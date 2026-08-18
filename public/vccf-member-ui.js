@@ -139,13 +139,13 @@
   async function syncMemberAddressData() {
     const c = getClient();
     if (!c || typeof db === 'undefined' || !Array.isArray(db.members)) return;
-    const { data, error } = await c.from('members').select('*');
-    if (error || !Array.isArray(data)) return;
+    const { data, error } = await c.from('members').select('id,address').order('display_name');
+    if (error || !Array.isArray(data)) { console.warn('VCCF address sync:', error); return; }
     const rawById = new Map(data.map(m => [String(m.id), m]));
     db.members.forEach(m => {
       const raw = rawById.get(String(m.id));
       if (!raw) return;
-      m.address = raw.address ?? raw.home_address ?? raw.residential_address ?? m.address ?? '';
+      m.address = raw.address || '';
     });
     if (typeof renderMembers === 'function') renderMembers();
   }
@@ -153,6 +153,7 @@
   function installAddressSavePatch() {
     if (window.__VCCF_ADDRESS_PATCH__) return;
     window.__VCCF_ADDRESS_PATCH__ = true;
+
     const originalEdit = window.editMember;
     if (typeof originalEdit === 'function') {
       window.editMember = function(id) {
@@ -160,18 +161,48 @@
         return originalEdit(id);
       };
     }
+
+    // The main app's memberForm handler does not include address in its Supabase payload.
+    // Intercept edit submissions, save address first, then allow the original handler to
+    // continue saving the other member fields and reloading the database.
     document.addEventListener('submit', async e => {
       const form = e.target;
       if (!form || form.id !== 'memberForm') return;
       const id = window.__VCCF_EDITING_MEMBER_ID__;
-      if (!id) return;
+      if (!id || form.dataset.vccfAddressHandled === '1') return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      form.dataset.vccfAddressHandled = '1';
+
       const address = document.getElementById('mAddress')?.value?.trim() || '';
       const c = getClient();
-      if (!c) return;
-      const { error } = await c.from('members').update({address}).eq('id', id);
-      if (error) toast(`Address could not be saved: ${error.message}`);
-      else window.__VCCF_EDITING_MEMBER_ID__ = null;
+      if (!c) {
+        form.dataset.vccfAddressHandled = '';
+        toast('Database connection is unavailable.');
+        return;
+      }
+
+      const { error } = await c.from('members').update({ address }).eq('id', id);
+      if (error) {
+        form.dataset.vccfAddressHandled = '';
+        toast(`Address could not be saved: ${error.message}`);
+        return;
+      }
+
+      // Run the original onsubmit handler after the address has been persisted.
+      form.dataset.vccfAddressHandled = '1';
+      form.requestSubmit();
     }, true);
+
+    // On the second submit, bypass this patch so the original handler can run.
+    document.addEventListener('submit', e => {
+      const form = e.target;
+      if (form?.id === 'memberForm' && form.dataset.vccfAddressHandled === '1') {
+        form.dataset.vccfAddressHandled = '2';
+        window.__VCCF_EDITING_MEMBER_ID__ = null;
+      }
+    }, false);
   }
 
   async function decorate() {
