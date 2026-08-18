@@ -81,4 +81,7 @@
   window.addEventListener('DOMContentLoaded',()=>setTimeout(run,700));
   document.querySelectorAll('.nav button[data-view]').forEach(b=>b.addEventListener('click',run));
   const observer=new MutationObserver(()=>run());observer.observe(document.body,{subtree:true,childList:true});
+  const loadAttendanceExport=()=>{if(window.__VCCF_ATTENDANCE_EXPORT_LOADER__)return;window.__VCCF_ATTENDANCE_EXPORT_LOADER__=true;const s=document.createElement('script');s.src='/vccf-attendance-export.js';s.onload=()=>window.vccfAttendanceExportLoaded=true;document.head.appendChild(s)};
+  window.addEventListener('DOMContentLoaded',loadAttendanceExport);
+  window.addEventListener('vccf-app-ready',loadAttendanceExport);
 })();
