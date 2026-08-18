@@ -21,20 +21,20 @@ drop policy if exists "site_settings_admin_write" on public.site_settings;
 create policy "site_settings_admin_write"
 on public.site_settings for all
 to authenticated
-using (exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin') )
-with check (exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin'));
+using (exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role::text = 'admin'))
+with check (exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role::text = 'admin'));
 
 drop policy if exists "members_status_admin_leader_update" on public.members;
 create policy "members_status_admin_leader_update"
 on public.members for update
 to authenticated
 using (
-  exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin')
-  or exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'area leader' and p.area_id = public.members.area_id)
+  exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role::text = 'admin')
+  or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role::text in ('area leader','area_leader') and p.area_id = public.members.area_id)
 )
 with check (
-  exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin')
-  or exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'area leader' and p.area_id = public.members.area_id)
+  exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role::text = 'admin')
+  or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role::text in ('area leader','area_leader') and p.area_id = public.members.area_id)
 );
 
 -- Only Admins may delete members.
@@ -42,7 +42,7 @@ drop policy if exists "members_admin_delete" on public.members;
 create policy "members_admin_delete"
 on public.members for delete
 to authenticated
-using (exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin'));
+using (exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role::text = 'admin'));
 
 insert into public.site_settings(key,value)
 values ('dashboard_youtube_url','')
