@@ -266,10 +266,39 @@
     },true);
   }
 
+  function installGalleryProfileFilter(){
+    if(window.__VCCF_GALLERY_PROFILE_FILTER__) return;
+    window.__VCCF_GALLERY_PROFILE_FILTER__=true;
+    const isProfilePhoto = p => {
+      const title=String(p?.title||'');
+      const path=String(p?.storage_path||'');
+      return title.startsWith('__ABOUT_PERSON__:') || path.startsWith('about/');
+    };
+    const apply=()=>{
+      if(typeof window.renderGallery!=='function') return false;
+      const original=window.renderGallery;
+      window.renderGallery=function(){
+        original.apply(this,arguments);
+        document.querySelectorAll('#galleryGrid .photo').forEach(card=>{
+          const title=card.querySelector('.meta b')?.textContent?.trim()||'';
+          if((typeof db!=='undefined'?(db.photos||[]):[]).some(p=>isProfilePhoto(p)&&String(p.title||'')===title)) card.remove();
+        });
+        document.querySelectorAll('#featuredMini img').forEach(img=>{
+          const title=img.getAttribute('alt')||'';
+          if((typeof db!=='undefined'?(db.photos||[]):[]).some(p=>isProfilePhoto(p)&&String(p.title||'')===title)) img.remove();
+        });
+      };
+      return true;
+    };
+    const tryApply=()=>{if(!apply())setTimeout(tryApply,100)};
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryApply,{once:true});else tryApply();
+  }
+
   async function start(){
     if(window.__VCCF_MEMBER_START_V6__) return;
     window.__VCCF_MEMBER_START_V6__=true;
     installAddressSave();
+    installGalleryProfileFilter();
     queueRepair(150);
   }
 
