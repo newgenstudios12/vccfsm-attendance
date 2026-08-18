@@ -240,7 +240,7 @@ body{background:radial-gradient(circle at 92% 0%,rgba(255,138,24,.10),transparen
 const { createClient } = window.supabase;
 const SUPABASE_URL = window.VCCF_SUPABASE_URL || '';
 const SUPABASE_KEY = window.VCCF_SUPABASE_PUBLISHABLE_KEY || '';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 let db={members:[],attendance:[],photos:[],pastors:[],leaders:[],accounts:[],areas:[]};
 let session=null, scanner=null;
 let profile=null;
