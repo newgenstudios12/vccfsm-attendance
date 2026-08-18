@@ -70,4 +70,14 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
       }
     };
   }, 0));
+
+  // The sidebar buttons exist in index.html, but the navigation click binding
+  // was missing. Attach it after the page's openView() function is defined.
+  window.addEventListener('DOMContentLoaded', () => setTimeout(() => {
+    document.querySelectorAll('.nav button[data-view]').forEach(button => {
+      button.onclick = () => {
+        if (typeof window.openView === 'function') window.openView(button.dataset.view);
+      };
+    });
+  }, 0));
 })();
