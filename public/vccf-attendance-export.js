@@ -31,19 +31,20 @@
     button.type='button';
     button.className='btn secondary';
     button.textContent='Download Sunday Attendance';
-    button.style.cssText='margin-left:10px;white-space:nowrap;';
+    button.style.cssText='white-space:nowrap;';
     button.addEventListener('click', exportAttendance);
 
-    const recordsHeading=[...view.querySelectorAll('h1,h2,h3,h4')].find(h=>/attendance records/i.test(h.textContent||''));
-    if(recordsHeading){
-      recordsHeading.insertAdjacentElement('afterend',button);
+    const panel=rows.closest('.panel');
+    if(panel){
+      const actions=document.createElement('div');
+      actions.className='vccf-export-actions';
+      actions.style.cssText='display:flex;justify-content:flex-end;align-items:center;margin-top:16px;padding-top:4px;';
+      actions.appendChild(button);
+      panel.appendChild(actions);
       return true;
     }
-    const topHeading=[...view.querySelectorAll('h1,h2,h3,h4')].find(h=>/^attendance$/i.test((h.textContent||'').trim()));
-    if(topHeading){topHeading.insertAdjacentElement('afterend',button);return true;}
-    const panel=rows.closest('.panel');
-    if(panel){panel.insertBefore(button,panel.firstChild);return true;}
-    view.insertBefore(button,view.firstChild);
+
+    view.appendChild(button);
     return true;
   }
 
