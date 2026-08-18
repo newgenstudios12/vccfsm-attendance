@@ -94,8 +94,6 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
 
-  // Username login support: Supabase Auth still receives an email-shaped identifier,
-  // while the UI accepts a username when an account was created without an email.
   const usernameEmail = value => {
     const s = String(value || '').trim().toLowerCase();
     if (!s || s.includes('@')) return s;
@@ -115,7 +113,7 @@
   }
 
   const BARANGAYS = [
-    'Bagong Pook','Bagumbayan','Bubukal','Cabooan','Calangay','Cambuja','Coralan','Cueva',
+    'Adia','Bagong Pook','Bagumbayan','Bubukal','Cabooan','Calangay','Cambuja','Coralan','Cueva',
     'Inayapan','Jose Laurel, Sr.','Kayhakat','Macasipac','Masinao','Mataling-Ting','Pao-o',
     'Parang Ng Buho','Barangay I','Barangay II','Barangay III','Barangay IV','Jose Rizal',
     'Santiago','Talangka','Tungkod'
@@ -131,12 +129,12 @@
     const old = input.value || '';
     const wrap = input.closest('.field');
     if (!wrap) return;
-    input.dataset.barangayPatched = '1';
     const select = document.createElement('select');
     select.id = 'mAddress';
+    select.dataset.barangayPatched = '1';
     select.required = true;
     select.innerHTML = '<option value="">Select barangay</option>' +
-      BARANGAYS.map(b => `<option value="Barangay, Santa Maria, Laguna">${esc(b)}, Santa Maria</option>`).join('') +
+      BARANGAYS.map(b => `<option value="${esc(b)}, Santa Maria">${esc(b)}, Santa Maria</option>`).join('') +
       '<option value="Others">Others</option>';
     const other = document.createElement('input');
     other.id = 'mAddressOther';
@@ -144,11 +142,10 @@
     other.placeholder = 'Enter address / barangay';
     other.style.marginTop = '8px';
     other.className = 'hidden';
-    wrap.innerHTML = '<label>Address</label>';
+    wrap.innerHTML = '<label>Address (Barangay, Santa Maria)</label>';
     wrap.appendChild(select);
     wrap.appendChild(other);
 
-    // Store the actual barangay name in the value that the existing member form reads.
     select.addEventListener('change', () => {
       if (select.value === 'Others') {
         other.classList.remove('hidden');
@@ -158,16 +155,13 @@
         other.required = false;
         other.value = '';
       }
-      select.dataset.addressValue = select.value === 'Others' ? '' : (select.options[select.selectedIndex]?.textContent || '');
     });
 
     const normalizedOld = old.trim();
     if (normalizedOld) {
       const match = BARANGAYS.find(b => normalizedOld.toLowerCase() === `${b}, santa maria`.toLowerCase() || normalizedOld.toLowerCase() === `${b}, santa maria, laguna`.toLowerCase());
       if (match) {
-        select.value = 'Barangay, Santa Maria, Laguna';
-        [...select.options].find(o => o.textContent.startsWith(match + ','))?.setAttribute('selected','selected');
-        select.value = [...select.options].find(o => o.textContent.startsWith(match + ','))?.value || 'Barangay, Santa Maria, Laguna';
+        select.value = `${match}, Santa Maria`;
       } else {
         select.value = 'Others';
         other.classList.remove('hidden');
@@ -183,7 +177,7 @@
     if (!form || !select || form.dataset.addressSavePatched) return;
     form.dataset.addressSavePatched = '1';
     form.addEventListener('submit', async () => {
-      const address = select.value === 'Others' ? (document.getElementById('mAddressOther')?.value.trim() || 'Others') : (select.options[select.selectedIndex]?.textContent || '').trim();
+      const address = select.value === 'Others' ? (document.getElementById('mAddressOther')?.value.trim() || 'Others') : select.value.trim();
       if (!address) return;
       const name = document.getElementById('mName')?.value.trim() || '';
       const birthday = document.getElementById('mBirth')?.value || '';
