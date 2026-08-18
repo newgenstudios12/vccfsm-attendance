@@ -269,3 +269,22 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     tryPatch();
   },0));
 })();
+
+// Ensure the attendance export feature is actually loaded by production builds.
+// index.html already loads this config file, so this avoids relying on a second
+// static <script> tag being present in the deployed HTML.
+(() => {
+  const loadAttendanceExport = () => {
+    if (window.__VCCF_ATTENDANCE_EXPORT_LOADER__) return;
+    window.__VCCF_ATTENDANCE_EXPORT_LOADER__ = true;
+    if (document.querySelector('script[data-vccf-attendance-export]')) return;
+    const script = document.createElement('script');
+    script.src = '/vccf-attendance-export.js?v=3';
+    script.dataset.vccfAttendanceExport = '1';
+    script.onload = () => console.info('VCCF attendance export loaded');
+    script.onerror = () => console.error('VCCF attendance export failed to load');
+    document.head.appendChild(script);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadAttendanceExport, {once:true});
+  else loadAttendanceExport();
+})();
