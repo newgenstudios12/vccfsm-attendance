@@ -49,23 +49,3 @@ using (
       and p.role::text = 'admin'
   )
 );
-
--- Admins may unlink a profile from a member before deletion.
-drop policy if exists "profiles_admin_member_unlink" on public.profiles;
-create policy "profiles_admin_member_unlink"
-on public.profiles for update
-to authenticated
-using (
-  exists (
-    select 1 from public.profiles me
-    where me.user_id = auth.uid()
-      and me.role::text = 'admin'
-  )
-)
-with check (
-  exists (
-    select 1 from public.profiles me
-    where me.user_id = auth.uid()
-      and me.role::text = 'admin'
-  )
-);
