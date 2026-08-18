@@ -32,7 +32,7 @@ jobs:
               'const supabase = createClient(',
               'const supabaseClient = createClient('
           )
-          fixed = re.sub(r'(?<!window\\.)\\bsupabase\\.', 'supabaseClient.', fixed)
+          fixed = re.sub(r'(?<!window\.)\bsupabase\.', 'supabaseClient.', fixed)
 
           if fixed == block:
               print('No change needed.')
