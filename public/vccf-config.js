@@ -104,7 +104,6 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
       const label=document.getElementById('newMembers')?.previousElementSibling;if(label)label.textContent='New Members (30d)';
       const bars=document.getElementById('areaBars');
       if(bars){
-        const areaMap=new Map((areas||[]).map(a=>[a.id,a.name]));
         const counts=new Map();sunday.forEach(a=>counts.set(a.area_id,(counts.get(a.area_id)||0)+1));
         const visibleAreas=(areas||[]).filter(a=>visibleMembers.some(m=>m.area_id===a.id));
         const max=Math.max(1,...visibleAreas.map(a=>counts.get(a.id)||0));
@@ -161,6 +160,98 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     };
   }
 
+  // Gallery downloads and editable attendance dates for Admins / Area Leaders.
+  async function downloadGalleryPhoto(photo){
+    if(!photo?.storage_path){toast2('This photo has no downloadable storage file.');return}
+    const {data,error}=await client.storage.from('vccf-gallery').download(photo.storage_path);
+    if(error){toast2(error.message);return}
+    const url=URL.createObjectURL(data);const a=document.createElement('a');a.href=url;a.download=(photo.storage_path.split('/').pop()||'vccf-photo.jpg').replace(/^[^-]+-/,'');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast2('Photo download started.');
+  }
+
+  async function patchAttendanceAndGallery(){
+    if(typeof window.renderGallery!=='function'||typeof window.renderAttendance!=='function'||typeof window.checkin!=='function')return false;
+    if(window.__VCCF_ATTENDANCE_GALLERY_PATCH__)return true;
+    window.__VCCF_ATTENDANCE_GALLERY_PATCH__=true;
+
+    const manual=document.querySelector('.manual-panel');
+    if(manual&&!document.getElementById('attendanceDate')){
+      const wrap=document.createElement('div');wrap.className='field';wrap.style.margin='10px 0';
+      wrap.innerHTML='<label>Attendance date</label><input id="attendanceDate" type="date" class="search" style="width:100%;min-width:0">';
+      const select=document.getElementById('manualMember');if(select)select.insertAdjacentElement('afterend',wrap);else manual.appendChild(wrap);
+    }
+    const dateInput=document.getElementById('attendanceDate');
+    if(dateInput){dateInput.value=manilaDate();dateInput.max=manilaDate();dateInput.onchange=()=>{if(dateInput.value>manilaDate()){dateInput.value=manilaDate();toast2('Attendance date cannot be in the future.')}}}
+
+    const originalCheckin=window.checkin;
+    window.checkin=async function(id){
+      const role=typeof session!=='undefined'?session?.role:null;
+      const date=(role==='Admin'||role==='Area Leader')?(document.getElementById('attendanceDate')?.value||manilaDate()):manilaDate();
+      if(date>manilaDate()){toast2('Attendance date cannot be in the future.');return}
+      if(role==='Member'&&date!==manilaDate()){toast2('Members can only check themselves in for today.');return}
+      const m=typeof currentMemberById==='function'?currentMemberById(id):null;
+      if(!m){toast2('Invalid member QR.');return}
+      if(role==='Member'&&m.id!==session.memberId){toast2('Members can only check in themselves.');return}
+      if(role==='Area Leader'&&m.areaId!==session.areaId){toast2('You can only check in members in your assigned area.');return}
+      const start=new Date(date+'T00:00:00+08:00').toISOString();const endDate=new Date(date+'T00:00:00+08:00');endDate.setUTCDate(endDate.getUTCDate()+1);const end=endDate.toISOString();
+      const {data:existing,error:er}=await client.from('attendance').select('id').eq('member_id',m.id).gte('checked_in_at',start).lt('checked_in_at',end).limit(1);
+      if(er){toast2(er.message);return}if(existing?.length){toast2('Already checked in for that date.');return}
+      const now=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
+      const checked=new Date(date+'T'+now+'+08:00').toISOString();
+      const r=await client.from('attendance').insert({member_id:m.id,area_id:m.areaId,checked_in_by:typeof profile!=='undefined'?profile?.user_id||null:null,source:role==='Member'?'self':'qr',checked_in_at:checked});
+      if(r.error){toast2(r.error.message);return}
+      await loadDb();refresh();toast2('Attendance recorded.');
+    };
+
+    const originalAttendance=window.renderAttendance;
+    window.renderAttendance=async function(){
+      const {data:rows,error}=await client.from('attendance').select('*').order('checked_in_at',{ascending:false});
+      if(error){console.warn(error);return originalAttendance()}
+      const tbody=document.getElementById('attendanceRows');if(!tbody)return;
+      const role=typeof session!=='undefined'?session?.role:null;
+      const visible=(rows||[]).filter(a=>role==='Admin'||(role==='Area Leader'&&a.area_id===session.areaId));
+      tbody.innerHTML=visible.map(a=>{
+        const m=(typeof db!=='undefined'?db.members:[]).find(x=>x.id===a.member_id)||{name:a.member_id,area:'',photo:''};
+        const area=(typeof db!=='undefined'?db.areas:[]).find(x=>x.id===a.area_id)?.name||m.area||'';
+        const date=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
+        const time=new Date(a.checked_in_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
+        return `<tr><td><div class="member-cell">${typeof memberAvatar==='function'?memberAvatar(m,true):`<b>${esc(m.name)}</b>`}</div></td><td><span class="tag">${esc(area)}</span></td><td>${date}</td><td>${time}</td><td>✓ Present <button class="btn secondary" style="margin-left:8px" onclick="editAttendanceDate('${a.id}')">Edit date</button></td></tr>`;
+      }).join('')||'<tr><td colspan="5" style="color:var(--muted)">No attendance recorded yet.</td></tr>';
+    };
+
+    window.editAttendanceDate=async function(recordId){
+      const {data:a,error}=await client.from('attendance').select('id,member_id,area_id,checked_in_at').eq('id',recordId).maybeSingle();
+      if(error||!a){toast2(error?.message||'Attendance record not found.');return}
+      const role=typeof session!=='undefined'?session?.role:null;
+      if(role!=='Admin'&&!(role==='Area Leader'&&a.area_id===session.areaId)){toast2('You do not have permission to edit this attendance.');return}
+      const oldDate=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
+      const member=(typeof db!=='undefined'?db.members:[]).find(x=>x.id===a.member_id);
+      openModal('Edit attendance date',`<div class="field"><label>Member</label><input value="${esc(member?.name||a.member_id)}" disabled></div><div class="field"><label>Attendance date</label><input id="editAttendanceDate" type="date" value="${oldDate}" max="${manilaDate()}"></div><button class="btn" id="saveAttendanceDate" style="width:100%">Save date</button>`);
+      document.getElementById('saveAttendanceDate').onclick=async()=>{
+        const date=document.getElementById('editAttendanceDate').value;if(!date){toast2('Choose an attendance date.');return}if(date>manilaDate()){toast2('Attendance date cannot be in the future.');return}
+        const time=new Date(a.checked_in_at).toLocaleTimeString('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+        const checked=new Date(date+'T'+time+'+08:00').toISOString();
+        const r=await client.from('attendance').update({checked_in_at:checked}).eq('id',a.id);if(r.error){toast2(r.error.message);return}
+        document.getElementById('modal').classList.remove('open');await loadDb();refresh();toast2('Attendance date updated.');
+      };
+    };
+
+    const originalGallery=window.renderGallery;
+    window.renderGallery=function(){
+      originalGallery();
+      const grid=document.getElementById('galleryGrid');if(!grid)return;
+      [...grid.querySelectorAll('.photo')].forEach((card,i)=>{
+        const actions=card.querySelector('.photo-actions');if(!actions||actions.querySelector('.download-photo-btn'))return;
+        const btn=document.createElement('button');btn.className='btn secondary download-photo-btn';btn.textContent='Download';btn.onclick=()=>downloadGalleryPhoto((typeof db!=='undefined'?db.photos:[])[i]);actions.insertBefore(btn,actions.firstChild);
+      });
+    };
+
+    const originalRefresh=window.refresh;
+    window.refresh=function(){originalRefresh();setTimeout(()=>{const d=document.getElementById('attendanceDate');if(d){d.value=d.value||manilaDate();d.max=manilaDate()}},0)};
+    await window.renderAttendance();
+    window.renderGallery();
+    return true;
+  }
+
   window.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{
     document.querySelectorAll('.nav button[data-view]').forEach(button=>{
       button.onclick=async()=>{
@@ -174,5 +265,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     if(el)el.onclick=()=>aboutEditor('leader');
     setTimeout(updateStatistics,1200);
     setTimeout(()=>loadAboutPeople().catch(()=>{}),1200);
+    const tryPatch=async()=>{if(await patchAttendanceAndGallery())return;setTimeout(tryPatch,300)};
+    tryPatch();
   },0));
 })();
