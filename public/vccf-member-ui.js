@@ -1,12 +1,12 @@
 (() => {
-  if (window.__VCCF_MEMBER_UI_V5__) return;
-  window.__VCCF_MEMBER_UI_V5__ = true;
+  if (window.__VCCF_MEMBER_UI_V6__) return;
+  window.__VCCF_MEMBER_UI_V6__ = true;
 
   const esc = v => String(v ?? '').replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
   const roleName = r => String(r || '').trim().toLowerCase().replace(/_/g, ' ');
   const isManager = r => ['admin','area leader'].includes(roleName(r));
   const toast = m => { const x=document.getElementById('toast'); if(x){x.textContent=m;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2500);} };
-  let client=null, cachedProfile=null;
+  let client=null, cachedProfile=null, repairInFlight=false, repairQueued=false;
 
   function getClient(){
     if(client) return client;
@@ -37,8 +37,6 @@
 
   async function saveMemberStatus(id,status){
     const c=getClient(); if(!c) throw new Error('Database connection is unavailable.');
-    // Prefer the protected RPC. If the migration has not yet been applied,
-    // fall back to the RLS-protected table update and verify the saved value.
     let rpcError=null;
     try{
       const {data,error}=await c.rpc('set_member_status',{p_member_id:id,p_status:status});
@@ -47,7 +45,6 @@
         if(row?.id) return row;
       } else rpcError=error;
     }catch(e){rpcError=e}
-
     const {data,error}=await c.from('members').update({status,status_updated_at:new Date().toISOString()}).eq('id',id).select('id,status').maybeSingle();
     if(error) throw error;
     if(!data?.id) throw rpcError||new Error('Status update returned no updated member.');
@@ -85,8 +82,7 @@
       const areaSelect=[...document.querySelectorAll('select')].find(s=>/statistics|area|total/i.test((s.getAttribute('aria-label')||'')+' '+s.className+' '+[...s.options].map(o=>o.textContent).join(' ')) && [...s.options].some(o=>/all areas|total|per area/i.test(o.textContent)));
       const selected=areaSelect?.value||'total';
       let filtered=members;
-      if(roleName(p.role)==='area leader') filtered=members;
-      else if(selected && !/total|all/i.test(selected)) filtered=members.filter(m=>String(m.area_id)===String(selected) || String(m.area_id||'').toLowerCase()===String(selected).toLowerCase());
+      if(roleName(p.role)!=='area leader' && selected && !/total|all/i.test(selected)) filtered=members.filter(m=>String(m.area_id)===String(selected) || String(m.area_id||'').toLowerCase()===String(selected).toLowerCase());
       const total=filtered.length;
       const inactive=filtered.filter(m=>String(m.status||'active').toLowerCase()==='inactive').length;
       const active=Math.max(0,total-inactive);
@@ -116,8 +112,7 @@
     toast('Member deleted successfully.');
     if(typeof window.loadDb==='function')await window.loadDb();
     if(typeof window.refresh==='function')window.refresh();
-    setTimeout(repairMembersTable,300);
-    setTimeout(refreshMemberStatistics,500);
+    queueRepair();
   }
   window.vccfDeleteMember=deleteMember;
 
@@ -171,69 +166,91 @@
   }
 
   async function repairMembersTable(){
-    const table=document.querySelector('#members .tablewrap table.table');
-    if(!table?.tHead?.rows?.[0]||!table.tBodies?.[0]){await repairAttendanceNames();await repairRecentAttendance();refreshMemberStatistics();return;}
-    const p=await getProfile();
-    if(!isManager(p?.role)){await repairAttendanceNames();return;}
-    await syncAddresses();
-    const managed=await getManagedMembers(p);
-    const byId=new Map(managed.map(m=>[String(m.id),m]));
-    const head=table.tHead.rows[0];
-    const wanted=['Name','Birthday','Area','Address','Access','Status','QR','Actions'];
-    const oldHeaders=[...head.cells];
-    const headerFor=label=>oldHeaders.find(h=>h.textContent.trim().toLowerCase()===label.toLowerCase());
-    wanted.forEach(label=>{let h=headerFor(label);if(!h){h=document.createElement('th');h.textContent=label;}head.appendChild(h);});
-    oldHeaders.forEach(h=>{if(!wanted.some(x=>x.toLowerCase()===h.textContent.trim().toLowerCase()))h.remove();});
-
-    [...table.tBodies[0].rows].forEach(row=>{
-      const id=memberIdFromRow(row); const m=byId.get(id); if(!m)return;
-      const cells=[...row.cells];
-      const view=cells.find(c=>[...c.querySelectorAll('button')].some(b=>b.textContent.trim().toLowerCase()==='view'));
-      const action=cells.find(c=>[...c.querySelectorAll('button')].some(b=>['edit','delete'].includes(b.textContent.trim().toLowerCase())));
-      const name=cells.find(c=>c.querySelector('small') && c.querySelector('.member-cell')) || cells[0];
-      const birthday=cells.find(c=>/^\d{4}-\d{2}-\d{2}$/.test(c.textContent.trim()));
-      const access=cells.find(c=>/^(member|admin|area leader)$/i.test(c.textContent.trim()));
-      const area=cells.find(c=>/area\s*\d+/i.test(c.textContent.trim()) || c.querySelector('.tag'));
-      const actionButtons=action?[...action.querySelectorAll('button')]:[];
-      const editButton=actionButtons.find(b=>b.textContent.trim().toLowerCase()==='edit');
-      const deleteButton=actionButtons.find(b=>b.textContent.trim().toLowerCase()==='delete');
-      row.innerHTML='';
-      [name,birthday,area,null,access,null,null,null].forEach((src,i)=>{
-        const td=document.createElement('td');
-        if(i===3)td.textContent=m.address||'';
-        else if(i===5){
-          const select=document.createElement('select');select.className='vccf-inline-status';select.dataset.id=m.id;select.style.cssText='border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);font-weight:800;';
-          select.innerHTML='<option value="active">Active</option><option value="inactive">Inactive</option>';select.value=m.status==='inactive'?'inactive':'active';select.style.color=select.value==='inactive'?'#dc3545':'#198754';
-          select.onchange=async()=>{
-            const requested=select.value,previous=m.status||'active';
-            const current=await getProfile(true);
-            if(!isManager(current?.role)){select.value=previous;return;}
-            if(roleName(current.role)==='area leader'&&String(m.area_id)!==String(current.area_id)){toast('You can only change members in your area.');select.value=previous;return;}
-            select.disabled=true;
-            try{const saved=await saveMemberStatus(m.id,requested);m.status=saved.status;select.value=saved.status;select.style.color=saved.status==='inactive'?'#dc3545':'#198754';toast(`Member set to ${saved.status}.`);await refreshMemberStatistics();}
-            catch(e){console.error(e);toast(`Could not save status: ${e?.message||e}`);select.value=previous;}
-            finally{select.disabled=false;}
-          };
-          td.appendChild(select);
-        } else if(i===6){if(view)td.appendChild(view);}
-        else if(i===7){
-          if(editButton)td.appendChild(editButton);
-          if(roleName(p.role)==='admin'){
-            if(deleteButton)td.appendChild(deleteButton);
-            else {const b=document.createElement('button');b.type='button';b.className='btn danger';b.textContent='Delete';b.style.marginLeft='6px';b.onclick=()=>deleteMember(m.id);td.appendChild(b);}
-          }
-        } else if(src){while(src.firstChild)td.appendChild(src.firstChild);}
-        row.appendChild(td);
+    if(repairInFlight){repairQueued=true;return;}
+    repairInFlight=true;
+    try{
+      const table=document.querySelector('#members .tablewrap table.table');
+      if(!table?.tHead?.rows?.[0]||!table.tBodies?.[0]){
+        await repairAttendanceNames();
+        await repairRecentAttendance();
+        await refreshMemberStatistics();
+        return;
+      }
+      const p=await getProfile();
+      if(!isManager(p?.role)){await repairAttendanceNames();return;}
+      await syncAddresses();
+      const managed=await getManagedMembers(p);
+      const byId=new Map(managed.map(m=>[String(m.id),m]));
+      const head=table.tHead.rows[0];
+      const wanted=['Name','Birthday','Area','Address','Access','Status','QR','Actions'];
+      const existing=new Map([...head.cells].map(h=>[h.textContent.trim().toLowerCase(),h]));
+      const headers=wanted.map(label=>{
+        const key=label.toLowerCase();
+        const h=existing.get(key)||document.createElement('th');
+        if(!existing.has(key)) h.textContent=label;
+        return h;
       });
-    });
-    await repairAttendanceNames();
-    await repairRecentAttendance();
-    await refreshMemberStatistics();
+      head.replaceChildren(...headers);
+
+      [...table.tBodies[0].rows].forEach(row=>{
+        const id=memberIdFromRow(row); const m=byId.get(id); if(!m)return;
+        const cells=[...row.cells];
+        const view=cells.find(c=>[...c.querySelectorAll('button')].some(b=>b.textContent.trim().toLowerCase()==='view'));
+        const action=cells.find(c=>[...c.querySelectorAll('button')].some(b=>['edit','delete'].includes(b.textContent.trim().toLowerCase())));
+        const name=cells.find(c=>c.querySelector('small') && c.querySelector('.member-cell')) || cells[0];
+        const birthday=cells.find(c=>/^\d{4}-\d{2}-\d{2}$/.test(c.textContent.trim()));
+        const access=cells.find(c=>/^(member|admin|area leader)$/i.test(c.textContent.trim()));
+        const area=cells.find(c=>/area\s*\d+/i.test(c.textContent.trim()) || c.querySelector('.tag'));
+        const actionButtons=action?[...action.querySelectorAll('button')]:[];
+        const editButton=actionButtons.find(b=>b.textContent.trim().toLowerCase()==='edit');
+        const deleteButton=actionButtons.find(b=>b.textContent.trim().toLowerCase()==='delete');
+        row.replaceChildren();
+        [name,birthday,area,null,access,null,null,null].forEach((src,i)=>{
+          const td=document.createElement('td');
+          if(i===3)td.textContent=m.address||'';
+          else if(i===5){
+            const select=document.createElement('select');select.className='vccf-inline-status';select.dataset.id=m.id;select.style.cssText='border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);font-weight:800;';
+            select.innerHTML='<option value="active">Active</option><option value="inactive">Inactive</option>';select.value=m.status==='inactive'?'inactive':'active';select.style.color=select.value==='inactive'?'#dc3545':'#198754';
+            select.onchange=async()=>{
+              const requested=select.value,previous=m.status||'active';
+              const current=await getProfile(true);
+              if(!isManager(current?.role)){select.value=previous;return;}
+              if(roleName(current.role)==='area leader'&&String(m.area_id)!==String(current.area_id)){toast('You can only change members in your area.');select.value=previous;return;}
+              select.disabled=true;
+              try{const saved=await saveMemberStatus(m.id,requested);m.status=saved.status;select.value=saved.status;select.style.color=saved.status==='inactive'?'#dc3545':'#198754';toast(`Member set to ${saved.status}.`);await refreshMemberStatistics();}
+              catch(e){console.error(e);toast(`Could not save status: ${e?.message||e}`);select.value=previous;}
+              finally{select.disabled=false;}
+            };
+            td.appendChild(select);
+          } else if(i===6){if(view)td.appendChild(view);}
+          else if(i===7){
+            if(editButton)td.appendChild(editButton);
+            if(roleName(p.role)==='admin'){
+              if(deleteButton)td.appendChild(deleteButton);
+              else {const b=document.createElement('button');b.type='button';b.className='btn danger';b.textContent='Delete';b.style.marginLeft='6px';b.onclick=()=>deleteMember(m.id);td.appendChild(b);}
+            }
+          } else if(src){while(src.firstChild)td.appendChild(src.firstChild);}
+          row.appendChild(td);
+        });
+      });
+      await repairAttendanceNames();
+      await repairRecentAttendance();
+      await refreshMemberStatistics();
+    }finally{
+      repairInFlight=false;
+      if(repairQueued){repairQueued=false;setTimeout(()=>repairMembersTable(),50);}
+    }
   }
 
+  function queueRepair(delay=200){
+    clearTimeout(window.__VCCF_MEMBER_REPAIR_TIMER__);
+    window.__VCCF_MEMBER_REPAIR_TIMER__=setTimeout(()=>repairMembersTable(),delay);
+  }
+  window.vccfRepairMembers=queueRepair;
+
   function installAddressSave(){
-    if(window.__VCCF_ADDRESS_SAVE_V5__)return;
-    window.__VCCF_ADDRESS_SAVE_V5__=true;
+    if(window.__VCCF_ADDRESS_SAVE_V6__)return;
+    window.__VCCF_ADDRESS_SAVE_V6__=true;
     const originalEdit=window.editMember;
     if(typeof originalEdit==='function')window.editMember=function(id){window.__VCCF_EDITING_MEMBER_ID__=id;return originalEdit(id);};
     document.addEventListener('submit',async e=>{
@@ -250,12 +267,16 @@
   }
 
   async function start(){
+    if(window.__VCCF_MEMBER_START_V6__) return;
+    window.__VCCF_MEMBER_START_V6__=true;
     installAddressSave();
-    let tries=0;
-    const tick=async()=>{tries++;try{await repairMembersTable();await repairAttendanceNames();await repairRecentAttendance();await refreshMemberStatistics();}catch(e){console.warn('VCCF member UI:',e);}if(tries<30)setTimeout(tick,700);};
-    tick();
+    queueRepair(150);
   }
-  window.addEventListener('DOMContentLoaded',start);
-  window.addEventListener('vccf-app-ready',()=>{cachedProfile=null;start();});
-  document.addEventListener('click',e=>{if(e.target.closest?.('button[data-view="members"],button[data-view="dashboard"],button[data-view="attendance"]'))setTimeout(()=>{repairMembersTable();repairAttendanceNames();repairRecentAttendance();refreshMemberStatistics();},200);});
+
+  window.addEventListener('DOMContentLoaded',start,{once:true});
+  window.addEventListener('vccf-app-ready',()=>{cachedProfile=null;queueRepair(150);});
+  document.addEventListener('click',e=>{
+    if(e.target.closest?.('button[data-view="members"]')) queueRepair(200);
+    else if(e.target.closest?.('button[data-view="dashboard"],button[data-view="attendance"]')) clearTimeout(window.__VCCF_MEMBER_REPAIR_TIMER__);
+  });
 })();
