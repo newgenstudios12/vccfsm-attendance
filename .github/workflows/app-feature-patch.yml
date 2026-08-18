@@ -1,0 +1,114 @@
+name: Apply VCCF app feature patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch dashboard and gallery behavior
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('public/vccf-config.js')
+          text = path.read_text(encoding='utf-8')
+          marker = "  // Dashboard YouTube video and profile-photo gallery exclusion."
+          if marker in text:
+              print('Patch already present.')
+          else:
+              patch = r'''
+  // Dashboard YouTube video and profile-photo gallery exclusion.
+  const PROFILE_PHOTO_PREFIX='__ABOUT_PERSON__:';
+  const YOUTUBE_KIND='youtube';
+  function youtubeId(value){
+    let s=String(value||'').trim();
+    const iframe=s.match(/src=["']([^"']+)["']/i); if(iframe)s=iframe[1];
+    const m=s.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/i);
+    return m?m[1]:null;
+  }
+  function youtubeEmbed(value){
+    const id=youtubeId(value);return id?`https://www.youtube-nocookie.com/embed/${id}`:null;
+  }
+  async function getDashboardYoutube(){
+    const {data,error}=await client.from('site_people').select('id,name,description,sort_order').eq('kind',YOUTUBE_KIND).order('sort_order').limit(1);
+    if(error) throw error; return data?.[0]||null;
+  }
+  async function renderDashboardYoutube(){
+    const host=document.getElementById('dashboardYoutube');if(!host)return;
+    let video=null;try{video=await getDashboardYoutube()}catch(e){console.warn('YouTube setting load failed:',e)}
+    const embed=video?.description?youtubeEmbed(video.description):null;
+    host.innerHTML=`<div class="panel" style="margin-top:16px"><div class="toolbar" style="margin-bottom:12px"><div><h3 style="margin:0">VCCF Video</h3><p style="color:var(--muted);margin:4px 0 0">Featured YouTube video for the dashboard.</p></div>${typeof admin==='function'&&admin()?'<button class="btn secondary" id="editYoutubeBtn">Edit video</button>':''}</div>${embed?`<div style="position:relative;width:100%;padding-top:56.25%;overflow:hidden;border-radius:16px;background:#000"><iframe src="${esc(embed)}" title="VCCF featured YouTube video" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe></div>`:'<div style="padding:28px;text-align:center;border:1px dashed var(--line);border-radius:16px;color:var(--muted)">No featured video has been added yet.</div>'}</div>`;
+    const edit=document.getElementById('editYoutubeBtn');
+    if(edit)edit.onclick=editDashboardYoutube;
+  }
+  async function editDashboardYoutube(){
+    if(!(await isAdmin())){toast2('Only administrators can change the dashboard video.');return}
+    const current=await getDashboardYoutube();
+    openModal('Dashboard YouTube video',`<div class="field"><label>YouTube link or embed URL/code</label><input id="youtubeInput" value="${esc(current?.description||'')}" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off"><small style="display:block;color:var(--muted);margin-top:6px">Paste a normal YouTube link, youtu.be link, Shorts link, or the URL from YouTube's Embed code.</small></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn danger" id="removeYoutubeBtn" type="button">Remove video</button><button class="btn" id="saveYoutubeBtn" type="button">Save video</button></div>`);
+    document.getElementById('saveYoutubeBtn').onclick=async()=>{
+      const raw=document.getElementById('youtubeInput').value.trim();
+      const embed=youtubeEmbed(raw);if(!embed){toast2('Please enter a valid YouTube video link or embed code.');return}
+      try{
+        if(current){const r=await client.from('site_people').update({name:'VCCF Dashboard Video',description:raw,sort_order:-100}).eq('id',current.id);if(r.error)throw r.error}
+        else{const r=await client.from('site_people').insert({kind:YOUTUBE_KIND,name:'VCCF Dashboard Video',description:raw,sort_order:-100});if(r.error)throw r.error}
+        document.getElementById('modal').classList.remove('open');await renderDashboardYoutube();toast2('Dashboard video updated.');
+      }catch(e){console.error(e);toast2(e.message||'Unable to save the video.')}
+    };
+    document.getElementById('removeYoutubeBtn').onclick=async()=>{
+      if(!current){document.getElementById('modal').classList.remove('open');return}
+      if(!confirm('Remove the dashboard video?'))return;
+      const r=await client.from('site_people').delete().eq('id',current.id);if(r.error){toast2(r.error.message);return}
+      document.getElementById('modal').classList.remove('open');await renderDashboardYoutube();toast2('Dashboard video removed.');
+    };
+  }
+  async function patchDashboardVideo(){
+    const dashboard=document.getElementById('dashboard');if(!dashboard)return;
+    if(!document.getElementById('dashboardYoutube')){
+      const host=document.createElement('div');host.id='dashboardYoutube';
+      const recent=document.getElementById('recentAttendance')?.closest('.panel');
+      if(recent)recent.insertAdjacentElement('afterend',host);else dashboard.appendChild(host);
+    }
+    await renderDashboardYoutube();
+  }
+  function patchGalleryProfilePhotos(){
+    if(typeof window.renderGallery!=='function'||window.__VCCF_GALLERY_PROFILE_FILTER__)return;
+    window.__VCCF_GALLERY_PROFILE_FILTER__=true;
+    const originalGallery=window.renderGallery;
+    window.renderGallery=function(){
+      const all=(typeof db!=='undefined'?db.photos:[])||[];
+      const publicPhotos=all.filter(p=>!String(p.title||'').startsWith(PROFILE_PHOTO_PREFIX));
+      const old=db.photos;db.photos=publicPhotos;
+      try{originalGallery()}finally{db.photos=old}
+    };
+  }
+  window.addEventListener('DOMContentLoaded',()=>setTimeout(async()=>{
+    patchGalleryProfilePhotos();
+    await patchDashboardVideo();
+    const originalRefresh=window.refresh;
+    if(originalRefresh&&!window.__VCCF_VIDEO_REFRESH_PATCH__){
+      window.__VCCF_VIDEO_REFRESH_PATCH__=true;
+      window.refresh=function(){originalRefresh();setTimeout(()=>{patchGalleryProfilePhotos();patchDashboardVideo().catch(e=>console.warn(e))},0)};
+    }
+  },700));
+'''
+              idx=text.rfind('\n})();')
+              if idx<0: raise SystemExit('Could not locate config closure')
+              text=text[:idx]+'\n'+patch+text[idx:]
+              path.write_text(text,encoding='utf-8')
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/vccf-config.js
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Add dashboard YouTube and hide profile photos from gallery'
+          git push
