@@ -408,7 +408,7 @@ function createAccount(){
  if(!admin()){toast("Only administrators can create accounts.");return}
  const members=db.members.filter(m=>!m.access || m.access==='Member');
  openModal("Create account",`<form id="accountForm"><div class="formgrid">
- <div class="field"><label>Email</label><input id="aUser" type="email" required autocomplete="off"></div>
+ <div class="field"><label>E-mail/username</label><input id="aUser" type="text" required autocomplete="off"></div>
  <div class="field"><label>Temporary password</label><input id="aPass" type="password" minlength="8" required autocomplete="new-password"></div>
  <div class="field"><label>Display name</label><input id="aName" required></div>
  <div class="field"><label>Role</label><select id="aRole"><option value="member">Member</option><option value="area_leader">Area Leader</option><option value="admin">Admin</option></select></div>
