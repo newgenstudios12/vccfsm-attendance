@@ -12,7 +12,6 @@ create table if not exists public.site_settings (
 
 alter table public.site_settings enable row level security;
 
--- Logged-in users may read the dashboard setting. Writes are restricted to admins by policy.
 drop policy if exists "site_settings_read_authenticated" on public.site_settings;
 create policy "site_settings_read_authenticated"
 on public.site_settings for select
@@ -22,10 +21,9 @@ drop policy if exists "site_settings_admin_write" on public.site_settings;
 create policy "site_settings_admin_write"
 on public.site_settings for all
 to authenticated
-using (exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin'))
+using (exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin') )
 with check (exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin'));
 
--- Admins and Area Leaders can update member status; leaders are restricted to their own area.
 drop policy if exists "members_status_admin_leader_update" on public.members;
 create policy "members_status_admin_leader_update"
 on public.members for update
@@ -38,6 +36,13 @@ with check (
   exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin')
   or exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'area leader' and p.area_id = public.members.area_id)
 );
+
+-- Only Admins may delete members.
+drop policy if exists "members_admin_delete" on public.members;
+create policy "members_admin_delete"
+on public.members for delete
+to authenticated
+using (exists (select 1 from public.profiles p where p.user_id = auth.uid() and lower(p.role) = 'admin'));
 
 insert into public.site_settings(key,value)
 values ('dashboard_youtube_url','')
