@@ -1,0 +1,156 @@
+name: Apply attendance and gallery fixes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch application
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          replacements = []
+
+          replacements.append((
+              '''<div class="panel manual-panel"><h3>Manual attendance</h3><p style="color:var(--muted);font-size:.9rem">Search for a member by name, select their profile, then record attendance.</p><div class="manual-search-wrap"><span>⌕</span><input id="manualSearch" class="search" placeholder="Search member name..."></div><select id="manualMember" class="search" style="width:100%;margin:10px 0"></select><button class="btn success" id="manualCheckin">Record attendance</button><div id="scanResult" style="margin-top:16px"></div></div>''',
+              '''<div class="panel manual-panel"><h3>Manual attendance</h3><p style="color:var(--muted);font-size:.9rem">Search for a member by name, select their profile, choose the attendance date, then record attendance.</p><div class="manual-search-wrap"><span>⌕</span><input id="manualSearch" class="search" placeholder="Search member name..."></div><select id="manualMember" class="search" style="width:100%;margin:10px 0"></select><div class="field" style="margin:10px 0"><label>Attendance date</label><input id="attendanceDate" type="date" class="search" style="width:100%;min-width:0" max=""></div><button class="btn success" id="manualCheckin">Record attendance</button><div id="scanResult" style="margin-top:16px"></div></div>'''
+          ))
+
+          replacements.append((
+              '''db.attendance=(attendanceR.data||[]).map(a=>({id:(db.members.find(m=>m.id===a.member_id)||{}).memberCode||a.member_id,name:(db.members.find(m=>m.id===a.member_id)||{}).name||'',area:(db.areas.find(x=>x.id===a.area_id)||{}).name||'',date:new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}),time:new Date(a.checked_in_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'}),memberId:a.member_id}));''',
+              '''db.attendance=(attendanceR.data||[]).map(a=>({recordId:a.id,id:(db.members.find(m=>m.id===a.member_id)||{}).memberCode||a.member_id,name:(db.members.find(m=>m.id===a.member_id)||{}).name||'',area:(db.areas.find(x=>x.id===a.area_id)||{}).name||'',date:new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}),time:new Date(a.checked_in_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'}),memberId:a.member_id,areaId:a.area_id,checkedInAt:a.checked_in_at}));'''
+          ))
+
+          replacements.append((
+              '''function today(){return new Date().toISOString().slice(0,10)}''',
+              '''function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
+function manilaTime(){return new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date())}
+function attendanceDateValue(){const el=$("attendanceDate");return el?.value||today()}
+function dateToStartIso(date){return new Date(date+"T00:00:00+08:00").toISOString()}
+function dateToEndIso(date){const d=new Date(date+"T00:00:00+08:00");d.setUTCDate(d.getUTCDate()+1);return d.toISOString()}
+function dateTimeToIso(date,time){return new Date(date+"T"+time+"+08:00").toISOString()}'''
+          ))
+
+          replacements.append((
+              '''$("totalMembers").textContent=db.members.length;''',
+              '''$("totalMembers").textContent=db.members.length;
+ $("attendanceDate").value=attendanceDateValue();
+ $("attendanceDate").max=today();'''
+          ))
+
+          replacements.append((
+              '''function renderAttendance(){
+ const rows=[...db.attendance].reverse();
+ $("attendanceRows").innerHTML=rows.map(a=>{
+   const m=db.members.find(x=>x.id===a.id)||{name:a.name,area:a.area,photo:""};
+   return `<tr><td><div class="member-cell">${memberAvatar(m,true)}<div><b>${m.name}</b><br><small style="color:var(--muted)">${m.id||a.id}</small></div></div></td><td><span class="tag">${a.area}</span></td><td>${a.date}</td><td>${a.time}</td><td>✓ Present</td></tr>`;
+ }).join("")||`<tr><td colspan="5" style="color:var(--muted)">No attendance recorded yet.</td></tr>`;
+}''',
+              '''function canEditAttendance(a){return allowedWrite() && (session.role==="Admin" || a.areaId===session.areaId)}
+function renderAttendance(){
+ const rows=[...db.attendance].reverse();
+ $("attendanceRows").innerHTML=rows.map(a=>{
+   const m=db.members.find(x=>x.id===a.memberId)||{name:a.name,area:a.area,photo:""};
+   const edit=canEditAttendance(a)?`<button class="btn secondary" onclick="editAttendance('${a.recordId}')">Edit date</button>`:"";
+   return `<tr><td><div class="member-cell">${memberAvatar(m,true)}<div><b>${m.name}</b><br><small style="color:var(--muted)">${m.memberCode||a.id}</small></div></div></td><td><span class="tag">${a.area}</span></td><td>${a.date}</td><td>${a.time}</td><td>✓ Present ${edit?`<span style="margin-left:8px">${edit}</span>`:""}</td></tr>`;
+ }).join("")||`<tr><td colspan="5" style="color:var(--muted)">No attendance recorded yet.</td></tr>`;
+}
+async function editAttendance(recordId){
+ const a=db.attendance.find(x=>x.recordId===recordId);
+ if(!a||!canEditAttendance(a)){toast("You do not have permission to edit this attendance.");return}
+ openModal("Edit attendance date",`<div class="field"><label>Member</label><input value="${a.name}" disabled></div><div class="field"><label>Attendance date</label><input id="editAttendanceDate" type="date" value="${a.date}" max="${today()}"></div><button class="btn" id="saveAttendanceDate" style="width:100%">Save date</button>`);
+ $("saveAttendanceDate").onclick=async()=>{
+   const date=$("editAttendanceDate").value;
+   if(!date){toast("Choose an attendance date.");return}
+   if(date>today()){toast("Attendance date cannot be in the future.");return}
+   const originalTime=new Date(a.checkedInAt).toLocaleTimeString('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+   const r=await supabaseClient.from('attendance').update({checked_in_at:dateTimeToIso(date,originalTime)}).eq('id',a.recordId);
+   if(r.error){toast(r.error.message);return}
+   $("modal").classList.remove("open");await loadDb();refresh();toast("Attendance date updated.");
+ };
+}'''
+          ))
+
+          replacements.append((
+              '''async function checkin(id){
+  if(!session)return;
+  let m=currentMemberById(id);
+  if(!m){toast("Invalid member QR.");return}
+  if(session.role==="Member" && m.id!==session.memberId){toast("Members can only check in themselves.");return}
+  if(session.role==="Area Leader" && m.areaId!==session.areaId){toast("You can only check in members in your assigned area.");return}
+  const {data:existing,error:er}=await supabaseClient.from('attendance').select('id').eq('member_id',m.id).gte('checked_in_at',new Date(new Date().toLocaleDateString('en-US',{timeZone:'Asia/Manila'})).toISOString()).limit(1);
+  if(er){toast(er.message);return} if(existing?.length){toast("Already checked in today.");return}
+  const r=await supabaseClient.from('attendance').insert({member_id:m.id,area_id:m.areaId,checked_in_by:profile?.user_id||null,source:session.role==='Member'?'self':'qr'});
+  if(r.error){toast(r.error.message);return}
+  await loadDb();refresh();$("scanResult").innerHTML=`<div class="panel" style="border-color:#198754"><div class="member-cell">${memberAvatar(m)}<div><b>✓ Attendance recorded</b><br>${m.name} · ${m.area}</div></div></div>`;toast("Attendance recorded.");
+}''',
+              '''async function checkin(id,selectedDate=null){
+  if(!session)return;
+  let m=currentMemberById(id);
+  if(!m){toast("Invalid member QR.");return}
+  if(session.role==="Member" && m.id!==session.memberId){toast("Members can only check in themselves.");return}
+  if(session.role==="Area Leader" && m.areaId!==session.areaId){toast("You can only check in members in your assigned area.");return}
+  const date=(selectedDate||today()).trim();
+  if(date>today()){toast("Attendance date cannot be in the future.");return}
+  if(session.role==="Member" && date!==today()){toast("Members can only check themselves in for today.");return}
+  const startIso=dateToStartIso(date),endIso=dateToEndIso(date);
+  const {data:existing,error:er}=await supabaseClient.from('attendance').select('id').eq('member_id',m.id).gte('checked_in_at',startIso).lt('checked_in_at',endIso).limit(1);
+  if(er){toast(er.message);return} if(existing?.length){toast("Already checked in for that date.");return}
+  const r=await supabaseClient.from('attendance').insert({member_id:m.id,area_id:m.areaId,checked_in_by:profile?.user_id||null,source:session.role==='Member'?'self':'qr',checked_in_at:dateTimeToIso(date,manilaTime())});
+  if(r.error){toast(r.error.message);return}
+  await loadDb();refresh();$("scanResult").innerHTML=`<div class="panel" style="border-color:#198754"><div class="member-cell">${memberAvatar(m)}<div><b>✓ Attendance recorded</b><br>${m.name} · ${m.area} · ${date}</div></div></div>`;toast("Attendance recorded.");
+}'''
+          ))
+
+          replacements.append((
+              '''$("manualCheckin").onclick=()=>{const id=$("manualMember").value;if(!id){toast("Please search and select a member first.");return}checkin(id)};''',
+              '''$("manualCheckin").onclick=()=>{const id=$("manualMember").value;if(!id){toast("Please search and select a member first.");return}checkin(id,attendanceDateValue())};
+$("attendanceDate").onchange=()=>{const el=$("attendanceDate");if(el.value>today()){el.value=today();toast("Attendance date cannot be in the future.")}};'''
+          ))
+
+          replacements.append((
+              '''checkin(session.memberId); renderSelfCheck();''',
+              '''checkin(session.memberId,today()); renderSelfCheck();'''
+          ))
+
+          replacements.append((
+              '''function renderGallery(){let can=admin();$("galleryGrid").innerHTML=db.photos.map((p,i)=>{const src=p.public_url||p.src||'';return `<div class="photo"><img src="${src}" alt="${p.title}"><div class="meta"><b>${p.title}</b><br><small>${p.taken_on||p.date||''} ${p.featured?"· Featured":""}</small><div class="photo-actions">${can?`<button class="btn secondary" onclick="toggleFeatured(${i})">${p.featured?"Unfeature":"Feature"}</button><button class="btn danger" onclick="deletePhoto(${i})">Delete</button>`:""}</div></div></div>`}).join("")||`<div class="panel" style="grid-column:1/-1;color:var(--muted)">No photos yet. Admins can add Sunday photos.</div>`;let f=db.photos.filter(p=>p.featured).slice(0,3);$("featuredMini").innerHTML=f.map(p=>`<img src="${p.public_url||p.src||''}" alt="${p.title}">`).join("")||`<p style="color:var(--muted)">No featured photos yet.</p>`}''',
+              '''function renderGallery(){let can=admin();$("galleryGrid").innerHTML=db.photos.map((p,i)=>{const src=p.public_url||p.src||'';return `<div class="photo"><img src="${src}" alt="${p.title}"><div class="meta"><b>${p.title}</b><br><small>${p.taken_on||p.date||''} ${p.featured?"· Featured":""}</small><div class="photo-actions"><button class="btn secondary" onclick="downloadPhoto(${i})">Download</button>${can?`<button class="btn secondary" onclick="toggleFeatured(${i})">${p.featured?"Unfeature":"Feature"}</button><button class="btn danger" onclick="deletePhoto(${i})">Delete</button>`:""}</div></div></div>`}).join("")||`<div class="panel" style="grid-column:1/-1;color:var(--muted)">No photos yet. Admins can add Sunday photos.</div>`;let f=db.photos.filter(p=>p.featured).slice(0,3);$("featuredMini").innerHTML=f.map(p=>`<img src="${p.public_url||p.src||''}" alt="${p.title}">`).join("")||`<p style="color:var(--muted)">No featured photos yet.</p>`}
+async function downloadPhoto(i){const p=db.photos[i];if(!p?.storage_path){toast("This photo has no downloadable storage file.");return}const {data,error}=await supabaseClient.storage.from('vccf-gallery').download(p.storage_path);if(error){toast(error.message);return}const url=URL.createObjectURL(data);const a=document.createElement('a');a.href=url;a.download=(p.storage_path.split('/').pop()||'vccf-photo.jpg').replace(/^[^-]+-/,'');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Photo download started.")}'''
+          ))
+
+          missing = []
+          for old,new in replacements:
+              if old not in s:
+                  missing.append(old[:90].replace('\n',' '))
+              else:
+                  s=s.replace(old,new,1)
+          if missing:
+              raise SystemExit('Patch anchors not found: ' + repr(missing))
+
+          p.write_text(s,encoding='utf-8')
+
+      - name: Commit patched application and remove one-shot workflow
+        run: |
+          rm -f .github/workflows/apply-attendance-gallery-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html .github/workflows/apply-attendance-gallery-fix.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Make gallery photos downloadable and attendance dates editable"
+          git push origin main
