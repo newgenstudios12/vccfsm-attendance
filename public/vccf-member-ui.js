@@ -63,16 +63,18 @@
       }
     });
 
-    const updates = [];
     const result = rows.map(m => {
       const joined = m.created_at ? manila.format(new Date(m.created_at)) : null;
       const eligible = !joined || joined <= sundays[3];
       const inactiveByAttendance = eligible && sundays.every(day => !(seen.get(String(m.id))?.has(day)));
-      const status = inactiveByAttendance ? 'inactive' : (m.status || 'active');
-      if (m.status !== status) updates.push({id:m.id,status});
-      return {...m,status};
+      return {...m, status: inactiveByAttendance ? 'inactive' : (m.status || 'active'), autoInactive: inactiveByAttendance};
     });
-    await Promise.all(updates.map(x => c.from('members').update({status:x.status,status_updated_at:new Date().toISOString()}).eq('id',x.id)));
+
+    // Only enforce the automatic four-Sunday rule. Do not write every row back here;
+    // otherwise a manual status change can immediately be overwritten by a refresh.
+    const autoInactive = result.filter(m => m.autoInactive && m.status !== 'inactive');
+    await Promise.all(autoInactive.map(x => c.from('members').update({status:'inactive'}).eq('id',x.id)));
+    autoInactive.forEach(x => { x.status = 'inactive'; });
     return result;
   }
 
@@ -134,15 +136,36 @@
       const inactive = m.status === 'inactive';
       cell.innerHTML = `<select class="vccf-inline-status" data-id="${esc(m.id)}" style="border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);color:${inactive?'#dc3545':'#198754'};font-weight:800"><option value="active" ${!inactive?'selected':''}>Active</option><option value="inactive" ${inactive?'selected':''}>Inactive</option></select>`;
       cell.querySelector('select').onchange = async e => {
+        const select = e.target;
+        const requested = select.value;
+        const previous = m.status || 'active';
         const current = await getProfile(true);
-        if (!isManager(current?.role)) { toast('You do not have permission.'); return; }
-        if (roleName(current.role) === 'area leader' && String(m.area_id) !== String(current.area_id)) { toast('You can only change members in your area.'); e.target.value=m.status; return; }
+        if (!isManager(current?.role)) { toast('You do not have permission.'); select.value=previous; return; }
+        if (roleName(current.role) === 'area leader' && String(m.area_id) !== String(current.area_id)) { toast('You can only change members in your area.'); select.value=previous; return; }
         const c = getClient();
-        const r = await c.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);
-        if (r.error) { toast(r.error.message); e.target.value=m.status; return; }
-        m.status = e.target.value;
-        toast(`Member set to ${e.target.value}.`);
-        setTimeout(decorate, 50);
+        if (!c) { toast('Database connection is unavailable.'); select.value=previous; return; }
+
+        select.disabled = true;
+        const r = await c.from('members').update({status:requested}).eq('id',m.id).select('id,status').maybeSingle();
+        select.disabled = false;
+
+        if (r.error) {
+          console.error('VCCF member status save failed:', r.error);
+          toast(`Could not save status: ${r.error.message}`);
+          select.value=previous;
+          return;
+        }
+        if (!r.data) {
+          console.error('VCCF member status save returned no row. Check Supabase UPDATE RLS policy.');
+          toast('Status was not saved. Please check the member UPDATE policy in Supabase.');
+          select.value=previous;
+          return;
+        }
+
+        m.status = r.data.status;
+        toast(`Member set to ${r.data.status}.`);
+        select.value = r.data.status;
+        select.style.color = r.data.status === 'inactive' ? '#dc3545' : '#198754';
       };
 
       const actionCell = row.cells[row.cells.length - 1];
