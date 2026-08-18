@@ -83,8 +83,6 @@
       return {...m, status: inactiveByAttendance ? 'inactive' : (m.status || 'active'), autoInactive: inactiveByAttendance};
     });
 
-    // Only enforce the automatic four-Sunday rule. Manual changes use the same
-    // secure RPC below so they cannot be blocked by client-side UPDATE RLS.
     const autoInactive = result.filter(m => m.autoInactive && m.status !== 'inactive');
     await Promise.all(autoInactive.map(async x => {
       try {
@@ -121,11 +119,66 @@
   }
   window.vccfDeleteMember = deleteMember;
 
+  function fixAttendanceNames() {
+    try {
+      if (typeof db === 'undefined' || !Array.isArray(db.members)) return;
+      const byId = new Map(db.members.map(m => [String(m.id), m]));
+      const byCode = new Map(db.members.map(m => [String(m.memberCode || ''), m]));
+      const rows = document.querySelectorAll('#attendanceRows tr');
+      rows.forEach(row => {
+        const first = row.cells?.[0];
+        if (!first) return;
+        const small = first.querySelector('small');
+        const key = small?.textContent?.trim() || '';
+        const m = byId.get(key) || byCode.get(key);
+        if (!m || !m.name) return;
+        const avatar = typeof memberAvatar === 'function'
+          ? memberAvatar(m, true)
+          : `<span class="member-avatar sm">${esc((m.name || '?').slice(0,1).toUpperCase())}</span>`;
+        first.innerHTML = `<div class="member-cell">${avatar}<div><b>${esc(m.name)}</b><br><small style="color:var(--muted)">${esc(m.memberCode || m.id)}</small></div></div>`;
+      });
+
+      const recent = document.querySelectorAll('#recentAttendance tr');
+      recent.forEach(row => {
+        const first = row.cells?.[0];
+        if (!first) return;
+        const name = first.querySelector('b')?.textContent?.trim();
+        if (name && name !== 'undefined') return;
+        const tag = row.cells?.[1]?.textContent?.trim() || '';
+        const m = db.members.find(x => x.area === tag);
+        if (!m) return;
+        const avatar = typeof memberAvatar === 'function' ? memberAvatar(m, true) : '';
+        first.innerHTML = `<div class="member-cell">${avatar}<b>${esc(m.name)}</b></div>`;
+      });
+    } catch (e) {
+      console.warn('VCCF attendance name repair:', e);
+    }
+  }
+
+  async function syncMemberAddressData() {
+    const c = getClient();
+    if (!c || typeof db === 'undefined' || !Array.isArray(db.members)) return;
+    const { data, error } = await c.from('members').select('*');
+    if (error || !Array.isArray(data)) return;
+    const rawById = new Map(data.map(m => [String(m.id), m]));
+    db.members.forEach(m => {
+      const raw = rawById.get(String(m.id));
+      if (!raw) return;
+      m.address = raw.address ?? raw.home_address ?? raw.residential_address ?? m.address ?? '';
+    });
+  }
+
   async function decorate() {
     const table = document.querySelector('#members .tablewrap table.table');
-    if (!table?.tHead?.rows?.[0] || !table.tBodies?.[0]) return;
+    if (!table?.tHead?.rows?.[0] || !table.tBodies?.[0]) {
+      fixAttendanceNames();
+      return;
+    }
     const p = await getProfile();
-    if (!isManager(p?.role)) return;
+    if (!isManager(p?.role)) {
+      fixAttendanceNames();
+      return;
+    }
 
     const members = await getMembersForStatus(p);
     const byId = new Map(members.map(m => [String(m.id), m]));
@@ -186,6 +239,9 @@
         actionCell.appendChild(b);
       }
     });
+
+    fixAttendanceNames();
+    await syncMemberAddressData();
   }
 
   function start() {
