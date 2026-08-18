@@ -1,6 +1,6 @@
 (() => {
-  if (window.__VCCF_THEME_PERSIST_V1__) return;
-  window.__VCCF_THEME_PERSIST_V1__ = true;
+  if (window.__VCCF_THEME_PERSIST_V2__) return;
+  window.__VCCF_THEME_PERSIST_V2__ = true;
 
   const valid = v => v === 'dark' || v === 'light';
   let client = null;
@@ -25,6 +25,8 @@
   function applyTheme(theme) {
     const value = valid(theme) ? theme : 'light';
     document.documentElement.dataset.theme = value;
+    localStorage.setItem('vccf-theme', value);
+    updateThemeButtons();
   }
 
   async function saveTheme(theme) {
@@ -52,47 +54,97 @@
 
   async function loadTheme() {
     const c = getClient();
-    if (!c) return;
+    const local = localStorage.getItem('vccf-theme');
+    if (!c) { applyTheme(valid(local) ? local : 'light'); return; }
     try {
       const { data: auth } = await c.auth.getUser();
       userId = auth?.user?.id || null;
-      if (!userId) { ready = false; applyTheme('light'); return; }
+      if (!userId) {
+        ready = false;
+        applyTheme(valid(local) ? local : 'light');
+        return;
+      }
       const { data, error } = await c.rpc('get_my_theme_preference');
       if (error) throw error;
       const theme = Array.isArray(data) ? data[0] : data;
       const value = typeof theme === 'string' ? theme : theme?.theme_preference;
-      applyTheme(valid(value) ? value : 'light');
-      lastSaved = valid(value) ? value : 'light';
+      applyTheme(valid(value) ? value : (valid(local) ? local : 'light'));
+      lastSaved = valid(value) ? value : currentTheme();
       ready = true;
     } catch (e) {
       console.warn('VCCF theme preference could not be loaded:', e);
-      applyTheme('light');
+      applyTheme(valid(local) ? local : 'light');
       ready = true;
-      lastSaved = 'light';
+      lastSaved = currentTheme();
     }
+  }
+
+  function setTheme(theme) {
+    const value = valid(theme) ? theme : 'light';
+    applyTheme(value);
+    if (ready) saveTheme(value);
+  }
+
+  function buttonStyle() {
+    return 'border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px 12px;font-weight:800;box-shadow:0 4px 12px rgba(0,0,0,.06);';
+  }
+
+  function makeThemeButton(id) {
+    const b = document.createElement('button');
+    b.id = id;
+    b.type = 'button';
+    b.style.cssText = buttonStyle();
+    b.addEventListener('click', () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
+    return b;
+  }
+
+  function updateThemeButtons() {
+    const dark = currentTheme() === 'dark';
+    const text = dark ? '☀️ Light mode' : '🌙 Dark mode';
+    ['vccfLoginThemeToggle', 'vccfTopThemeToggle'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.textContent = text;
+    });
+    const settingsToggle = document.getElementById('themeToggle');
+    if (settingsToggle) settingsToggle.checked = dark;
+  }
+
+  function installThemeButtons() {
+    if (!document.getElementById('vccfLoginThemeToggle')) {
+      const loginCard = document.querySelector('#login .login-card');
+      if (loginCard) {
+        const b = makeThemeButton('vccfLoginThemeToggle');
+        b.style.cssText += 'display:block;margin:0 0 18px auto;';
+        loginCard.insertBefore(b, loginCard.firstChild);
+      }
+    }
+
+    if (!document.getElementById('vccfTopThemeToggle')) {
+      const topbar = document.querySelector('.topbar');
+      if (topbar) {
+        const b = makeThemeButton('vccfTopThemeToggle');
+        b.style.cssText += 'margin-left:auto;';
+        const userchip = topbar.querySelector('.userchip');
+        if (userchip) topbar.insertBefore(b, userchip);
+        else topbar.appendChild(b);
+      }
+    }
+    updateThemeButtons();
   }
 
   function watchThemeChanges() {
     const observer = new MutationObserver(() => {
+      updateThemeButtons();
       if (ready) saveTheme(currentTheme());
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-    document.addEventListener('click', () => {
-      if (!ready) return;
-      setTimeout(() => saveTheme(currentTheme()), 80);
-    }, true);
+    const checkbox = document.getElementById('themeToggle');
+    if (checkbox && !checkbox.dataset.vccfPatched) {
+      checkbox.dataset.vccfPatched = '1';
+      checkbox.addEventListener('change', () => setTheme(checkbox.checked ? 'dark' : 'light'));
+    }
   }
-
-  async function start() {
-    watchThemeChanges();
-    await loadTheme();
-    const c = getClient();
-    c?.auth?.onAuthStateChange(() => setTimeout(loadTheme, 0));
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-  else start();
 
   const usernameEmail = value => {
     const s = String(value || '').trim().toLowerCase();
@@ -129,6 +181,7 @@
     const old = input.value || '';
     const wrap = input.closest('.field');
     if (!wrap) return;
+
     const select = document.createElement('select');
     select.id = 'mAddress';
     select.dataset.barangayPatched = '1';
@@ -136,38 +189,39 @@
     select.innerHTML = '<option value="">Select barangay</option>' +
       BARANGAYS.map(b => `<option value="${esc(b)}, Santa Maria">${esc(b)}, Santa Maria</option>`).join('') +
       '<option value="Others">Others</option>';
+
     const other = document.createElement('input');
     other.id = 'mAddressOther';
     other.type = 'text';
     other.placeholder = 'Enter address / barangay';
     other.style.marginTop = '8px';
     other.className = 'hidden';
+
     wrap.innerHTML = '<label>Address (Barangay, Santa Maria)</label>';
     wrap.appendChild(select);
     wrap.appendChild(other);
 
-    select.addEventListener('change', () => {
-      if (select.value === 'Others') {
-        other.classList.remove('hidden');
-        other.required = true;
-      } else {
-        other.classList.add('hidden');
-        other.required = false;
-        other.value = '';
-      }
-    });
+    const syncOthers = () => {
+      const isOther = select.value === 'Others';
+      other.classList.toggle('hidden', !isOther);
+      other.required = isOther;
+      if (!isOther) other.value = '';
+    };
+    select.addEventListener('change', syncOthers);
 
     const normalizedOld = old.trim();
     if (normalizedOld) {
-      const match = BARANGAYS.find(b => normalizedOld.toLowerCase() === `${b}, santa maria`.toLowerCase() || normalizedOld.toLowerCase() === `${b}, santa maria, laguna`.toLowerCase());
+      const match = BARANGAYS.find(b =>
+        normalizedOld.toLowerCase() === `${b}, santa maria`.toLowerCase() ||
+        normalizedOld.toLowerCase() === `${b}, santa maria, laguna`.toLowerCase()
+      );
       if (match) {
         select.value = `${match}, Santa Maria`;
       } else {
         select.value = 'Others';
-        other.classList.remove('hidden');
-        other.required = true;
         other.value = normalizedOld;
       }
+      syncOthers();
     }
   }
 
@@ -176,8 +230,10 @@
     const select = document.getElementById('mAddress');
     if (!form || !select || form.dataset.addressSavePatched) return;
     form.dataset.addressSavePatched = '1';
-    form.addEventListener('submit', async () => {
-      const address = select.value === 'Others' ? (document.getElementById('mAddressOther')?.value.trim() || 'Others') : select.value.trim();
+    form.addEventListener('submit', () => {
+      const address = select.value === 'Others'
+        ? (document.getElementById('mAddressOther')?.value.trim() || 'Others')
+        : select.value.trim();
       if (!address) return;
       const name = document.getElementById('mName')?.value.trim() || '';
       const birthday = document.getElementById('mBirth')?.value || '';
@@ -185,7 +241,9 @@
       setTimeout(async () => {
         try {
           const c = getClient(); if (!c) return;
-          const existing = typeof db !== 'undefined' ? (db.members || []).find(m => m.name === name && m.birthday === birthday && m.area === areaText) : null;
+          const existing = typeof db !== 'undefined'
+            ? (db.members || []).find(m => m.name === name && m.birthday === birthday && m.area === areaText)
+            : null;
           if (existing?.id) {
             const r = await c.from('members').update({address}).eq('id', existing.id);
             if (r.error) console.warn('Address save:', r.error);
@@ -212,10 +270,23 @@
   }
 
   function startEnhancements() {
+    installThemeButtons();
     enableUsernameLogin();
     observeMemberModal();
+    watchThemeChanges();
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startEnhancements, { once:true });
-  else startEnhancements();
+  async function start() {
+    startEnhancements();
+    await loadTheme();
+    installThemeButtons();
+    updateThemeButtons();
+    const c = getClient();
+    c?.auth?.onAuthStateChange(() => setTimeout(() => {
+      loadTheme().then(installThemeButtons);
+    }, 0));
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
 })();
