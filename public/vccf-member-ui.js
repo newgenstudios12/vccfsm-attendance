@@ -37,6 +37,19 @@
     return row?.cells?.[0]?.querySelector('small')?.textContent?.trim() || '';
   }
 
+  async function saveMemberStatus(memberId, status) {
+    const c = getClient();
+    if (!c) throw new Error('Database connection is unavailable.');
+    const { data, error } = await c.rpc('set_member_status', {
+      p_member_id: memberId,
+      p_status: status
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.id || !row?.status) throw new Error('Status update returned no updated member. Make sure the set_member_status SQL function has been run in Supabase.');
+    return row;
+  }
+
   async function getMembersForStatus(p) {
     const c = getClient();
     if (!c || !p) return [];
@@ -70,11 +83,17 @@
       return {...m, status: inactiveByAttendance ? 'inactive' : (m.status || 'active'), autoInactive: inactiveByAttendance};
     });
 
-    // Only enforce the automatic four-Sunday rule. Do not write every row back here;
-    // otherwise a manual status change can immediately be overwritten by a refresh.
+    // Only enforce the automatic four-Sunday rule. Manual changes use the same
+    // secure RPC below so they cannot be blocked by client-side UPDATE RLS.
     const autoInactive = result.filter(m => m.autoInactive && m.status !== 'inactive');
-    await Promise.all(autoInactive.map(x => c.from('members').update({status:'inactive'}).eq('id',x.id)));
-    autoInactive.forEach(x => { x.status = 'inactive'; });
+    await Promise.all(autoInactive.map(async x => {
+      try {
+        const saved = await saveMemberStatus(x.id, 'inactive');
+        x.status = saved.status;
+      } catch (e) {
+        console.warn('VCCF automatic inactive update failed:', e);
+      }
+    }));
     return result;
   }
 
@@ -142,30 +161,21 @@
         const current = await getProfile(true);
         if (!isManager(current?.role)) { toast('You do not have permission.'); select.value=previous; return; }
         if (roleName(current.role) === 'area leader' && String(m.area_id) !== String(current.area_id)) { toast('You can only change members in your area.'); select.value=previous; return; }
-        const c = getClient();
-        if (!c) { toast('Database connection is unavailable.'); select.value=previous; return; }
 
         select.disabled = true;
-        const r = await c.from('members').update({status:requested}).eq('id',m.id).select('id,status').maybeSingle();
-        select.disabled = false;
-
-        if (r.error) {
-          console.error('VCCF member status save failed:', r.error);
-          toast(`Could not save status: ${r.error.message}`);
-          select.value=previous;
-          return;
+        try {
+          const saved = await saveMemberStatus(m.id, requested);
+          m.status = saved.status;
+          toast(`Member set to ${saved.status}.`);
+          select.value = saved.status;
+          select.style.color = saved.status === 'inactive' ? '#dc3545' : '#198754';
+        } catch (err) {
+          console.error('VCCF member status save failed:', err);
+          toast(`Could not save status: ${err?.message || err}`);
+          select.value = previous;
+        } finally {
+          select.disabled = false;
         }
-        if (!r.data) {
-          console.error('VCCF member status save returned no row. Check Supabase UPDATE RLS policy.');
-          toast('Status was not saved. Please check the member UPDATE policy in Supabase.');
-          select.value=previous;
-          return;
-        }
-
-        m.status = r.data.status;
-        toast(`Member set to ${r.data.status}.`);
-        select.value = r.data.status;
-        select.style.color = r.data.status === 'inactive' ? '#dc3545' : '#198754';
       };
 
       const actionCell = row.cells[row.cells.length - 1];
