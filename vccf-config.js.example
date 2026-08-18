@@ -1,0 +1,2 @@
+window.VCCF_SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
+window.VCCF_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_YOUR_KEY";
