@@ -40,12 +40,26 @@
     const table=section.querySelector('#memberRows')?.closest('table');if(!table)return;const head=table.tHead?.rows?.[0],body=table.tBodies?.[0];if(!head||!body)return;
     const headers=[...head.cells];let statusIndex=headers.findIndex(c=>c.dataset.vccfStatus==='1'||c.textContent.trim().toLowerCase()==='status');let qrIndex=headers.findIndex(c=>/qr|code/i.test(c.textContent));if(qrIndex<0)qrIndex=headers.length;
     if(statusIndex<0){const th=document.createElement('th');th.textContent='Status';th.dataset.vccfStatus='1';head.insertBefore(th,head.cells[qrIndex]||null);statusIndex=qrIndex;qrIndex++}
+    let actionsIndex=[...head.cells].findIndex(c=>c.dataset.vccfActions==='1');
+    if(actionsIndex<0){const th=document.createElement('th');th.textContent='Actions';th.dataset.vccfActions='1';head.appendChild(th);actionsIndex=head.cells.length-1}
     const visible=(window.db?.members||[]).filter(m=>roleName(p.role)==='admin'||String(m.areaId)===String(p.area_id));
     [...body.rows].forEach(row=>{
       const idCell=row.cells[0]?.querySelector('small');const id=idCell?.textContent?.trim();const m=visible.find(x=>x.id===id);if(!m)return;
       const cell=row.cells[statusIndex]||row.insertCell(statusIndex);cell.innerHTML=`<select class="vccf-inline-status" style="border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);color:var(--text);font-weight:800"><option value="active">Active</option><option value="inactive">Inactive</option></select>`;cell.querySelector('select').value=m.status||'active';
       cell.querySelector('select').onchange=async e=>{const me=await profile();if(!me||!['admin','area leader'].includes(roleName(me.role))){toast('You do not have permission.');return}if(roleName(me.role)==='area leader'&&String(m.areaId)!==String(me.area_id)){toast('You can only change members in your area.');e.target.value=m.status||'active';return}const r=await supa.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);if(r.error){toast(r.error.message);e.target.value=m.status||'active';return}m.status=e.target.value;toast(`Member set to ${e.target.value}.`)};
-      if(roleName(p.role)==='admin'&&!row.querySelector('.vccf-delete-member')){const actions=row.cells[row.cells.length-1];if(actions){const b=document.createElement('button');b.className='btn danger vccf-delete-member';b.textContent='Delete';b.style.marginLeft='6px';b.onclick=async()=>{if(!confirm(`Delete ${m.name}? This will remove the member and their attendance records.`))return;const [u1,u2,u3]=await Promise.all([supa.from('profiles').update({member_id:null}).eq('member_id',m.id),supa.from('attendance').delete().eq('member_id',m.id),supa.from('members').delete().eq('id',m.id)]);const bad=u1.error||u2.error||u3.error;if(bad){toast(bad.message);return}await window.loadDb();window.refresh();toast('Member deleted.')};actions.appendChild(b)}}
+      const actionCell=row.cells[actionsIndex]||row.insertCell(actionsIndex);actionCell.dataset.vccfActionsCell='1';
+      if(roleName(p.role)==='admin'&&!actionCell.querySelector('.vccf-delete-member')){
+        const b=document.createElement('button');b.className='btn danger vccf-delete-member';b.textContent='Delete';
+        b.onclick=async()=>{
+          if(!confirm(`Delete ${m.name}? This will remove the member and their attendance records.`))return;
+          b.disabled=true;b.textContent='Deleting...';
+          const p1=await supa.from('profiles').update({member_id:null}).eq('member_id',m.id);if(p1.error){toast(p1.error.message);b.disabled=false;b.textContent='Delete';return}
+          const p2=await supa.from('attendance').delete().eq('member_id',m.id);if(p2.error){toast(p2.error.message);b.disabled=false;b.textContent='Delete';return}
+          const p3=await supa.from('members').delete().eq('id',m.id);if(p3.error){toast(p3.error.message);b.disabled=false;b.textContent='Delete';return}
+          await window.loadDb();window.refresh();toast('Member deleted.');
+        };
+        actionCell.appendChild(b);
+      }
     });
   }
 
