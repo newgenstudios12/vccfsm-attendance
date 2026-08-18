@@ -40,10 +40,7 @@
   async function saveMemberStatus(memberId, status) {
     const c = getClient();
     if (!c) throw new Error('Database connection is unavailable.');
-    const { data, error } = await c.rpc('set_member_status', {
-      p_member_id: memberId,
-      p_status: status
-    });
+    const { data, error } = await c.rpc('set_member_status', { p_member_id: memberId, p_status: status });
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.id || !row?.status) throw new Error('Status update returned no updated member. Make sure the set_member_status SQL function has been run in Supabase.');
@@ -57,7 +54,6 @@
     if (roleName(p.role) === 'area leader') q = q.eq('area_id', p.area_id);
     const { data, error } = await q;
     if (error) { console.warn('VCCF member status query:', error); return []; }
-
     const rows = data || [];
     const { data: att, error: attError } = await c.from('attendance').select('member_id,checked_in_at');
     if (attError) { console.warn('VCCF attendance status query:', attError); return rows; }
@@ -85,12 +81,8 @@
 
     const autoInactive = result.filter(m => m.autoInactive && m.status !== 'inactive');
     await Promise.all(autoInactive.map(async x => {
-      try {
-        const saved = await saveMemberStatus(x.id, 'inactive');
-        x.status = saved.status;
-      } catch (e) {
-        console.warn('VCCF automatic inactive update failed:', e);
-      }
+      try { const saved = await saveMemberStatus(x.id, 'inactive'); x.status = saved.status; }
+      catch (e) { console.warn('VCCF automatic inactive update failed:', e); }
     }));
     return result;
   }
@@ -104,14 +96,12 @@
     if (me) { toast(me.message); return; }
     if (!member) { toast('Member not found.'); return; }
     if (!confirm(`Delete ${member.display_name || 'this member'}? This removes the member record and attendance history.`)) return;
-
     const unlink = await c.from('profiles').update({member_id:null}).eq('member_id', id);
     if (unlink.error) { toast(unlink.error.message); return; }
     const att = await c.from('attendance').delete().eq('member_id', id);
     if (att.error) { toast(att.error.message); return; }
     const del = await c.from('members').delete().eq('id', id);
     if (del.error) { toast(del.error.message); return; }
-
     toast('Member deleted successfully.');
     if (typeof window.loadDb === 'function') await window.loadDb();
     if (typeof window.refresh === 'function') window.refresh();
@@ -124,35 +114,26 @@
       if (typeof db === 'undefined' || !Array.isArray(db.members)) return;
       const byId = new Map(db.members.map(m => [String(m.id), m]));
       const byCode = new Map(db.members.map(m => [String(m.memberCode || ''), m]));
-      const rows = document.querySelectorAll('#attendanceRows tr');
-      rows.forEach(row => {
-        const first = row.cells?.[0];
-        if (!first) return;
+      document.querySelectorAll('#attendanceRows tr').forEach(row => {
+        const first = row.cells?.[0]; if (!first) return;
         const small = first.querySelector('small');
         const key = small?.textContent?.trim() || '';
         const m = byId.get(key) || byCode.get(key);
         if (!m || !m.name) return;
-        const avatar = typeof memberAvatar === 'function'
-          ? memberAvatar(m, true)
-          : `<span class="member-avatar sm">${esc((m.name || '?').slice(0,1).toUpperCase())}</span>`;
+        const avatar = typeof memberAvatar === 'function' ? memberAvatar(m, true) : `<span class="member-avatar sm">${esc((m.name || '?').slice(0,1).toUpperCase())}</span>`;
         first.innerHTML = `<div class="member-cell">${avatar}<div><b>${esc(m.name)}</b><br><small style="color:var(--muted)">${esc(m.memberCode || m.id)}</small></div></div>`;
       });
-
-      const recent = document.querySelectorAll('#recentAttendance tr');
-      recent.forEach(row => {
-        const first = row.cells?.[0];
-        if (!first) return;
-        const name = first.querySelector('b')?.textContent?.trim();
-        if (name && name !== 'undefined') return;
-        const tag = row.cells?.[1]?.textContent?.trim() || '';
-        const m = db.members.find(x => x.area === tag);
+      document.querySelectorAll('#recentAttendance tr').forEach(row => {
+        const first = row.cells?.[0]; if (!first) return;
+        const current = first.querySelector('b')?.textContent?.trim();
+        if (current) return;
+        const code = first.querySelector('small')?.textContent?.trim();
+        const m = byId.get(code) || byCode.get(code);
         if (!m) return;
         const avatar = typeof memberAvatar === 'function' ? memberAvatar(m, true) : '';
         first.innerHTML = `<div class="member-cell">${avatar}<b>${esc(m.name)}</b></div>`;
       });
-    } catch (e) {
-      console.warn('VCCF attendance name repair:', e);
-    }
+    } catch (e) { console.warn('VCCF attendance name repair:', e); }
   }
 
   async function syncMemberAddressData() {
@@ -166,98 +147,86 @@
       if (!raw) return;
       m.address = raw.address ?? raw.home_address ?? raw.residential_address ?? m.address ?? '';
     });
+    if (typeof renderMembers === 'function') renderMembers();
+  }
+
+  function installAddressSavePatch() {
+    if (window.__VCCF_ADDRESS_PATCH__) return;
+    window.__VCCF_ADDRESS_PATCH__ = true;
+    const originalEdit = window.editMember;
+    if (typeof originalEdit === 'function') {
+      window.editMember = function(id) {
+        window.__VCCF_EDITING_MEMBER_ID__ = id;
+        return originalEdit(id);
+      };
+    }
+    document.addEventListener('submit', async e => {
+      const form = e.target;
+      if (!form || form.id !== 'memberForm') return;
+      const id = window.__VCCF_EDITING_MEMBER_ID__;
+      if (!id) return;
+      const address = document.getElementById('mAddress')?.value?.trim() || '';
+      const c = getClient();
+      if (!c) return;
+      const { error } = await c.from('members').update({address}).eq('id', id);
+      if (error) toast(`Address could not be saved: ${error.message}`);
+      else window.__VCCF_EDITING_MEMBER_ID__ = null;
+    }, true);
   }
 
   async function decorate() {
+    installAddressSavePatch();
     const table = document.querySelector('#members .tablewrap table.table');
     if (!table?.tHead?.rows?.[0] || !table.tBodies?.[0]) {
       fixAttendanceNames();
       return;
     }
     const p = await getProfile();
-    if (!isManager(p?.role)) {
-      fixAttendanceNames();
-      return;
-    }
-
+    if (!isManager(p?.role)) { fixAttendanceNames(); return; }
     const members = await getMembersForStatus(p);
     const byId = new Map(members.map(m => [String(m.id), m]));
     const head = table.tHead.rows[0];
-
     let statusIndex = [...head.cells].findIndex(c => c.dataset.vccfStatusHeader === '1');
     if (statusIndex < 0) {
       const qrIndex = [...head.cells].findIndex(c => /qr/i.test(c.textContent || ''));
       statusIndex = qrIndex >= 0 ? qrIndex : Math.max(0, head.cells.length - 1);
-      const th = document.createElement('th');
-      th.textContent = 'Status';
-      th.dataset.vccfStatusHeader = '1';
+      const th = document.createElement('th'); th.textContent = 'Status'; th.dataset.vccfStatusHeader = '1';
       head.insertBefore(th, head.cells[statusIndex] || null);
     }
 
     [...table.tBodies[0].rows].forEach(row => {
-      const id = findMemberId(row);
-      const m = byId.get(String(id));
+      const id = findMemberId(row), m = byId.get(String(id));
       if (!m) return;
-
       let cell = row.querySelector('td[data-vccf-status-cell="1"]');
-      if (!cell) {
-        cell = document.createElement('td');
-        cell.dataset.vccfStatusCell = '1';
-        row.insertBefore(cell, row.cells[statusIndex] || null);
-      }
+      if (!cell) { cell = document.createElement('td'); cell.dataset.vccfStatusCell = '1'; row.insertBefore(cell, row.cells[statusIndex] || null); }
       const inactive = m.status === 'inactive';
       cell.innerHTML = `<select class="vccf-inline-status" data-id="${esc(m.id)}" style="border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);color:${inactive?'#dc3545':'#198754'};font-weight:800"><option value="active" ${!inactive?'selected':''}>Active</option><option value="inactive" ${inactive?'selected':''}>Inactive</option></select>`;
       cell.querySelector('select').onchange = async e => {
-        const select = e.target;
-        const requested = select.value;
-        const previous = m.status || 'active';
+        const select = e.target, requested = select.value, previous = m.status || 'active';
         const current = await getProfile(true);
         if (!isManager(current?.role)) { toast('You do not have permission.'); select.value=previous; return; }
         if (roleName(current.role) === 'area leader' && String(m.area_id) !== String(current.area_id)) { toast('You can only change members in your area.'); select.value=previous; return; }
-
         select.disabled = true;
-        try {
-          const saved = await saveMemberStatus(m.id, requested);
-          m.status = saved.status;
-          toast(`Member set to ${saved.status}.`);
-          select.value = saved.status;
-          select.style.color = saved.status === 'inactive' ? '#dc3545' : '#198754';
-        } catch (err) {
-          console.error('VCCF member status save failed:', err);
-          toast(`Could not save status: ${err?.message || err}`);
-          select.value = previous;
-        } finally {
-          select.disabled = false;
-        }
+        try { const saved = await saveMemberStatus(m.id, requested); m.status = saved.status; toast(`Member set to ${saved.status}.`); select.value = saved.status; select.style.color = saved.status === 'inactive' ? '#dc3545' : '#198754'; }
+        catch (err) { console.error('VCCF member status save failed:', err); toast(`Could not save status: ${err?.message || err}`); select.value = previous; }
+        finally { select.disabled = false; }
       };
-
       const actionCell = row.cells[row.cells.length - 1];
       if (actionCell && roleName(p.role) === 'admin' && !actionCell.querySelector('[data-vccf-delete-member]')) {
-        const b=document.createElement('button');
-        b.type='button'; b.className='btn danger'; b.textContent='Delete'; b.dataset.vccfDeleteMember='1'; b.style.marginLeft='6px';
-        b.onclick=()=>deleteMember(m.id);
-        actionCell.appendChild(b);
+        const b=document.createElement('button'); b.type='button'; b.className='btn danger'; b.textContent='Delete'; b.dataset.vccfDeleteMember='1'; b.style.marginLeft='6px'; b.onclick=()=>deleteMember(m.id); actionCell.appendChild(b);
       }
     });
-
     fixAttendanceNames();
     await syncMemberAddressData();
   }
 
   function start() {
     let tries = 0;
-    const tick = async () => {
-      tries++;
-      try { await decorate(); } catch (e) { console.warn('VCCF member UI:', e); }
-      if (tries < 30) setTimeout(tick, 500);
-    };
+    const tick = async () => { tries++; try { await decorate(); } catch (e) { console.warn('VCCF member UI:', e); } if (tries < 30) setTimeout(tick, 500); };
     tick();
   }
 
   window.addEventListener('DOMContentLoaded', start);
   window.addEventListener('vccf-app-ready', () => { cachedProfile=null; start(); });
-  document.addEventListener('click', e => {
-    const b=e.target.closest?.('button[data-view="members"]');
-    if(b) setTimeout(decorate,100);
-  });
+  document.addEventListener('click', e => { const b=e.target.closest?.('button[data-view="members"]'); if(b) setTimeout(decorate,100); });
 })();
