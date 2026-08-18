@@ -1,6 +1,6 @@
 (() => {
-  if (window.__VCCF_MEMBER_UI_V3__) return;
-  window.__VCCF_MEMBER_UI_V3__ = true;
+  if (window.__VCCF_MEMBER_UI_V4__) return;
+  window.__VCCF_MEMBER_UI_V4__ = true;
 
   const esc = v => String(v ?? '').replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
   const roleName = r => String(r || '').trim().toLowerCase().replace(/_/g, ' ');
@@ -44,18 +44,13 @@
     return row;
   }
 
-  async function loadManagedMembers(p){
+  async function getManagedMembers(p){
     const c=getClient(); if(!c || !p) return [];
     let q=c.from('members').select('id,display_name,address,area_id,status,created_at');
     if(roleName(p.role)==='area leader') q=q.eq('area_id',p.area_id);
     const {data,error}=await q.order('display_name');
     if(error){console.warn('VCCF member query:',error);return [];} 
     const rows=data||[];
-    if(typeof db!=='undefined' && Array.isArray(db.members)){
-      const byId=new Map(rows.map(x=>[String(x.id),x]));
-      db.members.forEach(m=>{const raw=byId.get(String(m.id));if(raw)m.address=raw.address||'';});
-    }
-
     const {data:att,error:ae}=await c.from('attendance').select('member_id,checked_in_at');
     if(ae) return rows;
     const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'});
@@ -73,6 +68,33 @@
     });
   }
 
+  async function refreshMemberStatistics(){
+    try{
+      const p=await getProfile(true); if(!p || !isManager(p.role)) return;
+      const members=await getManagedMembers(p);
+      const areaSelect=[...document.querySelectorAll('select')].find(s=>/statistics|area|total/i.test((s.getAttribute('aria-label')||'')+' '+s.className+' '+[...s.options].map(o=>o.textContent).join(' ')) && [...s.options].some(o=>/all areas|total|per area/i.test(o.textContent)));
+      const selected=areaSelect?.value||'total';
+      let filtered=members;
+      if(roleName(p.role)==='area leader') filtered=members;
+      else if(selected && !/total|all/i.test(selected)){
+        filtered=members.filter(m=>String(m.area_id)===String(selected) || String(m.area_id||'').toLowerCase()===String(selected).toLowerCase());
+      }
+      const total=filtered.length;
+      const inactive=filtered.filter(m=>String(m.status||'active').toLowerCase()==='inactive').length;
+      const active=Math.max(0,total-inactive);
+
+      const stats=[...document.querySelectorAll('.stats .stat')];
+      stats.forEach(card=>{
+        const label=(card.querySelector('small')?.textContent||'').trim().toLowerCase();
+        const value=card.querySelector('strong'); if(!value)return;
+        if(label.includes('inactive')) value.textContent=inactive;
+        else if(label.includes('active')) value.textContent=active;
+        else if(label.includes('total') && label.includes('member')) value.textContent=total;
+      });
+    }catch(e){console.warn('VCCF statistics refresh:',e);}
+  }
+  window.vccfRefreshMemberStatistics=refreshMemberStatistics;
+
   async function deleteMember(id){
     const p=await getProfile(true);
     if(roleName(p?.role)!=='admin'){toast('Only administrators can delete members.');return;}
@@ -88,6 +110,7 @@
     if(typeof window.loadDb==='function')await window.loadDb();
     if(typeof window.refresh==='function')window.refresh();
     setTimeout(repairMembersTable,300);
+    setTimeout(refreshMemberStatistics,500);
   }
   window.vccfDeleteMember=deleteMember;
 
@@ -127,29 +150,21 @@
     return {cells,view,action,name,birthday,access,area};
   }
 
-  function makeButtonCell(node){
-    const td=document.createElement('td');
-    if(node){while(node.firstChild)td.appendChild(node.firstChild);} 
-    return td;
-  }
-
   async function repairMembersTable(){
     const table=document.querySelector('#members .tablewrap table.table');
-    if(!table?.tHead?.rows?.[0]||!table.tBodies?.[0]){attendanceNames();return;}
+    if(!table?.tHead?.rows?.[0]||!table.tBodies?.[0]){attendanceNames();refreshMemberStatistics();return;}
     const p=await getProfile();
     if(!isManager(p?.role)){attendanceNames();return;}
     await syncAddresses();
-    const managed=await loadManagedMembers(p);
+    const managed=await getManagedMembers(p);
     const byId=new Map(managed.map(m=>[String(m.id),m]));
     const head=table.tHead.rows[0];
-
-    // Normalize the header order so Status sits between Access and QR.
     const wanted=['Name','Birthday','Area','Address','Access','Status','QR','Actions'];
     const oldHeaders=[...head.cells];
     const headerFor=label=>oldHeaders.find(h=>h.textContent.trim().toLowerCase()===label.toLowerCase());
     wanted.forEach(label=>{
       let h=headerFor(label);
-      if(!h){h=document.createElement('th');h.textContent=label;if(label==='Status')h.dataset.vccfStatusHeader='1';}
+      if(!h){h=document.createElement('th');h.textContent=label;}
       head.appendChild(h);
     });
     oldHeaders.forEach(h=>{if(!wanted.some(x=>x.toLowerCase()===h.textContent.trim().toLowerCase()))h.remove();});
@@ -157,28 +172,15 @@
     [...table.tBodies[0].rows].forEach(row=>{
       const id=memberIdFromRow(row); const m=byId.get(id); if(!m)return;
       const parts=classifyCells(row);
-      const nameCell=parts.name;
-      const birthdayCell=parts.birthday;
-      const areaCell=parts.area;
-      const accessCell=parts.access;
       const viewButton=parts.view?.querySelector('button');
       const actionButtons=parts.action?[...parts.action.querySelectorAll('button')]:[];
       const editButton=actionButtons.find(b=>b.textContent.trim().toLowerCase()==='edit');
       const deleteButton=actionButtons.find(b=>b.textContent.trim().toLowerCase()==='delete');
-      const cells=[
-        nameCell,
-        birthdayCell,
-        areaCell,
-        null,
-        accessCell,
-        null,
-        null,
-        null
-      ];
+      const cells=[parts.name,parts.birthday,parts.area,null,parts.access,null,null,null];
       row.innerHTML='';
       cells.forEach((src,i)=>{
         const td=document.createElement('td');
-        if(i===3){td.textContent=m.address||'';}
+        if(i===3)td.textContent=m.address||'';
         else if(i===5){
           const select=document.createElement('select');select.className='vccf-inline-status';select.dataset.id=m.id;select.style.cssText='border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);font-weight:800;';
           select.innerHTML=`<option value="active">Active</option><option value="inactive">Inactive</option>`;select.value=m.status==='inactive'?'inactive':'active';select.style.color=select.value==='inactive'?'#dc3545':'#198754';
@@ -188,7 +190,7 @@
             if(!isManager(current?.role)){select.value=previous;return;}
             if(roleName(current.role)==='area leader'&&String(m.area_id)!==String(current.area_id)){toast('You can only change members in your area.');select.value=previous;return;}
             select.disabled=true;
-            try{const saved=await saveMemberStatus(m.id,requested);m.status=saved.status;select.value=saved.status;select.style.color=saved.status==='inactive'?'#dc3545':'#198754';toast(`Member set to ${saved.status}.`);}
+            try{const saved=await saveMemberStatus(m.id,requested);m.status=saved.status;select.value=saved.status;select.style.color=saved.status==='inactive'?'#dc3545':'#198754';toast(`Member set to ${saved.status}.`);await refreshMemberStatistics();}
             catch(e){console.error(e);toast(`Could not save status: ${e?.message||e}`);select.value=previous;}
             finally{select.disabled=false;}
           };
@@ -205,11 +207,12 @@
       });
     });
     attendanceNames();
+    await refreshMemberStatistics();
   }
 
   function installAddressSave(){
-    if(window.__VCCF_ADDRESS_SAVE_V3__)return;
-    window.__VCCF_ADDRESS_SAVE_V3__=true;
+    if(window.__VCCF_ADDRESS_SAVE_V4__)return;
+    window.__VCCF_ADDRESS_SAVE_V4__=true;
     const originalEdit=window.editMember;
     if(typeof originalEdit==='function')window.editMember=function(id){window.__VCCF_EDITING_MEMBER_ID__=id;return originalEdit(id);};
     document.addEventListener('submit',async e=>{
@@ -228,10 +231,10 @@
   async function start(){
     installAddressSave();
     let tries=0;
-    const tick=async()=>{tries++;try{await repairMembersTable();}catch(e){console.warn('VCCF member UI:',e);}if(tries<30)setTimeout(tick,500);};
+    const tick=async()=>{tries++;try{await repairMembersTable();await refreshMemberStatistics();}catch(e){console.warn('VCCF member UI:',e);}if(tries<30)setTimeout(tick,700);};
     tick();
   }
   window.addEventListener('DOMContentLoaded',start);
   window.addEventListener('vccf-app-ready',()=>{cachedProfile=null;start();});
-  document.addEventListener('click',e=>{if(e.target.closest?.('button[data-view="members"]'))setTimeout(repairMembersTable,150);});
+  document.addEventListener('click',e=>{if(e.target.closest?.('button[data-view="members"],button[data-view="dashboard"]'))setTimeout(()=>{repairMembersTable();refreshMemberStatistics();},200);});
 })();
