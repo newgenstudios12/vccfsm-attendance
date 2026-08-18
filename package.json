@@ -1,0 +1,6 @@
+{
+  "name":"vccf-attendance-production",
+  "version":"2.0.0",
+  "private":true,
+  "description":"VCCF Santa Maria Attendance — Supabase connected production frontend"
+}
