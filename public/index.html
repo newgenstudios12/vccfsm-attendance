@@ -247,12 +247,12 @@ let profile=null;
 
 async function loadDb(){
   const [areasR,membersR,attendanceR,photosR,peopleR,profileR] = await Promise.all([
-    supabase.from('areas').select('*').order('name'),
-    supabase.from('members').select('*').order('display_name'),
-    supabase.from('attendance').select('*').order('checked_in_at',{ascending:false}),
-    supabase.from('photos').select('*').order('created_at',{ascending:false}),
-    supabase.from('site_people').select('*').order('sort_order'),
-    supabase.auth.getUser()
+    supabaseClient.from('areas').select('*').order('name'),
+    supabaseClient.from('members').select('*').order('display_name'),
+    supabaseClient.from('attendance').select('*').order('checked_in_at',{ascending:false}),
+    supabaseClient.from('photos').select('*').order('created_at',{ascending:false}),
+    supabaseClient.from('site_people').select('*').order('sort_order'),
+    supabaseClient.auth.getUser()
   ]);
   for(const r of [areasR,membersR,attendanceR,photosR]) if(r.error) throw r.error;
   db.areas=areasR.data||[];
@@ -260,9 +260,9 @@ async function loadDb(){
   db.attendance=(attendanceR.data||[]).map(a=>({id:(db.members.find(m=>m.id===a.member_id)||{}).memberCode||a.member_id,name:(db.members.find(m=>m.id===a.member_id)||{}).name||'',area:(db.areas.find(x=>x.id===a.area_id)||{}).name||'',date:new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}),time:new Date(a.checked_in_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'}),memberId:a.member_id}));
   db.pastors=(peopleR.data||[]).filter(x=>x.kind==='pastor').map(x=>({name:x.name,desc:x.description||'',id:x.id}));
   db.leaders=(peopleR.data||[]).filter(x=>x.kind==='leader').map(x=>({name:x.name,desc:x.description||'',id:x.id}));
-  db.photos=(photosR.data||[]).map(p=>({...p,public_url:supabase.storage.from('vccf-gallery').getPublicUrl(p.storage_path).data.publicUrl}));
+  db.photos=(photosR.data||[]).map(p=>({...p,public_url:supabaseClient.storage.from('vccf-gallery').getPublicUrl(p.storage_path).data.publicUrl}));
   if(profileR.data.user){
-    const pr=await supabase.from('profiles').select('*, members(*)').eq('user_id',profileR.data.user.id).single();
+    const pr=await supabaseClient.from('profiles').select('*, members(*)').eq('user_id',profileR.data.user.id).single();
     if(!pr.error) profile=pr.data;
   }
   if(profile){
@@ -380,7 +380,7 @@ $("memberForm").onsubmit=async e=>{
  const parts=fullName.split(/\s+/); const first_name=parts.shift()||fullName; const last_name=parts.join(' ')||'';
  const area_id=areaIdByName($("mArea").value);
  const payload={first_name,last_name,birth_date:$("mBirth").value||null,area_id,photo_url:photo||null};
- const r=m ? await supabase.from('members').update(payload).eq('id',m.id) : await supabase.from('members').insert(payload);
+ const r=m ? await supabaseClient.from('members').update(payload).eq('id',m.id) : await supabaseClient.from('members').insert(payload);
  if(r.error){toast(r.error.message);return}
  $("modal").classList.remove("open");await loadDb();refresh();toast("Member saved.");
 };
@@ -416,7 +416,7 @@ function createAccount(){
  <div style="margin-top:16px;color:var(--muted);font-size:.8rem">Accounts are managed by Supabase Auth. The production account-creation endpoint must be deployed as a server-side function.</div>`);
  const sync=()=>{const role=$("aRole").value;$("aArea").disabled=role==='admin';if(role==='admin')$("aArea").value='';};
  $("aRole").onchange=sync;sync();
- $("accountForm").onsubmit=async e=>{e.preventDefault();const email=$("aUser").value.trim(),password=$("aPass").value,display_name=$("aName").value.trim(),role=$("aRole").value,area_id=$("aArea").value||null,member_id=$("aMember").value||null;try{const {error}=await supabase.functions.invoke('create-user',{body:{email,password,display_name,role,area_id,member_id}});if(error)throw error;$("modal").classList.remove("open");toast("Account created successfully.")}catch(err){toast(err.message||"Unable to create account.")}};
+ $("accountForm").onsubmit=async e=>{e.preventDefault();const email=$("aUser").value.trim(),password=$("aPass").value,display_name=$("aName").value.trim(),role=$("aRole").value,area_id=$("aArea").value||null,member_id=$("aMember").value||null;try{const {error}=await supabaseClient.functions.invoke('create-user',{body:{email,password,display_name,role,area_id,member_id}});if(error)throw error;$("modal").classList.remove("open");toast("Account created successfully.")}catch(err){toast(err.message||"Unable to create account.")}};
 }
 function renderAttendance(){
  const rows=[...db.attendance].reverse();
@@ -431,9 +431,9 @@ async function checkin(id){
   if(!m){toast("Invalid member QR.");return}
   if(session.role==="Member" && m.id!==session.memberId){toast("Members can only check in themselves.");return}
   if(session.role==="Area Leader" && m.areaId!==session.areaId){toast("You can only check in members in your assigned area.");return}
-  const {data:existing,error:er}=await supabase.from('attendance').select('id').eq('member_id',m.id).gte('checked_in_at',new Date(new Date().toLocaleDateString('en-US',{timeZone:'Asia/Manila'})).toISOString()).limit(1);
+  const {data:existing,error:er}=await supabaseClient.from('attendance').select('id').eq('member_id',m.id).gte('checked_in_at',new Date(new Date().toLocaleDateString('en-US',{timeZone:'Asia/Manila'})).toISOString()).limit(1);
   if(er){toast(er.message);return} if(existing?.length){toast("Already checked in today.");return}
-  const r=await supabase.from('attendance').insert({member_id:m.id,area_id:m.areaId,checked_in_by:profile?.user_id||null,source:session.role==='Member'?'self':'qr'});
+  const r=await supabaseClient.from('attendance').insert({member_id:m.id,area_id:m.areaId,checked_in_by:profile?.user_id||null,source:session.role==='Member'?'self':'qr'});
   if(r.error){toast(r.error.message);return}
   await loadDb();refresh();$("scanResult").innerHTML=`<div class="panel" style="border-color:#198754"><div class="member-cell">${memberAvatar(m)}<div><b>✓ Attendance recorded</b><br>${m.name} · ${m.area}</div></div></div>`;toast("Attendance recorded.");
 }
@@ -472,10 +472,10 @@ function selfCheckIn(){
 $("selfCheckBtn").onclick=selfCheckIn;
 
 function renderGallery(){let can=admin();$("galleryGrid").innerHTML=db.photos.map((p,i)=>{const src=p.public_url||p.src||'';return `<div class="photo"><img src="${src}" alt="${p.title}"><div class="meta"><b>${p.title}</b><br><small>${p.taken_on||p.date||''} ${p.featured?"· Featured":""}</small><div class="photo-actions">${can?`<button class="btn secondary" onclick="toggleFeatured(${i})">${p.featured?"Unfeature":"Feature"}</button><button class="btn danger" onclick="deletePhoto(${i})">Delete</button>`:""}</div></div></div>`}).join("")||`<div class="panel" style="grid-column:1/-1;color:var(--muted)">No photos yet. Admins can add Sunday photos.</div>`;let f=db.photos.filter(p=>p.featured).slice(0,3);$("featuredMini").innerHTML=f.map(p=>`<img src="${p.public_url||p.src||''}" alt="${p.title}">`).join("")||`<p style="color:var(--muted)">No featured photos yet.</p>`}
-async function uploadPhotos(){if(!admin())return;openModal("Add Sunday photos",`<div class="field"><label>Sunday / Collection title</label><input id="photoTitle" placeholder="Sunday Worship — August 16, 2026"></div><div class="field"><label>Select photos</label><input id="photoFiles" type="file" accept="image/*" multiple></div><button class="btn" id="savePhotos">Upload photos</button>`);$("savePhotos").onclick=async()=>{let files=[...$("photoFiles").files];if(!files.length)return toast("Choose at least one photo.");let title=$("photoTitle").value||"Sunday Worship";for(const file of files){const path=`${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const up=await supabase.storage.from('vccf-gallery').upload(path,file,{upsert:false});if(up.error){toast(up.error.message);return}const {data:pub}=supabase.storage.from('vccf-gallery').getPublicUrl(path);const ins=await supabase.from('photos').insert({title,storage_path:path,taken_on:today(),featured:false,uploaded_by:profile?.user_id||null});if(ins.error){toast(ins.error.message);return}}await loadDb();db.photos=db.photos.map(p=>({...p,public_url:supabase.storage.from('vccf-gallery').getPublicUrl(p.storage_path).data.publicUrl}));$("modal").classList.remove("open");refresh();toast(files.length+" photo(s) added.")}}
+async function uploadPhotos(){if(!admin())return;openModal("Add Sunday photos",`<div class="field"><label>Sunday / Collection title</label><input id="photoTitle" placeholder="Sunday Worship — August 16, 2026"></div><div class="field"><label>Select photos</label><input id="photoFiles" type="file" accept="image/*" multiple></div><button class="btn" id="savePhotos">Upload photos</button>`);$("savePhotos").onclick=async()=>{let files=[...$("photoFiles").files];if(!files.length)return toast("Choose at least one photo.");let title=$("photoTitle").value||"Sunday Worship";for(const file of files){const path=`${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const up=await supabaseClient.storage.from('vccf-gallery').upload(path,file,{upsert:false});if(up.error){toast(up.error.message);return}const {data:pub}=supabaseClient.storage.from('vccf-gallery').getPublicUrl(path);const ins=await supabaseClient.from('photos').insert({title,storage_path:path,taken_on:today(),featured:false,uploaded_by:profile?.user_id||null});if(ins.error){toast(ins.error.message);return}}await loadDb();db.photos=db.photos.map(p=>({...p,public_url:supabaseClient.storage.from('vccf-gallery').getPublicUrl(p.storage_path).data.publicUrl}));$("modal").classList.remove("open");refresh();toast(files.length+" photo(s) added.")}}
 $("uploadPhotoBtn").onclick=uploadPhotos;
-async function toggleFeatured(i){if(!admin())return;const p=db.photos[i];const r=await supabase.from('photos').update({featured:!p.featured}).eq('id',p.id);if(r.error){toast(r.error.message);return}await loadDb();refresh();toast("Featured photo updated.")}
-async function deletePhoto(i){if(!admin()||!confirm("Delete this photo?"))return;const p=db.photos[i];const r=await supabase.from('photos').delete().eq('id',p.id);if(r.error){toast(r.error.message);return}if(p.storage_path)await supabase.storage.from('vccf-gallery').remove([p.storage_path]);await loadDb();refresh()}
+async function toggleFeatured(i){if(!admin())return;const p=db.photos[i];const r=await supabaseClient.from('photos').update({featured:!p.featured}).eq('id',p.id);if(r.error){toast(r.error.message);return}await loadDb();refresh();toast("Featured photo updated.")}
+async function deletePhoto(i){if(!admin()||!confirm("Delete this photo?"))return;const p=db.photos[i];const r=await supabaseClient.from('photos').delete().eq('id',p.id);if(r.error){toast(r.error.message);return}if(p.storage_path)await supabaseClient.storage.from('vccf-gallery').remove([p.storage_path]);await loadDb();refresh()}
 function renderAbout(){ $("pastors").innerHTML=db.pastors.map(p=>`<div class="person"><div class="personpic">✝</div><div><b>${p.name}</b><div style="color:var(--muted);font-size:.85rem">${p.desc}</div></div></div>`).join(""); $("leaders").innerHTML=db.leaders.map(p=>`<div class="person"><div class="personpic">♥</div><div><b>${p.name}</b><div style="color:var(--muted);font-size:.85rem">${p.desc}</div></div></div>`).join("")}
 function editPeople(type){if(!admin())return;let arr=type==="pastors"?db.pastors:db.leaders;openModal(type==="pastors"?"Edit pastors":"Edit area leaders",`<div class="field"><label>One person per line: Name | Description</label><textarea id="peopleText" rows="8">${arr.map(x=>x.name+" | "+x.desc).join("\\n")}</textarea></div><button class="btn" id="savePeople">Save</button>`);$("savePeople").onclick=()=>{db[type]=$("peopleText").value.split("\\n").filter(Boolean).map(line=>{let [name,...rest]=line.split("|");return{name:name.trim(),desc:rest.join("|").trim()}});save();$("modal").classList.remove("open");refresh()}}
 $("editPastors").onclick=()=>editPeople("pastors");$("editLeaders").onclick=()=>editPeople("leaders");
@@ -491,14 +491,14 @@ function applyPermissions(){
 }
 function openView(v){document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$(v).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.view===v));$("pageTitle").textContent=v[0].toUpperCase()+v.slice(1);if(v==="members")renderMembers()}
 
-$("loginForm").onsubmit=async e=>{e.preventDefault();try{const {error}=await supabase.auth.signInWithPassword({email:$("loginUser").value.trim(),password:$("loginPass").value});if(error)throw error;await loadDb();if(!session)throw new Error("Your account has no VCCF profile yet. An administrator must assign your role.");$("login").style.display="none";$("app").classList.add("active");$("currentName").textContent=session.name;$("currentRole").textContent=session.role+(session.area?" · "+session.area:"");$("avatar").textContent=session.name[0];$("accountInfo").textContent=session.name+" · "+session.role;refresh()}catch(err){toast(err.message||"Unable to sign in.")}};
-$("logout").onclick=async()=>{await supabase.auth.signOut();session=null;profile=null;$("app").classList.remove("active");$("login").style.display="grid";$("loginForm").reset()};
+$("loginForm").onsubmit=async e=>{e.preventDefault();try{const {error}=await supabaseClient.auth.signInWithPassword({email:$("loginUser").value.trim(),password:$("loginPass").value});if(error)throw error;await loadDb();if(!session)throw new Error("Your account has no VCCF profile yet. An administrator must assign your role.");$("login").style.display="none";$("app").classList.add("active");$("currentName").textContent=session.name;$("currentRole").textContent=session.role+(session.area?" · "+session.area:"");$("avatar").textContent=session.name[0];$("accountInfo").textContent=session.name+" · "+session.role;refresh()}catch(err){toast(err.message||"Unable to sign in.")}};
+$("logout").onclick=async()=>{await supabaseClient.auth.signOut();session=null;profile=null;$("app").classList.remove("active");$("login").style.display="grid";$("loginForm").reset()};
 $("themeToggle").onchange=()=>{document.documentElement.dataset.theme=$("themeToggle").checked?"dark":"light";theme()};
 $("changePass").onclick=()=>openModal("Change password",`<form id="passwordForm"><div class="field"><label>New password</label><input id="newPass" type="password" minlength="8" required></div><button class="btn" style="width:100%">Update password</button></form>`);
 $("manageAccess").onclick=()=>openModal("Access management",`<p style="color:var(--muted)">Access is enforced by Supabase Auth and PostgreSQL Row Level Security. Administrators manage roles; Area Leaders are restricted to their assigned area.</p>`);
 $("exportBtn").onclick=()=>{let rows=[["Type","ID","Name","Area","Birthday","Address","Date","Time"]];db.members.forEach(m=>rows.push(["Member",m.memberCode,m.name,m.area,m.birthday,m.address,"",""]));db.attendance.forEach(a=>rows.push(["Attendance",a.id,a.name,a.area,"","",a.date,a.time]));let csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(",")).join("\n");let a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="vccf-attendance-export.csv";a.click()};
 document.documentElement.dataset.theme="light";theme();
-(async()=>{try{if(!SUPABASE_URL||!SUPABASE_KEY){toast("Supabase configuration is missing.");return}const {data}=await supabase.auth.getSession();if(data.session){await loadDb();if(session){$("login").style.display="none";$("app").classList.add("active");$("currentName").textContent=session.name;$("currentRole").textContent=session.role+(session.area?" · "+session.area:"");$("avatar").textContent=session.name[0];$("accountInfo").textContent=session.name+" · "+session.role;refresh()}}}catch(e){console.error(e)}})();
+(async()=>{try{if(!SUPABASE_URL||!SUPABASE_KEY){toast("Supabase configuration is missing.");return}const {data}=await supabaseClient.auth.getSession();if(data.session){await loadDb();if(session){$("login").style.display="none";$("app").classList.add("active");$("currentName").textContent=session.name;$("currentRole").textContent=session.role+(session.area?" · "+session.area:"");$("avatar").textContent=session.name[0];$("accountInfo").textContent=session.name+" · "+session.role;refresh()}}}catch(e){console.error(e)}})();
 </script>
 </body>
 </html>
