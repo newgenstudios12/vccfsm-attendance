@@ -16,12 +16,41 @@
     await Promise.all(updates.map(x=>supa.from('members').update({status:x.status,status_updated_at:new Date().toISOString()}).eq('id',x.id)));return out;
   }
 
+  async function deleteMember(id){
+    const p=await profile();
+    if(roleName(p?.role)!=='admin'){toast('Only administrators can delete members.');return}
+    const memberId=String(id);
+    const members=await supa.from('members').select('id,display_name').eq('id',memberId).maybeSingle();
+    if(members.error){toast(members.error.message);return}
+    if(!members.data){toast('Member not found.');return}
+    if(!confirm(`Delete ${members.data.display_name||'this member'}? This removes the member record and attendance history. The login account, if any, is not deleted.`))return;
+    try{
+      const unlink=await supa.from('profiles').update({member_id:null}).eq('member_id',memberId);
+      if(unlink.error)throw unlink.error;
+      const att=await supa.from('attendance').delete().eq('member_id',memberId);
+      if(att.error)throw att.error;
+      const del=await supa.from('members').delete().eq('id',memberId);
+      if(del.error)throw del.error;
+      toast('Member deleted successfully.');
+      if(typeof window.loadDb==='function')await window.loadDb();
+      if(typeof window.renderMembers==='function')window.renderMembers();
+      if(typeof window.refresh==='function')window.refresh();
+      setTimeout(decorateMembersTable,150);
+    }catch(e){toast(e?.message||'Unable to delete member.')}
+  }
+  window.vccfDeleteMember=deleteMember;
+
   async function decorateMembersTable(){
     const p=await profile();if(!manager(p?.role))return;const table=document.querySelector('#members .tablewrap table.table');if(!table?.tHead?.rows?.[0]||!table.tBodies?.[0])return;
     const members=await statusData(),byId=new Map(members.map(m=>[String(m.id),m])),head=table.tHead.rows[0];
     let statusIndex=[...head.cells].findIndex(c=>c.dataset.memberStatus==='1');
     if(statusIndex<0){const qrIndex=[...head.cells].findIndex(c=>/qr|code/i.test(c.textContent||''));statusIndex=qrIndex<0?head.cells.length:qrIndex;const th=document.createElement('th');th.textContent='Status';th.dataset.memberStatus='1';head.insertBefore(th,head.cells[statusIndex]||null)}
-    [...table.tBodies[0].rows].forEach(row=>{const id=row.cells[0]?.querySelector('small')?.textContent?.trim(),m=byId.get(String(id));let cell=row.querySelector('td[data-member-status-cell="1"]');if(!cell){cell=document.createElement('td');cell.dataset.memberStatusCell='1';row.insertBefore(cell,row.cells[statusIndex]||null)}if(!m){cell.textContent='—';return}const inactive=m.status==='inactive',c=inactive?'#dc3545':'#198754';cell.innerHTML=`<select class="vccf-inline-status" data-id="${esc(m.id)}" style="border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);color:${c};font-weight:800"><option value="active" ${!inactive?'selected':''}>Active</option><option value="inactive" ${inactive?'selected':''}>Inactive</option></select>`;cell.querySelector('select').onchange=async e=>{const r=await profile();if(!manager(r?.role)){toast('You do not have permission.');return}if(roleName(r.role)==='area leader'&&String(m.area_id)!==String(r.area_id)){toast('You can only change members in your area.');e.target.value=m.status;return}const u=await supa.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);if(u.error){toast(u.error.message);return}m.status=e.target.value;toast(`Member set to ${e.target.value}.`);await updateDashboardStats()}})
+    [...table.tBodies[0].rows].forEach(row=>{const id=row.cells[0]?.querySelector('small')?.textContent?.trim(),m=byId.get(String(id));let cell=row.querySelector('td[data-member-status-cell="1"]');if(!cell){cell=document.createElement('td');cell.dataset.memberStatusCell='1';row.insertBefore(cell,row.cells[statusIndex]||null)}if(!m){cell.textContent='—';return}const inactive=m.status==='inactive',c=inactive?'#dc3545':'#198754';cell.innerHTML=`<select class="vccf-inline-status" data-id="${esc(m.id)}" style="border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);color:${c};font-weight:800"><option value="active" ${!inactive?'selected':''}>Active</option><option value="inactive" ${inactive?'selected':''}>Inactive</option></select>`;cell.querySelector('select').onchange=async e=>{const r=await profile();if(!manager(r?.role)){toast('You do not have permission.');return}if(roleName(r.role)==='area leader'&&String(m.area_id)!==String(r.area_id)){toast('You can only change members in your area.');e.target.value=m.status;return}const u=await supa.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);if(u.error){toast(u.error.message);return}m.status=e.target.value;toast(`Member set to ${e.target.value}.`);await updateDashboardStats()}});
+      const actionCell=row.cells[row.cells.length-1];
+      if(actionCell&&roleName(p.role)==='admin'&&!actionCell.querySelector('[data-vccf-delete-member]')){
+        const b=document.createElement('button');b.type='button';b.className='btn danger';b.textContent='Delete';b.dataset.vccfDeleteMember='1';b.style.marginLeft='6px';b.onclick=()=>deleteMember(m.id);actionCell.appendChild(b);
+      }
+    });
   }
 
   async function updateDashboardStats(){
