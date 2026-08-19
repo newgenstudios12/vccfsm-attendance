@@ -1,6 +1,6 @@
 (() => {
-  if (window.__VCCF_THEME_PERSIST_V2__) return;
-  window.__VCCF_THEME_PERSIST_V2__ = true;
+  if (window.__VCCF_THEME_PERSIST_V3__) return;
+  window.__VCCF_THEME_PERSIST_V3__ = true;
 
   const valid = v => v === 'dark' || v === 'light';
   let client = null;
@@ -22,10 +22,19 @@
     return valid(document.documentElement.dataset.theme) ? document.documentElement.dataset.theme : 'light';
   }
 
+  function syncLogos(theme) {
+    const dark = theme === 'dark';
+    document.querySelectorAll('.logo').forEach(img => {
+      const desired = dark ? img.dataset.dark : img.dataset.light;
+      if (desired && img.getAttribute('src') !== desired) img.setAttribute('src', desired);
+    });
+  }
+
   function applyTheme(theme) {
     const value = valid(theme) ? theme : 'light';
     document.documentElement.dataset.theme = value;
     localStorage.setItem('vccf-theme', value);
+    syncLogos(value);
     updateThemeButtons();
   }
 
@@ -107,6 +116,7 @@
     });
     const settingsToggle = document.getElementById('themeToggle');
     if (settingsToggle) settingsToggle.checked = dark;
+    syncLogos(dark ? 'dark' : 'light');
   }
 
   function installThemeButtons() {
@@ -261,6 +271,8 @@
   function observeMemberModal() {
     const modal = document.getElementById('modal');
     if (!modal) return;
+    if (modal.dataset.vccfAddressObserver) return;
+    modal.dataset.vccfAddressObserver = '1';
     const observer = new MutationObserver(() => {
       patchAddressField();
       saveAddressAfterMemberSubmit();
@@ -274,6 +286,7 @@
     enableUsernameLogin();
     observeMemberModal();
     watchThemeChanges();
+    syncLogos(currentTheme());
   }
 
   async function start() {
