@@ -5,105 +5,17 @@
   const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
   let sortMode = 'name';
   let addressFilter = '';
-
   const $ = id => document.getElementById(id);
 
-  function getMembers() {
-    if (typeof window.areaMembers !== 'function' || !Array.isArray(window.db?.members)) return [];
-    return window.areaMembers();
-  }
-
-  function sortMembers() {
-    const members = getMembers();
-    members.sort((a, b) => {
-      if (sortMode === 'address') {
-        return collator.compare(String(a.address || ''), String(b.address || '')) ||
-               collator.compare(String(a.name || ''), String(b.name || ''));
-      }
-      return collator.compare(String(a.name || ''), String(b.name || ''));
-    });
-  }
-
-  function updateAddressFilterOptions() {
-    const select = $('vccfFilterByAddress');
-    if (!select) return;
-
-    const values = [...new Set(
-      getMembers()
-        .map(m => String(m.address || '').trim())
-        .filter(Boolean)
-    )].sort(collator.compare);
-
-    const current = addressFilter;
-    select.innerHTML = '<option value="">All addresses</option>' +
-      values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('') +
-      '<option value="__blank__">No address</option>';
-    select.value = values.includes(current) || current === '__blank__' ? current : '';
-  }
-
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>\"]/g, ch => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;'
-    }[ch]));
-  }
-
-  function applyAddressFilter() {
-    const tbody = $('memberRows');
-    if (!tbody) return;
-
-    Array.from(tbody.rows).forEach(row => {
-      const address = (row.cells[3]?.textContent || '').trim();
-      const visible = addressFilter === '__blank__' ? !address : (!addressFilter || address === addressFilter);
-      row.hidden = !visible;
-    });
-  }
-
-  function updateMemberCount() {
-    const el = $('vccfMemberCount');
-    if (!el) return;
-
-    const total = Array.isArray(window.db?.members) ? window.db.members.length : 0;
-    const shown = getMembers().filter(member => {
-      const address = String(member.address || '').trim();
-      return addressFilter === '__blank__' ? !address : (!addressFilter || address === addressFilter);
-    }).length;
-
-    el.textContent = `Total members: ${total} · Showing: ${shown}`;
-  }
-
-  function renderMembersWithControls() {
-    sortMembers();
-    if (typeof window.renderMembers === 'function') window.renderMembers();
-    updateAddressFilterOptions();
-    applyAddressFilter();
-    updateMemberCount();
-  }
-
-  function patchRenderer() {
-    if (window.__VCCF_MEMBER_RENDER_PATCHED_V2__) return true;
-    if (typeof window.renderMembers !== 'function') return false;
-
-    const original = window.renderMembers;
-    window.renderMembers = function (...args) {
-      sortMembers();
-      const result = original.apply(this, args);
-      updateAddressFilterOptions();
-      applyAddressFilter();
-      updateMemberCount();
-      return result;
-    };
-
-    window.__VCCF_MEMBER_RENDER_PATCHED_V2__ = true;
-    return true;
+  function members() {
+    if (!Array.isArray(window.db?.members)) return [];
+    if (typeof window.areaMembers === 'function') return window.areaMembers();
+    return window.db.members;
   }
 
   function ensureControls() {
     const section = $('members');
     if (!section) return false;
-
     const toolbar = section.querySelector('.toolbar');
     if (!toolbar) return false;
 
@@ -123,10 +35,10 @@
     }
 
     if (!$('vccfSortBy')) {
-      const label = document.createElement('label');
-      label.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
-      label.innerHTML = '<span>Sort by:</span>';
-
+      const wrap = document.createElement('label');
+      wrap.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
+      const label = document.createElement('span');
+      label.textContent = 'Sort by:';
       const select = document.createElement('select');
       select.id = 'vccfSortBy';
       select.className = 'search';
@@ -135,71 +47,150 @@
       select.value = sortMode;
       select.addEventListener('change', () => {
         sortMode = select.value;
-        renderMembersWithControls();
+        render();
       });
-
-      label.appendChild(select);
-      box.appendChild(label);
+      wrap.append(label, select);
+      box.appendChild(wrap);
     }
 
     if (!$('vccfFilterByAddress')) {
-      const label = document.createElement('label');
-      label.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
-      label.innerHTML = '<span>Filter by: Address</span>';
-
+      const wrap = document.createElement('label');
+      wrap.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
+      const label = document.createElement('span');
+      label.textContent = 'Filter by: Address';
       const select = document.createElement('select');
       select.id = 'vccfFilterByAddress';
       select.className = 'search';
-      select.style.minWidth = '210px';
+      select.style.minWidth = '230px';
       select.addEventListener('change', () => {
         addressFilter = select.value;
-        applyAddressFilter();
-        updateMemberCount();
+        applyRowFilter();
+        updateCount();
       });
-
-      label.appendChild(select);
-      box.appendChild(label);
+      wrap.append(label, select);
+      box.appendChild(wrap);
     }
 
-    updateAddressFilterOptions();
-    applyAddressFilter();
-    updateMemberCount();
+    refreshAddressOptions();
+    return true;
+  }
+
+  function refreshAddressOptions() {
+    const select = $('vccfFilterByAddress');
+    if (!select) return;
+    const values = [...new Set(
+      members()
+        .map(m => String(m.address || '').trim())
+        .filter(Boolean)
+    )].sort(collator.compare);
+
+    const current = addressFilter;
+    const options = ['<option value="">All addresses</option>']
+      .concat(values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`))
+      .concat(['<option value="__blank__">No address</option>']);
+
+    select.innerHTML = options.join('');
+    select.value = values.includes(current) || current === '__blank__' ? current : '';
+  }
+
+  function escapeHtml(v) {
+    return String(v).replace(/[&<>\"]/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'
+    }[m]));
+  }
+
+  function sortRows() {
+    const data = members();
+    data.sort((a, b) => {
+      if (sortMode === 'address') {
+        return collator.compare(String(a.address || ''), String(b.address || '')) ||
+          collator.compare(String(a.name || ''), String(b.name || ''));
+      }
+      return collator.compare(String(a.name || ''), String(b.name || ''));
+    });
+  }
+
+  function applyRowFilter() {
+    const tbody = $('memberRows');
+    if (!tbody) return;
+    [...tbody.rows].forEach(row => {
+      const address = (row.cells[3]?.textContent || '').trim();
+      const show = addressFilter === '__blank__' ? !address : (!addressFilter || address === addressFilter);
+      row.style.display = show ? '' : 'none';
+    });
+  }
+
+  function updateCount() {
+    const all = Array.isArray(window.db?.members) ? window.db.members : [];
+    const visible = members();
+    const shown = visible.filter(m => {
+      const a = String(m.address || '').trim();
+      return addressFilter === '__blank__' ? !a : (!addressFilter || a === addressFilter);
+    }).length;
+    const el = $('vccfMemberCount');
+    if (el) el.textContent = `Total members: ${all.length} · Showing: ${shown}`;
+  }
+
+  function render() {
+    sortRows();
+    if (typeof window.renderMembers === 'function') window.renderMembers();
+    refreshAddressOptions();
+    applyRowFilter();
+    updateCount();
+  }
+
+  function patchRenderer() {
+    if (window.__VCCF_MEMBER_RENDER_PATCHED__) return true;
+    if (typeof window.renderMembers !== 'function') return false;
+    const original = window.renderMembers;
+    window.renderMembers = function (...args) {
+      sortRows();
+      const result = original.apply(this, args);
+      refreshAddressOptions();
+      applyRowFilter();
+      updateCount();
+      return result;
+    };
+    window.__VCCF_MEMBER_RENDER_PATCHED__ = true;
     return true;
   }
 
   function boot() {
-    ensureControls();
+    const ready = ensureControls();
     patchRenderer();
-
-    const search = $('memberSearch');
-    if (search && !search.dataset.vccfMemberControlsBound) {
-      search.dataset.vccfMemberControlsBound = '1';
-      search.addEventListener('input', () => setTimeout(updateMemberCount, 0));
-    }
-
-    const area = $('areaFilter');
-    if (area && !area.dataset.vccfMemberControlsBound) {
-      area.dataset.vccfMemberControlsBound = '1';
-      area.addEventListener('change', () => {
-        updateAddressFilterOptions();
-        applyAddressFilter();
-        updateMemberCount();
+    if ($('memberSearch') && !$('memberSearch').dataset.vccfControlsPatched) {
+      $('memberSearch').dataset.vccfControlsPatched = '1';
+      $('memberSearch').addEventListener('input', () => {
+        setTimeout(() => {
+          refreshAddressOptions();
+          applyRowFilter();
+          updateCount();
+        }, 0);
       });
     }
-
-    return typeof window.renderMembers === 'function';
+    if ($('areaFilter') && !$('areaFilter').dataset.vccfControlsPatched) {
+      $('areaFilter').dataset.vccfControlsPatched = '1';
+      $('areaFilter').addEventListener('change', () => {
+        refreshAddressOptions();
+        applyRowFilter();
+        updateCount();
+      });
+    }
+    applyRowFilter();
+    updateCount();
+    return ready;
   }
 
   function start() {
-    // The page already contains the Members markup before scripts near the end of
-    // the document run, so we deliberately avoid a MutationObserver here. The
-    // previous observer could continuously trigger itself and make the app hang.
     let attempts = 0;
     const timer = setInterval(() => {
       attempts += 1;
       const ready = boot();
-      if (ready || attempts >= 20) clearInterval(timer);
-    }, 250);
+      if (ready && Array.isArray(window.db?.members) && window.db.members.length >= 0) {
+        if (window.db.members.length > 0 || attempts >= 20) clearInterval(timer);
+      }
+      if (attempts >= 40) clearInterval(timer);
+    }, 300);
     boot();
   }
 
@@ -208,6 +199,4 @@
   } else {
     start();
   }
-
-  window.addEventListener('vccf-app-ready', start);
 })();
