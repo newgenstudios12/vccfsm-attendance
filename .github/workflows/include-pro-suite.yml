@@ -7,6 +7,7 @@ on:
       - 'public/vccf-pro-suite.js'
       - 'public/vccf-my-profile.js'
       - 'public/vccf-chat.js'
+      - 'public/vccf-profile-auto-link.js'
       - 'public/index.html'
       - '.github/workflows/include-pro-suite.yml'
 
@@ -22,7 +23,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Ensure Pro UX, My Profile, and Chat modules are loaded
+      - name: Ensure Pro UX, My Profile, Chat, and Profile Link modules are loaded
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -31,6 +32,7 @@ jobs:
           tags = [
               '<script src="/vccf-pro-suite.js"></script>',
               '<script src="/vccf-my-profile.js"></script>',
+              '<script src="/vccf-profile-auto-link.js"></script>',
               '<script src="/vccf-chat.js"></script>',
           ]
           marker = '</body>'
