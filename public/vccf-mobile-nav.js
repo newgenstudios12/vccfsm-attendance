@@ -49,3 +49,12 @@ const run=()=>{
 };
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(run,700));else setTimeout(run,700);
 })();
+
+// VCCF Connect PWA bootstrap. This file is already loaded by index.html,
+// so registration does not require another HTML change.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/vccf-sw.js', { scope: '/' })
+      .catch(error => console.warn('[VCCF PWA] Service worker registration failed:', error));
+  });
+}
