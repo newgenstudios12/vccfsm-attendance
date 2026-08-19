@@ -26,12 +26,20 @@
     const {data:members,error}=await supa.from('members').select('id,display_name,area_id,created_at,status');if(error||!members)return [];
     const {data:attendance}=await supa.from('attendance').select('member_id,checked_in_at');const sundays=sundayList(4),oldest=sundays[3];const by=new Map();
     (attendance||[]).forEach(a=>{const d=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});if(sundays.includes(d)){if(!by.has(a.member_id))by.set(a.member_id,new Set());by.get(a.member_id).add(d)}});
-    const updates=[];for(const m of members){const joined=m.created_at?new Date(m.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}):null;const eligible=!joined||joined<=oldest;const next=eligible&&sundays.every(d=>!(by.get(m.id)?.has(d)))?'inactive':'active';if(m.status!==next)updates.push({id:m.id,status:next})}
+    const updates=[];
+    for(const m of members){
+      const joined=m.created_at?new Date(m.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}):null;
+      const eligible=!joined||joined<=oldest;
+      const fourConsecutiveMisses=eligible&&sundays.every(d=>!(by.get(m.id)?.has(d)));
+      // Preserve the stored status unless the four-consecutive-Sundays rule explicitly requires inactivity.
+      const next=fourConsecutiveMisses?'inactive':(m.status||'active');
+      if(m.status!==next)updates.push({id:m.id,status:next});
+    }
     for(const u of updates)await supa.from('members').update({status:u.status,status_updated_at:new Date().toISOString()}).eq('id',u.id);
     return members.map(m=>({...m,status:updates.find(x=>x.id===m.id)?.status||m.status||'active'}));
   }
 
-  async function loadStatusesIntoDb(){const rows=await calculateStatuses();const map=new Map(rows.map(x=>[x.id,x.status]));(window.db?.members||[]).forEach(m=>m.status=map.get(m.id)||'active');return rows}
+  async function loadStatusesIntoDb(){const rows=await calculateStatuses();const map=new Map(rows.map(x=>[x.id,x.status]));(window.db?.members||[]).forEach(m=>m.status=map.get(m.id)||m.status||'active');return rows}
 
   async function enhanceMembers(){
     const section=document.getElementById('members');if(!section)return;document.getElementById('memberStatusPanel')?.remove();
@@ -46,7 +54,7 @@
     [...body.rows].forEach(row=>{
       const idCell=row.cells[0]?.querySelector('small');const id=idCell?.textContent?.trim();const m=visible.find(x=>x.id===id);if(!m)return;
       const cell=row.cells[statusIndex]||row.insertCell(statusIndex);cell.innerHTML=`<select class="vccf-inline-status" style="border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);color:var(--text);font-weight:800"><option value="active">Active</option><option value="inactive">Inactive</option></select>`;cell.querySelector('select').value=m.status||'active';
-      cell.querySelector('select').onchange=async e=>{const me=await profile();if(!me||!['admin','area leader'].includes(roleName(me.role))){toast('You do not have permission.');return}if(roleName(me.role)==='area leader'&&String(m.areaId)!==String(me.area_id)){toast('You can only change members in your area.');e.target.value=m.status||'active';return}const r=await supa.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);if(r.error){toast(r.error.message);e.target.value=m.status||'active';return}m.status=e.target.value;toast(`Member set to ${e.target.value}.`)};
+      cell.querySelector('select').onchange=async e=>{const me=await profile();if(!me||!['admin','area leader'].includes(roleName(me.role))){toast('You do not have permission.');return}if(roleName(me.role)==='area leader'&&String(m.areaId)!==String(me.area_id)){toast('You can only change members in your area.');e.target.value=m.status||'active';return}const r=await supa.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);if(r.error){toast(r.error.message);e.target.value=m.status||'active';return}m.status=e.target.value;const local=(window.db?.members||[]).find(x=>x.id===m.id);if(local)local.status=m.status;toast(`Member set to ${e.target.value}.`)};
       const actionCell=row.cells[actionsIndex]||row.insertCell(actionsIndex);actionCell.dataset.vccfActionsCell='1';
       if(roleName(p.role)==='admin'&&!actionCell.querySelector('.vccf-delete-member')){
         const b=document.createElement('button');b.className='btn danger vccf-delete-member';b.textContent='Delete';
@@ -77,10 +85,23 @@
     const draw=()=>{const sel=document.getElementById('memberStatsArea').value;const vis=sel==='all'?rows:rows.filter(m=>String(m.area_id)===String(sel));document.getElementById('memberStatsCards').innerHTML=`<div class="stat"><small>Total Members</small><strong>${vis.length}</strong></div><div class="stat"><small>Active Members</small><strong>${vis.filter(m=>m.status==='active').length}</strong></div><div class="stat"><small>Inactive Members</small><strong>${vis.filter(m=>m.status==='inactive').length}</strong></div>`};document.getElementById('memberStatsArea').onchange=draw;draw();
   }
 
-  function run(){setTimeout(async()=>{try{if(document.getElementById('dashboard')?.classList.contains('active')){await renderVideo();await renderStats();await fixRecentAttendance()}if(document.getElementById('members')?.classList.contains('active')){if(typeof window.renderMembers==='function')window.renderMembers();await enhanceMembers()}if(document.getElementById('attendance')?.classList.contains('active'))await fixAttendanceNames()}catch(e){console.warn('VCCF UI enhancement:',e)}},450)}
+  let runTimer=null;
+  let running=false;
+  async function run(){
+    if(running)return;
+    running=true;
+    try{
+      if(document.getElementById('dashboard')?.classList.contains('active')){await renderVideo();await renderStats();await fixRecentAttendance()}
+      if(document.getElementById('members')?.classList.contains('active')){if(typeof window.renderMembers==='function')window.renderMembers();await enhanceMembers()}
+      if(document.getElementById('attendance')?.classList.contains('active'))await fixAttendanceNames()
+    }catch(e){console.warn('VCCF UI enhancement:',e)}
+    finally{running=false}
+  }
+  const scheduleRun=()=>{clearTimeout(runTimer);runTimer=setTimeout(run,120)};
+
   window.addEventListener('DOMContentLoaded',()=>setTimeout(run,700));
-  document.querySelectorAll('.nav button[data-view]').forEach(b=>b.addEventListener('click',run));
-  const observer=new MutationObserver(()=>run());observer.observe(document.body,{subtree:true,childList:true});
+  document.querySelectorAll('.nav button[data-view]').forEach(b=>b.addEventListener('click',scheduleRun));
+  window.addEventListener('vccf-app-ready',scheduleRun);
   const loadAttendanceExport=()=>{if(window.__VCCF_ATTENDANCE_EXPORT_LOADER__)return;window.__VCCF_ATTENDANCE_EXPORT_LOADER__=true;const s=document.createElement('script');s.src='/vccf-attendance-export.js';s.onload=()=>window.vccfAttendanceExportLoaded=true;document.head.appendChild(s)};
   window.addEventListener('DOMContentLoaded',loadAttendanceExport);
   window.addEventListener('vccf-app-ready',loadAttendanceExport);
