@@ -1,0 +1,39 @@
+name: Link VCCF responsive safety stylesheet
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link responsive safety stylesheet
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('public/index.html')
+          text = p.read_text(encoding='utf-8')
+          marker = 'VCCF_RESPONSIVE_OVERRIDES_V1'
+          if marker in text:
+              print('Responsive safety stylesheet already linked.')
+              raise SystemExit(0)
+          head_end = text.find('</head>')
+          if head_end < 0:
+              raise SystemExit('Could not find </head>')
+          link = '<!-- VCCF_RESPONSIVE_OVERRIDES_V1 -->\n<link rel="stylesheet" href="/vccf-responsive-overrides.css">\n'
+          text = text[:head_end] + link + text[head_end:]
+          p.write_text(text, encoding='utf-8')
+      - name: Commit responsive link
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Link responsive safety stylesheet'
+          git push
