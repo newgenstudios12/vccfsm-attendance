@@ -1,0 +1,34 @@
+(()=>{
+'use strict';
+if(window.__VCCF_MOBILE_NAV_V1__)return;
+window.__VCCF_MOBILE_NAV_V1__=true;
+const run=()=>{
+  const nav=document.querySelector('.nav');
+  if(!nav||nav.querySelector('[data-mobile-more]'))return;
+  const primary=['dashboard','members','attendance','profile'];
+  const hidden=['selfcheck','gallery','about','settings','analytics','events','notifications'];
+  const buttons=[...nav.querySelectorAll('button')];
+  const find=v=>buttons.find(b=>(b.dataset.suiteView||b.dataset.view)===v);
+  hidden.forEach(v=>{const b=find(v);if(b)b.classList.add('mobile-secondary-nav')});
+  const more=document.createElement('button');
+  more.type='button';
+  more.dataset.mobileMore='true';
+  more.className='mobile-more-button';
+  more.innerHTML='<span aria-hidden="true">•••</span><span>More</span>';
+  nav.appendChild(more);
+  const overlay=document.createElement('div');
+  overlay.className='mobile-more-overlay';
+  overlay.innerHTML=`<div class="mobile-more-sheet" role="dialog" aria-label="More navigation"><div class="mobile-more-head"><div><b>More</b><small>More VCCF Connect sections</small></div><button type="button" class="mobile-more-close" aria-label="Close">×</button></div><div class="mobile-more-grid"></div></div>`;
+  document.body.appendChild(overlay);
+  const grid=overlay.querySelector('.mobile-more-grid');
+  hidden.forEach(v=>{const b=find(v);if(!b)return;const item=document.createElement('button');item.type='button';item.className='mobile-more-item';item.innerHTML=b.innerHTML;item.onclick=()=>{b.click();overlay.classList.remove('open')};grid.appendChild(item)});
+  const close=()=>overlay.classList.remove('open');
+  more.onclick=()=>overlay.classList.add('open');
+  overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+  overlay.querySelector('.mobile-more-close').onclick=close;
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+  const update=()=>{const active=nav.querySelector('button.active');if(active&&active!==more)more.classList.remove('active')};
+  const observer=new MutationObserver(update); observer.observe(nav,{subtree:true,attributes:true,attributeFilter:['class']});
+};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(run,1200));else setTimeout(run,1200);
+})();
