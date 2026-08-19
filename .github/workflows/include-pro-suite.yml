@@ -8,6 +8,7 @@ on:
       - 'public/vccf-my-profile.js'
       - 'public/vccf-my-profile-v2.js'
       - 'public/vccf-chat.js'
+      - 'public/vccf-chat-v2.js'
       - 'public/vccf-profile-auto-link.js'
       - 'public/vccf-profile-member-view-fix.js'
       - 'public/index.html'
@@ -25,19 +26,21 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Ensure Pro UX, My Profile, Chat, and Profile modules are loaded
+      - name: Ensure VCCF modules are loaded
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('public/index.html')
           s = p.read_text(encoding='utf-8')
+          s = s.replace('  <script src="/vccf-chat.js"></script>\n', '')
+          s = s.replace('  <script src="/vccf-chat-v2.js"></script>\n', '')
           tags = [
               '<script src="/vccf-pro-suite.js"></script>',
               '<script src="/vccf-my-profile.js"></script>',
               '<script src="/vccf-my-profile-v2.js"></script>',
               '<script src="/vccf-profile-auto-link.js"></script>',
               '<script src="/vccf-profile-member-view-fix.js"></script>',
-              '<script src="/vccf-chat.js"></script>',
+              '<script src="/vccf-chat-v2.js"></script>',
           ]
           marker = '</body>'
           if marker not in s:
