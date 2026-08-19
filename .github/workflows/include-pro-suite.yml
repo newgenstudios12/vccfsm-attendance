@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'public/vccf-pro-suite.js'
+      - 'public/vccf-my-profile.js'
       - 'public/index.html'
       - '.github/workflows/include-pro-suite.yml'
 
@@ -20,28 +21,35 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Ensure Pro UX suite is loaded
+      - name: Ensure Pro UX and My Profile modules are loaded
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('public/index.html')
           s = p.read_text(encoding='utf-8')
-          tag = '<script src="/vccf-pro-suite.js"></script>'
-          if tag not in s:
-              marker = '</body>'
-              if marker not in s:
-                  raise SystemExit('Could not find </body> in public/index.html')
-              s = s.replace(marker, f'  {tag}\n{marker}', 1)
+          tags = [
+              '<script src="/vccf-pro-suite.js"></script>',
+              '<script src="/vccf-my-profile.js"></script>',
+          ]
+          marker = '</body>'
+          if marker not in s:
+              raise SystemExit('Could not find </body> in public/index.html')
+          changed = False
+          for tag in tags:
+              if tag not in s:
+                  s = s.replace(marker, f'  {tag}\n{marker}', 1)
+                  changed = True
+          if changed:
               p.write_text(s, encoding='utf-8')
           PY
 
-      - name: Commit Pro UX suite inclusion
+      - name: Commit module inclusion
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/index.html
           if git diff --cached --quiet; then
-            echo 'Pro UX suite already included.'
+            echo 'Modules already included.'
           else
             git commit -m 'chore(pro): load production UX suite'
             git push
