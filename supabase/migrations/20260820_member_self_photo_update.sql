@@ -14,12 +14,7 @@ begin
     raise exception 'Only your own member profile can be updated';
   end if;
 
-  if new.display_name is distinct from old.display_name
-     or new.member_code is distinct from old.member_code
-     or new.area_id is distinct from old.area_id
-     or new.address is distinct from old.address
-     or new.birthday is distinct from old.birthday
-     or new.status is distinct from old.status then
+  if (to_jsonb(new) - 'photo_url') is distinct from (to_jsonb(old) - 'photo_url') then
     raise exception 'Only profile photo changes are allowed for your own member profile';
   end if;
 
