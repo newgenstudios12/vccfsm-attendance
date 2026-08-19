@@ -1,0 +1,37 @@
+name: Install organized mobile navigation
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link mobile navigation assets
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('public/index.html')
+          text = path.read_text(encoding='utf-8')
+          marker = 'VCCF_MOBILE_NAV_V1'
+          if marker not in text:
+              end = text.find('</head>')
+              if end < 0:
+                  raise SystemExit('Could not find </head>')
+              inject = '<!-- VCCF_MOBILE_NAV_V1 -->\n<link rel="stylesheet" href="/vccf-mobile-nav.css">\n<script src="/vccf-mobile-nav.js" defer></script>\n'
+              text = text[:end] + inject + text[end:]
+              path.write_text(text, encoding='utf-8')
+      - name: Commit mobile navigation patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Organize mobile navigation with More drawer'
+          git push
