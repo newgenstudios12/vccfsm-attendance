@@ -127,9 +127,14 @@
     applyRowFilter();updateCount();
   }
 
-  const observer=new MutationObserver(()=>boot());
-  observer.observe(document.body,{childList:true,subtree:true});
-  window.addEventListener('DOMContentLoaded',()=>setTimeout(boot,100));
-  window.addEventListener('vccf-app-ready',()=>setTimeout(boot,100));
-  boot();
+  const start = () => {
+    if (!document.body) return;
+    const observer=new MutationObserver(()=>boot());
+    observer.observe(document.body,{childList:true,subtree:true});
+    window.addEventListener('vccf-app-ready',()=>setTimeout(boot,100));
+    boot();
+  };
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
 })();
