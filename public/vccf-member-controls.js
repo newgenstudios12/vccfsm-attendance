@@ -1,16 +1,27 @@
 (() => {
-  if (window.__VCCF_MEMBER_CONTROLS_V2__) return;
-  window.__VCCF_MEMBER_CONTROLS_V2__ = true;
+  if (window.__VCCF_MEMBER_CONTROLS_V3__) return;
+  window.__VCCF_MEMBER_CONTROLS_V3__ = true;
 
   const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
   let sortMode = 'name';
   let addressFilter = '';
   const $ = id => document.getElementById(id);
 
+  function getMembersDb() {
+    try {
+      return (typeof db !== 'undefined' && Array.isArray(db.members)) ? db : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function members() {
-    if (!Array.isArray(window.db?.members)) return [];
-    if (typeof window.areaMembers === 'function') return window.areaMembers();
-    return window.db.members;
+    const state = getMembersDb();
+    if (!state) return [];
+    try {
+      if (typeof areaMembers === 'function') return areaMembers();
+    } catch (_) {}
+    return state.members;
   }
 
   function ensureControls() {
@@ -23,6 +34,8 @@
     if (!box) {
       box = document.createElement('div');
       box.id = 'vccfMemberControls';
+      box.setAttribute('role', 'group');
+      box.setAttribute('aria-label', 'Member list controls');
       box.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px 0;';
       toolbar.insertAdjacentElement('afterend', box);
     }
@@ -43,6 +56,7 @@
       select.id = 'vccfSortBy';
       select.className = 'search';
       select.style.minWidth = '150px';
+      select.setAttribute('aria-label', 'Sort members by');
       select.innerHTML = '<option value="name">Name</option><option value="address">Address</option>';
       select.value = sortMode;
       select.addEventListener('change', () => {
@@ -62,6 +76,7 @@
       select.id = 'vccfFilterByAddress';
       select.className = 'search';
       select.style.minWidth = '230px';
+      select.setAttribute('aria-label', 'Filter members by address');
       select.addEventListener('change', () => {
         addressFilter = select.value;
         applyRowFilter();
@@ -121,7 +136,8 @@
   }
 
   function updateCount() {
-    const all = Array.isArray(window.db?.members) ? window.db.members : [];
+    const state = getMembersDb();
+    const all = state?.members || [];
     const visible = members();
     const shown = visible.filter(m => {
       const a = String(m.address || '').trim();
@@ -133,16 +149,17 @@
 
   function render() {
     sortRows();
-    if (typeof window.renderMembers === 'function') window.renderMembers();
+    if (typeof renderMembers === 'function') renderMembers();
     refreshAddressOptions();
     applyRowFilter();
     updateCount();
   }
 
   function patchRenderer() {
-    if (window.__VCCF_MEMBER_RENDER_PATCHED__) return true;
-    if (typeof window.renderMembers !== 'function') return false;
-    const original = window.renderMembers;
+    if (window.__VCCF_MEMBER_RENDER_PATCHED_V2__) return true;
+    if (typeof renderMembers !== 'function') return false;
+    const original = renderMembers;
+    window.__VCCF_MEMBER_RENDER_PATCHED_V2__ = true;
     window.renderMembers = function (...args) {
       sortRows();
       const result = original.apply(this, args);
@@ -151,31 +168,68 @@
       updateCount();
       return result;
     };
-    window.__VCCF_MEMBER_RENDER_PATCHED__ = true;
     return true;
+  }
+
+  function installThemeFade() {
+    if (document.getElementById('vccfThemeFadeStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'vccfThemeFadeStyles';
+    style.textContent = `
+      html, body, .app, .sidebar, .main, .panel, .stat, .toolbar, .tablewrap, .login-card,
+      input, select, textarea, button, .btn, .search, .modal-card, .topbar, .userchip {
+        transition: background-color .24s ease, color .24s ease, border-color .24s ease,
+                    box-shadow .24s ease, opacity .24s ease;
+      }
+      .logo { transition: opacity .18s ease; }
+      body.vccf-theme-fading .logo { opacity: .1; }
+      @media (prefers-reduced-motion: reduce) {
+        html, body, .app, .sidebar, .main, .panel, .stat, .toolbar, .tablewrap, .login-card,
+        input, select, textarea, button, .btn, .search, .modal-card, .topbar, .userchip, .logo {
+          transition: none !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    let lastTheme = document.documentElement.dataset.theme || 'light';
+    const observer = new MutationObserver(() => {
+      const nextTheme = document.documentElement.dataset.theme || 'light';
+      if (nextTheme === lastTheme) return;
+      lastTheme = nextTheme;
+      document.body.classList.add('vccf-theme-fading');
+      window.setTimeout(() => document.body.classList.remove('vccf-theme-fading'), 240);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
   function boot() {
     const ready = ensureControls();
     patchRenderer();
-    if ($('memberSearch') && !$('memberSearch').dataset.vccfControlsPatched) {
-      $('memberSearch').dataset.vccfControlsPatched = '1';
-      $('memberSearch').addEventListener('input', () => {
-        setTimeout(() => {
+    installThemeFade();
+
+    const search = $('memberSearch');
+    if (search && !search.dataset.vccfControlsPatched) {
+      search.dataset.vccfControlsPatched = '1';
+      search.addEventListener('input', () => {
+        window.setTimeout(() => {
           refreshAddressOptions();
           applyRowFilter();
           updateCount();
         }, 0);
       });
     }
-    if ($('areaFilter') && !$('areaFilter').dataset.vccfControlsPatched) {
-      $('areaFilter').dataset.vccfControlsPatched = '1';
-      $('areaFilter').addEventListener('change', () => {
+
+    const area = $('areaFilter');
+    if (area && !area.dataset.vccfControlsPatched) {
+      area.dataset.vccfControlsPatched = '1';
+      area.addEventListener('change', () => {
         refreshAddressOptions();
         applyRowFilter();
         updateCount();
       });
     }
+
     applyRowFilter();
     updateCount();
     return ready;
@@ -186,10 +240,12 @@
     const timer = setInterval(() => {
       attempts += 1;
       const ready = boot();
-      if (ready && Array.isArray(window.db?.members) && window.db.members.length >= 0) {
-        if (window.db.members.length > 0 || attempts >= 20) clearInterval(timer);
+      const state = getMembersDb();
+      if (ready && state && state.members.length > 0) {
+        clearInterval(timer);
+      } else if (attempts >= 40) {
+        clearInterval(timer);
       }
-      if (attempts >= 40) clearInterval(timer);
     }, 300);
     boot();
   }
