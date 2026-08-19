@@ -6,6 +6,7 @@ on:
     paths:
       - 'public/vccf-pro-suite.js'
       - 'public/vccf-my-profile.js'
+      - 'public/vccf-my-profile-v2.js'
       - 'public/vccf-chat.js'
       - 'public/vccf-profile-auto-link.js'
       - 'public/vccf-profile-member-view-fix.js'
@@ -33,6 +34,7 @@ jobs:
           tags = [
               '<script src="/vccf-pro-suite.js"></script>',
               '<script src="/vccf-my-profile.js"></script>',
+              '<script src="/vccf-my-profile-v2.js"></script>',
               '<script src="/vccf-profile-auto-link.js"></script>',
               '<script src="/vccf-profile-member-view-fix.js"></script>',
               '<script src="/vccf-chat.js"></script>',
