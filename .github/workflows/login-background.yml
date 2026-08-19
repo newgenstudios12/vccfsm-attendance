@@ -51,3 +51,5 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Set church photo as responsive login background'
           git push
+
+# Trigger a follow-up run after the workflow file is present on main.
