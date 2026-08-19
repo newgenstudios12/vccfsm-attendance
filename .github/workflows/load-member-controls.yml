@@ -1,0 +1,38 @@
+name: Load member controls
+
+on:
+  push:
+    paths:
+      - 'public/vccf-member-controls.js'
+      - '.github/workflows/load-member-controls.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add member-controls script to index
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('public/index.html')
+          s = p.read_text()
+          tag = '<script src="/vccf-member-controls.js"></script>'
+          if tag not in s:
+              marker = '<script src="/vccf-member-ui.js"></script>'
+              if marker not in s:
+                  raise SystemExit('member-ui script tag not found')
+              s = s.replace(marker, marker + '\n' + tag, 1)
+              p.write_text(s)
+          PY
+      - name: Commit index patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Load member sort and address filter controls'
+          git push
