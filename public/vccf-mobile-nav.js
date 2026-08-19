@@ -1,51 +1,72 @@
 (()=>{
 'use strict';
-if(window.__VCCF_MOBILE_NAV_V2__)return;
-window.__VCCF_MOBILE_NAV_V2__=true;
+if(window.__VCCF_MOBILE_NAV_V3__)return;
+window.__VCCF_MOBILE_NAV_V3__=true;
 const run=()=>{
   const nav=document.querySelector('.nav');
-  if(!nav||nav.dataset.organizedNav==='true')return;
-  nav.dataset.organizedNav='true';
-  const primary=['dashboard','members','attendance','profile'];
-  const secondary=['selfcheck','gallery','about','settings','analytics','events','notifications'];
+  if(!nav||nav.dataset.responsiveNav==='v3')return;
+  nav.dataset.responsiveNav='v3';
   const buttons=[...nav.querySelectorAll('button')];
-  const find=v=>buttons.find(b=>(b.dataset.suiteView||b.dataset.view)===v);
-  secondary.forEach(v=>{const b=find(v);if(b)b.classList.add('mobile-secondary-nav')});
-  const primaryButtons=primary.map(find).filter(Boolean);
-  const more=document.createElement('button');
-  more.type='button';
-  more.dataset.mobileMore='true';
-  more.className='mobile-more-button';
-  more.setAttribute('aria-expanded','false');
-  more.innerHTML='<span aria-hidden="true">•••</span><span>More</span>';
-  nav.appendChild(more);
-  const overlay=document.createElement('div');
-  overlay.className='mobile-more-overlay';
-  overlay.innerHTML=`<div class="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="More navigation"><div class="mobile-more-head"><div><b>More</b><small>Additional VCCF Connect sections</small></div><button type="button" class="mobile-more-close" aria-label="Close">×</button></div><div class="mobile-more-grid"></div></div>`;
-  document.body.appendChild(overlay);
-  const grid=overlay.querySelector('.mobile-more-grid');
-  secondary.forEach(v=>{
-    const b=find(v);if(!b)return;
-    const item=document.createElement('button');
-    item.type='button';
-    item.className='mobile-more-item';
-    item.innerHTML=b.innerHTML;
-    item.onclick=()=>{b.click();close()};
-    grid.appendChild(item);
+  if(!buttons.length)return;
+
+  const trigger=document.createElement('button');
+  trigger.type='button';
+  trigger.className='mobile-nav-trigger';
+  trigger.setAttribute('aria-label','Open navigation');
+  trigger.setAttribute('aria-expanded','false');
+  trigger.innerHTML='<span></span><span></span><span></span>';
+
+  const backdrop=document.createElement('div');
+  backdrop.className='mobile-nav-backdrop';
+
+  const drawer=document.createElement('aside');
+  drawer.className='mobile-nav-drawer';
+  drawer.setAttribute('aria-label','Main navigation');
+  drawer.innerHTML='<div class="mobile-nav-drawer-head"><div class="mobile-nav-brand"><span class="mobile-nav-brand-mark">V</span><div><strong>VCCF Connect</strong><small>Navigation</small></div></div><button type="button" class="mobile-nav-close" aria-label="Close navigation">×</button></div><div class="mobile-nav-drawer-list"></div>';
+  const list=drawer.querySelector('.mobile-nav-drawer-list');
+
+  buttons.forEach((button)=>{
+    const item=button.cloneNode(true);
+    item.classList.remove('mobile-secondary-nav','mobile-more-button');
+    item.classList.add('mobile-drawer-item');
+    item.addEventListener('click',()=>{button.click();close()});
+    list.appendChild(item);
   });
-  const close=()=>{overlay.classList.remove('open');more.setAttribute('aria-expanded','false')};
-  const open=()=>{overlay.classList.add('open');more.setAttribute('aria-expanded','true')};
-  more.onclick=()=>overlay.classList.contains('open')?close():open();
-  overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
-  overlay.querySelector('.mobile-more-close').onclick=close;
-  document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
-  const observer=new MutationObserver(()=>{
+
+  const closeButton=drawer.querySelector('.mobile-nav-close');
+  const close=()=>{
+    drawer.classList.remove('open');
+    backdrop.classList.remove('open');
+    trigger.classList.remove('open');
+    trigger.setAttribute('aria-expanded','false');
+    trigger.setAttribute('aria-label','Open navigation');
+    document.body.classList.remove('mobile-nav-open');
+  };
+  const open=()=>{
+    drawer.classList.add('open');
+    backdrop.classList.add('open');
+    trigger.classList.add('open');
+    trigger.setAttribute('aria-expanded','true');
+    trigger.setAttribute('aria-label','Close navigation');
+    document.body.classList.add('mobile-nav-open');
+  };
+  trigger.addEventListener('click',()=>drawer.classList.contains('open')?close():open());
+  closeButton.addEventListener('click',close);
+  backdrop.addEventListener('click',close);
+  document.addEventListener('keydown',(event)=>{if(event.key==='Escape')close()});
+
+  document.body.appendChild(trigger);
+  document.body.appendChild(backdrop);
+  document.body.appendChild(drawer);
+
+  const syncActive=()=>{
     const active=nav.querySelector('button.active');
-    const secondaryActive=active&&active.classList.contains('mobile-secondary-nav');
-    more.classList.toggle('active',!!secondaryActive);
-    if(active&&!secondaryActive)more.classList.remove('active');
-  });
-  observer.observe(nav,{subtree:true,attributes:true,attributeFilter:['class']});
+    drawer.querySelectorAll('.mobile-drawer-item').forEach((item,index)=>{
+      item.classList.toggle('active',!!active&&buttons[index]===active);
+    });
+  };
+  new MutationObserver(syncActive).observe(nav,{subtree:true,attributes:true,attributeFilter:['class']});
+  syncActive();
 };
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(run,700));else setTimeout(run,700);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(run,250));else setTimeout(run,250);
 })();
