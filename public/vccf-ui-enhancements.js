@@ -1,9 +1,10 @@
 (() => {
-  if (window.__VCCF_UI_ENHANCEMENTS_V1__) return;
-  window.__VCCF_UI_ENHANCEMENTS_V1__ = true;
+  if (window.__VCCF_UI_ENHANCEMENTS_V2__) return;
+  window.__VCCF_UI_ENHANCEMENTS_V2__ = true;
 
   const $ = id => document.getElementById(id);
   const validTheme = t => t === 'dark' || t === 'light';
+  const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
   function applyLogoTheme() {
     const dark = document.documentElement.dataset.theme === 'dark';
@@ -91,23 +92,30 @@
   }
 
   let sortMode = 'name';
+  let addressFilter = '';
+
+  function memberPool() {
+    if (typeof areaMembers !== 'function' || !Array.isArray(window.db?.members)) return [];
+    return areaMembers();
+  }
 
   function visibleMembers() {
     const q = ($('memberSearch')?.value || '').toLowerCase();
     const area = $('areaFilter')?.value || '';
-    if (typeof areaMembers !== 'function' || !Array.isArray(window.db?.members)) return [];
-    return areaMembers().filter(m =>
+    return memberPool().filter(m =>
       (String(m.name || '').toLowerCase().includes(q) || String(m.address || '').toLowerCase().includes(q)) &&
-      (!area || m.area === area)
+      (!area || m.area === area) &&
+      (!addressFilter || String(m.address || '') === addressFilter)
     );
   }
 
   function sortMembersInDb() {
     if (!Array.isArray(window.db?.members)) return;
-    const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
-    const key = sortMode;
     window.db.members.sort((a, b) => {
-      if (key === 'address') return collator.compare(String(a.address || ''), String(b.address || '')) || collator.compare(String(a.name || ''), String(b.name || ''));
+      if (sortMode === 'address') {
+        return collator.compare(String(a.address || ''), String(b.address || '')) ||
+          collator.compare(String(a.name || ''), String(b.name || ''));
+      }
       return collator.compare(String(a.name || ''), String(b.name || ''));
     });
   }
@@ -117,6 +125,31 @@
     const shown = visibleMembers().length;
     const count = $('vccfMembersCount');
     if (count) count.textContent = `Total members: ${total} · Showing: ${shown}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>\"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;', "'":'&#39;' }[m]));
+  }
+
+  function refreshAddressFilterOptions() {
+    const select = $('vccfFilterAddress');
+    if (!select) return;
+    const current = addressFilter;
+    const addresses = [...new Set(memberPool().map(m => String(m.address || '').trim()).filter(Boolean))].sort(collator.compare);
+    select.innerHTML = '<option value="">All addresses</option>' +
+      addresses.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('') +
+      '<option value="__blank__">No address</option>';
+    select.value = current || '';
+  }
+
+  function applyAddressFilterToRows() {
+    const tbody = $('memberRows');
+    if (!tbody) return;
+    [...tbody.rows].forEach(row => {
+      const address = row.cells[3]?.textContent?.trim() || '';
+      const matches = addressFilter === '__blank__' ? !address : (!addressFilter || address === addressFilter);
+      row.style.display = matches ? '' : 'none';
+    });
   }
 
   function setupMemberControls() {
@@ -154,14 +187,43 @@
         sortMode = select.value;
         sortMembersInDb();
         if (typeof window.renderMembers === 'function') window.renderMembers();
-        setTimeout(updateMemberCount, 60);
+        setTimeout(() => {
+          applyAddressFilterToRows();
+          updateMemberCount();
+        }, 60);
       });
       label.appendChild(select);
       holder.appendChild(label);
     }
 
-    $('memberSearch')?.addEventListener('input', () => setTimeout(updateMemberCount, 0));
-    $('areaFilter')?.addEventListener('change', () => setTimeout(updateMemberCount, 0));
+    if (!holder.querySelector('#vccfFilterAddress')) {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:.85rem;font-weight:800;';
+      label.innerHTML = '<span>Filter by: Address</span>';
+      const select = document.createElement('select');
+      select.id = 'vccfFilterAddress';
+      select.className = 'search';
+      select.style.cssText = 'min-width:210px;';
+      select.addEventListener('change', () => {
+        addressFilter = select.value;
+        applyAddressFilterToRows();
+        updateMemberCount();
+      });
+      label.appendChild(select);
+      holder.appendChild(label);
+    }
+
+    refreshAddressFilterOptions();
+    $('memberSearch')?.addEventListener('input', () => setTimeout(() => {
+      applyAddressFilterToRows();
+      updateMemberCount();
+    }, 0));
+    $('areaFilter')?.addEventListener('change', () => setTimeout(() => {
+      refreshAddressFilterOptions();
+      applyAddressFilterToRows();
+      updateMemberCount();
+    }, 0));
+    applyAddressFilterToRows();
     updateMemberCount();
   }
 
@@ -172,7 +234,11 @@
     window.renderMembers = function(...args) {
       sortMembersInDb();
       const result = original.apply(this, args);
-      setTimeout(updateMemberCount, 0);
+      setTimeout(() => {
+        refreshAddressFilterOptions();
+        applyAddressFilterToRows();
+        updateMemberCount();
+      }, 0);
       return result;
     };
     window.__VCCF_RENDER_MEMBERS_WRAPPED__ = true;
@@ -194,8 +260,11 @@
   }
 
   observeTheme();
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(run, 200), { once:true });
-  else setTimeout(run, 200);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(run, 200), { once:true });
+  } else {
+    setTimeout(run, 200);
+  }
   window.addEventListener('vccf-app-ready', () => setTimeout(run, 100));
   const observer = new MutationObserver(() => run());
   observer.observe(document.body, { childList:true, subtree:true });
