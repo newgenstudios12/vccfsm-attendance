@@ -1,135 +1,213 @@
 (() => {
-  if (window.__VCCF_MEMBER_CONTROLS_V1__) return;
-  window.__VCCF_MEMBER_CONTROLS_V1__ = true;
+  if (window.__VCCF_MEMBER_CONTROLS_V2__) return;
+  window.__VCCF_MEMBER_CONTROLS_V2__ = true;
 
-  const collator = new Intl.Collator(undefined,{sensitivity:'base',numeric:true});
-  let sortMode='name', addressFilter='';
+  const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+  let sortMode = 'name';
+  let addressFilter = '';
+
   const $ = id => document.getElementById(id);
 
-  function members(){
-    if (typeof areaMembers !== 'function' || !Array.isArray(window.db?.members)) return [];
-    return areaMembers();
+  function getMembers() {
+    if (typeof window.areaMembers !== 'function' || !Array.isArray(window.db?.members)) return [];
+    return window.areaMembers();
   }
 
-  function ensureControls(){
-    const section=$('members');
-    if(!section) return false;
-    const toolbar=section.querySelector('.toolbar');
-    if(!toolbar) return false;
-    let box=section.querySelector('#vccfMemberControls');
-    if(!box){
-      box=document.createElement('div');
-      box.id='vccfMemberControls';
-      box.style.cssText='display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px 0;';
-      toolbar.insertAdjacentElement('afterend',box);
-    }
-
-    if(!$('vccfMemberCount')){
-      const count=document.createElement('span');
-      count.id='vccfMemberCount';
-      count.style.cssText='font-weight:800;color:var(--muted);padding:10px 2px;';
-      box.appendChild(count);
-    }
-
-    if(!$('vccfSortBy')){
-      const wrap=document.createElement('label');
-      wrap.style.cssText='display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
-      wrap.innerHTML='<span>Sort by:</span>';
-      const select=document.createElement('select');
-      select.id='vccfSortBy';
-      select.className='search';
-      select.style.minWidth='150px';
-      select.innerHTML='<option value="name">Name</option><option value="address">Address</option>';
-      select.value=sortMode;
-      select.onchange=()=>{sortMode=select.value;render();};
-      wrap.appendChild(select);box.appendChild(wrap);
-    }
-
-    if(!$('vccfFilterByAddress')){
-      const wrap=document.createElement('label');
-      wrap.style.cssText='display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
-      wrap.innerHTML='<span>Filter by: Address</span>';
-      const select=document.createElement('select');
-      select.id='vccfFilterByAddress';
-      select.className='search';
-      select.style.minWidth='210px';
-      select.onchange=()=>{addressFilter=select.value;applyRowFilter();updateCount();};
-      wrap.appendChild(select);box.appendChild(wrap);
-    }
-
-    refreshAddressOptions();
-    return true;
-  }
-
-  function refreshAddressOptions(){
-    const select=$('vccfFilterByAddress');
-    if(!select) return;
-    const values=[...new Set(members().map(m=>String(m.address||'').trim()).filter(Boolean))].sort(collator.compare);
-    const current=addressFilter;
-    select.innerHTML='<option value="">All addresses</option>' + values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('') + '<option value="__blank__">No address</option>';
-    select.value=current;
-  }
-
-  function escapeHtml(v){return String(v).replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[m]));}
-
-  function sortRows(){
-    const data=members();
-    data.sort((a,b)=>sortMode==='address'
-      ? collator.compare(String(a.address||''),String(b.address||'')) || collator.compare(String(a.name||''),String(b.name||''))
-      : collator.compare(String(a.name||''),String(b.name||'')));
-  }
-
-  function applyRowFilter(){
-    const tbody=$('memberRows');
-    if(!tbody) return;
-    [...tbody.rows].forEach(row=>{
-      const address=(row.cells[3]?.textContent||'').trim();
-      const show=addressFilter==='__blank__' ? !address : (!addressFilter || address===addressFilter);
-      row.style.display=show?'':'none';
+  function sortMembers() {
+    const members = getMembers();
+    members.sort((a, b) => {
+      if (sortMode === 'address') {
+        return collator.compare(String(a.address || ''), String(b.address || '')) ||
+               collator.compare(String(a.name || ''), String(b.name || ''));
+      }
+      return collator.compare(String(a.name || ''), String(b.name || ''));
     });
   }
 
-  function updateCount(){
-    const total=Array.isArray(window.db?.members)?window.db.members.length:0;
-    const shown=members().filter(m=>{
-      const a=String(m.address||'').trim();
-      return addressFilter==='__blank__'?!a:(!addressFilter||a===addressFilter);
+  function updateAddressFilterOptions() {
+    const select = $('vccfFilterByAddress');
+    if (!select) return;
+
+    const values = [...new Set(
+      getMembers()
+        .map(m => String(m.address || '').trim())
+        .filter(Boolean)
+    )].sort(collator.compare);
+
+    const current = addressFilter;
+    select.innerHTML = '<option value="">All addresses</option>' +
+      values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('') +
+      '<option value="__blank__">No address</option>';
+    select.value = values.includes(current) || current === '__blank__' ? current : '';
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>\"]/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;'
+    }[ch]));
+  }
+
+  function applyAddressFilter() {
+    const tbody = $('memberRows');
+    if (!tbody) return;
+
+    Array.from(tbody.rows).forEach(row => {
+      const address = (row.cells[3]?.textContent || '').trim();
+      const visible = addressFilter === '__blank__' ? !address : (!addressFilter || address === addressFilter);
+      row.hidden = !visible;
+    });
+  }
+
+  function updateMemberCount() {
+    const el = $('vccfMemberCount');
+    if (!el) return;
+
+    const total = Array.isArray(window.db?.members) ? window.db.members.length : 0;
+    const shown = getMembers().filter(member => {
+      const address = String(member.address || '').trim();
+      return addressFilter === '__blank__' ? !address : (!addressFilter || address === addressFilter);
     }).length;
-    const el=$('vccfMemberCount');
-    if(el) el.textContent=`Total members: ${total} · Showing: ${shown}`;
+
+    el.textContent = `Total members: ${total} · Showing: ${shown}`;
   }
 
-  function render(){
-    sortRows();
-    if(typeof window.renderMembers==='function') window.renderMembers();
-    setTimeout(()=>{refreshAddressOptions();applyRowFilter();updateCount();},80);
+  function renderMembersWithControls() {
+    sortMembers();
+    if (typeof window.renderMembers === 'function') window.renderMembers();
+    updateAddressFilterOptions();
+    applyAddressFilter();
+    updateMemberCount();
   }
 
-  function patchRenderer(){
-    if(window.__VCCF_MEMBER_RENDER_PATCHED__) return true;
-    if(typeof window.renderMembers!=='function') return false;
-    const original=window.renderMembers;
-    window.renderMembers=function(...args){
-      sortRows();
-      const result=original.apply(this,args);
-      setTimeout(()=>{refreshAddressOptions();applyRowFilter();updateCount();},0);
+  function patchRenderer() {
+    if (window.__VCCF_MEMBER_RENDER_PATCHED_V2__) return true;
+    if (typeof window.renderMembers !== 'function') return false;
+
+    const original = window.renderMembers;
+    window.renderMembers = function (...args) {
+      sortMembers();
+      const result = original.apply(this, args);
+      updateAddressFilterOptions();
+      applyAddressFilter();
+      updateMemberCount();
       return result;
     };
-    window.__VCCF_MEMBER_RENDER_PATCHED__=true;
+
+    window.__VCCF_MEMBER_RENDER_PATCHED_V2__ = true;
     return true;
   }
 
-  function boot(){
-    ensureControls();
-    patchRenderer();
-    if($('memberSearch')) $('memberSearch').oninput=()=>setTimeout(()=>{applyRowFilter();updateCount();},0);
-    if($('areaFilter')) $('areaFilter').onchange=()=>setTimeout(()=>{refreshAddressOptions();applyRowFilter();updateCount();},0);
-    applyRowFilter();updateCount();
+  function ensureControls() {
+    const section = $('members');
+    if (!section) return false;
+
+    const toolbar = section.querySelector('.toolbar');
+    if (!toolbar) return false;
+
+    let box = $('vccfMemberControls');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'vccfMemberControls';
+      box.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px 0;';
+      toolbar.insertAdjacentElement('afterend', box);
+    }
+
+    if (!$('vccfMemberCount')) {
+      const count = document.createElement('span');
+      count.id = 'vccfMemberCount';
+      count.style.cssText = 'font-weight:800;color:var(--muted);padding:10px 2px;';
+      box.appendChild(count);
+    }
+
+    if (!$('vccfSortBy')) {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
+      label.innerHTML = '<span>Sort by:</span>';
+
+      const select = document.createElement('select');
+      select.id = 'vccfSortBy';
+      select.className = 'search';
+      select.style.minWidth = '150px';
+      select.innerHTML = '<option value="name">Name</option><option value="address">Address</option>';
+      select.value = sortMode;
+      select.addEventListener('change', () => {
+        sortMode = select.value;
+        renderMembersWithControls();
+      });
+
+      label.appendChild(select);
+      box.appendChild(label);
+    }
+
+    if (!$('vccfFilterByAddress')) {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
+      label.innerHTML = '<span>Filter by: Address</span>';
+
+      const select = document.createElement('select');
+      select.id = 'vccfFilterByAddress';
+      select.className = 'search';
+      select.style.minWidth = '210px';
+      select.addEventListener('change', () => {
+        addressFilter = select.value;
+        applyAddressFilter();
+        updateMemberCount();
+      });
+
+      label.appendChild(select);
+      box.appendChild(label);
+    }
+
+    updateAddressFilterOptions();
+    applyAddressFilter();
+    updateMemberCount();
+    return true;
   }
 
-  const observer=new MutationObserver(()=>boot());
-  observer.observe(document.body,{childList:true,subtree:true});
-  window.addEventListener('DOMContentLoaded',()=>setTimeout(boot,100));
-  window.addEventListener('vccf-app-ready',()=>setTimeout(boot,100));
-  boot();
+  function boot() {
+    ensureControls();
+    patchRenderer();
+
+    const search = $('memberSearch');
+    if (search && !search.dataset.vccfMemberControlsBound) {
+      search.dataset.vccfMemberControlsBound = '1';
+      search.addEventListener('input', () => setTimeout(updateMemberCount, 0));
+    }
+
+    const area = $('areaFilter');
+    if (area && !area.dataset.vccfMemberControlsBound) {
+      area.dataset.vccfMemberControlsBound = '1';
+      area.addEventListener('change', () => {
+        updateAddressFilterOptions();
+        applyAddressFilter();
+        updateMemberCount();
+      });
+    }
+
+    return typeof window.renderMembers === 'function';
+  }
+
+  function start() {
+    // The page already contains the Members markup before scripts near the end of
+    // the document run, so we deliberately avoid a MutationObserver here. The
+    // previous observer could continuously trigger itself and make the app hang.
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      const ready = boot();
+      if (ready || attempts >= 20) clearInterval(timer);
+    }, 250);
+    boot();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+
+  window.addEventListener('vccf-app-ready', start);
 })();
