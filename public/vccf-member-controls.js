@@ -1,258 +1,28 @@
 (() => {
-  if (window.__VCCF_MEMBER_CONTROLS_V3__) return;
-  window.__VCCF_MEMBER_CONTROLS_V3__ = true;
-
-  const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
-  let sortMode = 'name';
-  let addressFilter = '';
-  const $ = id => document.getElementById(id);
-
-  function getMembersDb() {
-    try {
-      return (typeof db !== 'undefined' && Array.isArray(db.members)) ? db : null;
-    } catch (_) {
-      return null;
-    }
+  if (window.__VCCF_MEMBER_CONTROLS_V4__) return;
+  window.__VCCF_MEMBER_CONTROLS_V4__ = true;
+  const collator = new Intl.Collator(undefined,{sensitivity:'base',numeric:true}); let sortMode='name',addressFilter=''; const $=id=>document.getElementById(id);
+  function getMembersDb(){try{return(typeof db!=='undefined'&&Array.isArray(db.members))?db:null}catch(_){return null}}
+  function members(){const state=getMembersDb();if(!state)return[];try{if(typeof areaMembers==='function')return areaMembers()}catch(_){}return state.members}
+  function ensureControls(){const section=$('members');if(!section)return false;const toolbar=section.querySelector('.toolbar');if(!toolbar)return false;let box=$('vccfMemberControls');if(!box){box=document.createElement('div');box.id='vccfMemberControls';box.style.cssText='display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px 0;';toolbar.insertAdjacentElement('afterend',box)}if(!$('vccfMemberCount')){const count=document.createElement('span');count.id='vccfMemberCount';count.style.cssText='font-weight:800;color:var(--muted);padding:10px 2px;';box.appendChild(count)}if(!$('vccfSortBy')){const wrap=document.createElement('label');wrap.style.cssText='display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';wrap.innerHTML='<span>Sort by:</span><select id="vccfSortBy" class="search" style="min-width:150px"><option value="name">Name</option><option value="address">Address</option></select>';wrap.querySelector('select').onchange=e=>{sortMode=e.target.value;render()};box.appendChild(wrap)}refreshAddressOptions();return true}
+  function escapeHtml(v){return String(v??'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+  function refreshAddressOptions(){let select=$('vccfFilterByAddress');const box=$('vccfMemberControls');if(!select&&box){select=document.createElement('select');select.id='vccfFilterByAddress';select.className='search';select.style.minWidth='230px';select.onchange=e=>{addressFilter=e.target.value;applyRowFilter();updateCount()};box.appendChild(select)}if(!select)return;const values=[...new Set(members().map(m=>String(m.address||'').trim()).filter(Boolean))].sort(collator.compare);select.innerHTML=['<option value="">All addresses</option>',...values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`),'<option value="__blank__">No address</option>'].join('');select.value=values.includes(addressFilter)||addressFilter==='__blank__'?addressFilter:''}
+  function sortRows(){const data=members();data.sort((a,b)=>sortMode==='address'?collator.compare(String(a.address||''),String(b.address||''))||collator.compare(String(a.name||a.display_name||''),String(b.name||b.display_name||'')):collator.compare(String(a.name||a.display_name||''),String(b.name||b.display_name||'')))}
+  function applyRowFilter(){const tbody=$('memberRows');if(!tbody)return;[...tbody.rows].forEach(row=>{const address=(row.cells[3]?.textContent||'').trim();row.style.display=addressFilter==='__blank__'?!address:(!addressFilter||address===addressFilter)?'':'none'})}
+  function updateCount(){const all=getMembersDb()?.members||[];const el=$('vccfMemberCount');if(el)el.textContent=`Total members: ${all.length} · Showing: ${[...all].filter(m=>{const a=String(m.address||'').trim();return addressFilter==='__blank__'?!a:(!addressFilter||a===addressFilter)}).length}`}
+  function render(){sortRows();if(typeof renderMembers==='function')renderMembers();refreshAddressOptions();applyRowFilter();updateCount()}
+  function patchRenderer(){if(window.__VCCF_MEMBER_RENDER_PATCHED_V3__||typeof renderMembers!=='function')return;const original=renderMembers;window.__VCCF_MEMBER_RENDER_PATCHED_V3__=true;window.renderMembers=function(...args){sortRows();const result=original.apply(this,args);refreshAddressOptions();applyRowFilter();updateCount();return result}}
+  function client(){return window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY)}
+  async function getProfile(){const c=client();if(!c)return null;const {data:{user}}=await c.auth.getUser();if(!user)return null;const {data}=await c.from('profiles').select('role,member_id,user_id').eq('user_id',user.id).maybeSingle();return data?{c,user,p:data}:null}
+  function memberPortalCss(){if($('vccfMemberPortalStyle'))return;const s=document.createElement('style');s.id='vccfMemberPortalStyle';s.textContent='.vccf-member-analytics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:16px}.vccf-member-analytics .stat{min-width:0}.vccf-member-note{color:var(--muted);margin:0 0 14px}@media(max-width:700px){.vccf-member-analytics{grid-template-columns:1fr 1fr}.vccf-member-directory-actions,.vccf-member-analytics{gap:10px}}';document.head.appendChild(s)}
+  function attendanceRows(){try{return(Array.isArray(db?.attendance)?db.attendance:[])}catch(_){return[]}}
+  async function buildMemberExperience(){const ctx=await getProfile();if(!ctx)return;const role=String(ctx.p.role||'').toLowerCase();if(['admin','area leader'].includes(role))return;memberPortalCss();const nav=[...document.querySelectorAll('.nav button')];const membersBtn=nav.find(b=>b.dataset.view==='members');if(membersBtn){membersBtn.style.display='';membersBtn.disabled=false}
+    const dash=$('dashboard');if(dash&&!$('vccfMemberAnalytics')){const card=document.createElement('section');card.id='vccfMemberAnalytics';card.className='panel';card.innerHTML='<h3>My attendance at a glance</h3><p class="vccf-member-note">Your attendance statistics update from your recorded check-ins.</p><div class="vccf-member-analytics"><div class="stat"><small>Total check-ins</small><strong id="vccfMyTotal">—</strong></div><div class="stat"><small>Last 30 days</small><strong id="vccfMyMonth">—</strong></div><div class="stat"><small>Current streak</small><strong id="vccfMyStreak">—</strong></div></div><div class="panel"><h3 style="font-size:1rem">Recent attendance</h3><div id="vccfMyRecent" style="display:grid;gap:8px;color:var(--muted)">Loading…</div></div>';dash.prepend(card)}
+    await refreshMemberExperience(ctx);
   }
-
-  function members() {
-    const state = getMembersDb();
-    if (!state) return [];
-    try {
-      if (typeof areaMembers === 'function') return areaMembers();
-    } catch (_) {}
-    return state.members;
-  }
-
-  function ensureControls() {
-    const section = $('members');
-    if (!section) return false;
-    const toolbar = section.querySelector('.toolbar');
-    if (!toolbar) return false;
-
-    let box = $('vccfMemberControls');
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'vccfMemberControls';
-      box.setAttribute('role', 'group');
-      box.setAttribute('aria-label', 'Member list controls');
-      box.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px 0;';
-      toolbar.insertAdjacentElement('afterend', box);
-    }
-
-    if (!$('vccfMemberCount')) {
-      const count = document.createElement('span');
-      count.id = 'vccfMemberCount';
-      count.style.cssText = 'font-weight:800;color:var(--muted);padding:10px 2px;';
-      box.appendChild(count);
-    }
-
-    if (!$('vccfSortBy')) {
-      const wrap = document.createElement('label');
-      wrap.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
-      const label = document.createElement('span');
-      label.textContent = 'Sort by:';
-      const select = document.createElement('select');
-      select.id = 'vccfSortBy';
-      select.className = 'search';
-      select.style.minWidth = '150px';
-      select.setAttribute('aria-label', 'Sort members by');
-      select.innerHTML = '<option value="name">Name</option><option value="address">Address</option>';
-      select.value = sortMode;
-      select.addEventListener('change', () => {
-        sortMode = select.value;
-        render();
-      });
-      wrap.append(label, select);
-      box.appendChild(wrap);
-    }
-
-    if (!$('vccfFilterByAddress')) {
-      const wrap = document.createElement('label');
-      wrap.style.cssText = 'display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem;';
-      const label = document.createElement('span');
-      label.textContent = 'Filter by: Address';
-      const select = document.createElement('select');
-      select.id = 'vccfFilterByAddress';
-      select.className = 'search';
-      select.style.minWidth = '230px';
-      select.setAttribute('aria-label', 'Filter members by address');
-      select.addEventListener('change', () => {
-        addressFilter = select.value;
-        applyRowFilter();
-        updateCount();
-      });
-      wrap.append(label, select);
-      box.appendChild(wrap);
-    }
-
-    refreshAddressOptions();
-    return true;
-  }
-
-  function refreshAddressOptions() {
-    const select = $('vccfFilterByAddress');
-    if (!select) return;
-    const values = [...new Set(
-      members()
-        .map(m => String(m.address || '').trim())
-        .filter(Boolean)
-    )].sort(collator.compare);
-
-    const current = addressFilter;
-    const options = ['<option value="">All addresses</option>']
-      .concat(values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`))
-      .concat(['<option value="__blank__">No address</option>']);
-
-    select.innerHTML = options.join('');
-    select.value = values.includes(current) || current === '__blank__' ? current : '';
-  }
-
-  function escapeHtml(v) {
-    return String(v).replace(/[&<>\"]/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'
-    }[m]));
-  }
-
-  function sortRows() {
-    const data = members();
-    data.sort((a, b) => {
-      if (sortMode === 'address') {
-        return collator.compare(String(a.address || ''), String(b.address || '')) ||
-          collator.compare(String(a.name || ''), String(b.name || ''));
-      }
-      return collator.compare(String(a.name || ''), String(b.name || ''));
-    });
-  }
-
-  function applyRowFilter() {
-    const tbody = $('memberRows');
-    if (!tbody) return;
-    [...tbody.rows].forEach(row => {
-      const address = (row.cells[3]?.textContent || '').trim();
-      const show = addressFilter === '__blank__' ? !address : (!addressFilter || address === addressFilter);
-      row.style.display = show ? '' : 'none';
-    });
-  }
-
-  function updateCount() {
-    const state = getMembersDb();
-    const all = state?.members || [];
-    const visible = members();
-    const shown = visible.filter(m => {
-      const a = String(m.address || '').trim();
-      return addressFilter === '__blank__' ? !a : (!addressFilter || a === addressFilter);
-    }).length;
-    const el = $('vccfMemberCount');
-    if (el) el.textContent = `Total members: ${all.length} · Showing: ${shown}`;
-  }
-
-  function render() {
-    sortRows();
-    if (typeof renderMembers === 'function') renderMembers();
-    refreshAddressOptions();
-    applyRowFilter();
-    updateCount();
-  }
-
-  function patchRenderer() {
-    if (window.__VCCF_MEMBER_RENDER_PATCHED_V2__) return true;
-    if (typeof renderMembers !== 'function') return false;
-    const original = renderMembers;
-    window.__VCCF_MEMBER_RENDER_PATCHED_V2__ = true;
-    window.renderMembers = function (...args) {
-      sortRows();
-      const result = original.apply(this, args);
-      refreshAddressOptions();
-      applyRowFilter();
-      updateCount();
-      return result;
-    };
-    return true;
-  }
-
-  function installThemeFade() {
-    if (document.getElementById('vccfThemeFadeStyles')) return;
-    const style = document.createElement('style');
-    style.id = 'vccfThemeFadeStyles';
-    style.textContent = `
-      html, body, .app, .sidebar, .main, .panel, .stat, .toolbar, .tablewrap, .login-card,
-      input, select, textarea, button, .btn, .search, .modal-card, .topbar, .userchip {
-        transition: background-color .24s ease, color .24s ease, border-color .24s ease,
-                    box-shadow .24s ease, opacity .24s ease;
-      }
-      .logo { transition: opacity .18s ease; }
-      body.vccf-theme-fading .logo { opacity: .1; }
-      @media (prefers-reduced-motion: reduce) {
-        html, body, .app, .sidebar, .main, .panel, .stat, .toolbar, .tablewrap, .login-card,
-        input, select, textarea, button, .btn, .search, .modal-card, .topbar, .userchip, .logo {
-          transition: none !important;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-
-    let lastTheme = document.documentElement.dataset.theme || 'light';
-    const observer = new MutationObserver(() => {
-      const nextTheme = document.documentElement.dataset.theme || 'light';
-      if (nextTheme === lastTheme) return;
-      lastTheme = nextTheme;
-      document.body.classList.add('vccf-theme-fading');
-      window.setTimeout(() => document.body.classList.remove('vccf-theme-fading'), 240);
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  }
-
-  function boot() {
-    const ready = ensureControls();
-    patchRenderer();
-    installThemeFade();
-
-    const search = $('memberSearch');
-    if (search && !search.dataset.vccfControlsPatched) {
-      search.dataset.vccfControlsPatched = '1';
-      search.addEventListener('input', () => {
-        window.setTimeout(() => {
-          refreshAddressOptions();
-          applyRowFilter();
-          updateCount();
-        }, 0);
-      });
-    }
-
-    const area = $('areaFilter');
-    if (area && !area.dataset.vccfControlsPatched) {
-      area.dataset.vccfControlsPatched = '1';
-      area.addEventListener('change', () => {
-        refreshAddressOptions();
-        applyRowFilter();
-        updateCount();
-      });
-    }
-
-    applyRowFilter();
-    updateCount();
-    return ready;
-  }
-
-  function start() {
-    let attempts = 0;
-    const timer = setInterval(() => {
-      attempts += 1;
-      const ready = boot();
-      const state = getMembersDb();
-      if (ready && state && state.members.length > 0) {
-        clearInterval(timer);
-      } else if (attempts >= 40) {
-        clearInterval(timer);
-      }
-    }, 300);
-    boot();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start, { once: true });
-  } else {
-    start();
-  }
+  async function refreshMemberExperience(ctx){const c=ctx?.c||client();if(!c)return;const memberId=ctx?.p?.member_id;let rows=[];if(memberId){const r=await c.from('attendance').select('checked_in_at,member_id').eq('member_id',memberId).order('checked_in_at',{ascending:false}).limit(200);if(!r.error)rows=r.data||[]}else rows=attendanceRows();const total=rows.length,now=Date.now(),month=rows.filter(x=>now-new Date(x.checked_in_at).getTime()<=30*864e5).length;const days=[...new Set(rows.map(x=>new Date(x.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'})))];let streak=0;if(days.length){let d=new Date();for(;;){const key=d.toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});if(days.includes(key)){streak++;d.setDate(d.getDate()-1)}else break}}const set=(id,v)=>{const e=$(id);if(e)e.textContent=v};set('vccfMyTotal',total);set('vccfMyMonth',month);set('vccfMyStreak',streak);const recent=$('vccfMyRecent');if(recent)recent.innerHTML=rows.slice(0,5).map(r=>`<div>✓ ${escapeHtml(new Date(r.checked_in_at).toLocaleString('en-PH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Manila'}))}</div>`).join('')||'No attendance recorded yet.'}
+  function makeDirectoryVisible(){const section=$('members');if(!section)return;const table=section.querySelector('.tablewrap');if(table)table.style.display='';const search=$('memberSearch');if(search)search.disabled=false;const add=[...section.querySelectorAll('button')].filter(b=>/add|delete|edit|status|qr/i.test(b.textContent));add.forEach(b=>{if(!/view/i.test(b.textContent))b.style.display='none'});const title=section.querySelector('h2,h3');if(title)title.textContent='Member Directory';}
+  function boot(){const ready=ensureControls();patchRenderer();applyRowFilter();updateCount();buildMemberExperience().then(makeDirectoryVisible).catch(()=>{});return ready}
+  function start(){let attempts=0;const timer=setInterval(()=>{attempts++;const ready=boot();if(ready&&getMembersDb())clearInterval(timer);else if(attempts>=40)clearInterval(timer)},300);boot()}
+  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',start,{once:true}):start();
 })();
