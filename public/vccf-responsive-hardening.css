@@ -13,7 +13,7 @@ button,input,select,textarea{max-width:100%}
 .modal{padding:12px}
 .modal-card{width:min(680px,100%);max-height:calc(100dvh - 24px);padding:18px}
 
-/* Tablet: preserve a compact rail but give content all available width. */
+/* Tablet: preserve the existing compact sidebar/rail. */
 @media(max-width:900px){
   .main{padding:20px}
   .topbar{gap:12px}
@@ -25,18 +25,10 @@ button,input,select,textarea{max-width:100%}
   .gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
-/* Phone: use a bottom navigation instead of a cramped fixed sidebar. */
+/* Phone: keep the existing mobile navigation unchanged; only harden content sizing. */
 @media(max-width:600px){
   .app.active{display:block}
-  .sidebar{position:fixed;left:0;right:0;top:auto;bottom:0;width:100%;height:68px;padding:6px 8px;border-right:0;border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(16,24,40,.10);z-index:100}
-  [data-theme=dark] .sidebar{box-shadow:0 -10px 30px rgba(0,0,0,.35)}
-  .side-logo,.side-bottom{display:none}
-  .nav{display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;height:100%;align-items:center}
-  .nav::-webkit-scrollbar{display:none}
-  .nav button{flex:0 0 62px;height:56px;padding:7px 5px;border-radius:12px;text-align:center;font-size:0;white-space:nowrap}
-  .nav button:before{font-size:1.2rem;display:block;line-height:22px;margin-bottom:2px}
-  .nav button.active{background:#6d45e814;color:var(--brand)}
-  .main{margin-left:0;width:100%;max-width:none;padding:14px 14px 84px}
+  .main{margin-left:76px;width:calc(100% - 76px);max-width:none;padding:14px}
   .topbar{align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
   .topbar h2{font-size:1.25rem}
   .userchip{max-width:100%}
@@ -68,7 +60,6 @@ button,input,select,textarea{max-width:100%}
   .main{padding-left:10px;padding-right:10px}
   .stats{grid-template-columns:1fr}
   .stat strong{font-size:1.45rem}
-  .nav button{flex-basis:58px}
 }
 
 /* Chat: make its own height/scroll model reliable at every viewport size. */
@@ -77,7 +68,7 @@ button,input,select,textarea{max-width:100%}
 #chat.view.active .chat-list,#chat.view.active .chat-messages{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 #chat.view.active .chat-bubble{overflow-wrap:anywhere}
 @media(max-width:600px){
-  #chat.view.active{min-height:calc(100dvh - 84px);max-width:100%}
+  #chat.view.active{min-height:calc(100dvh - 20px);max-width:100%}
   #chat.view.active .chat-shell{border-radius:14px}
   #chat.view.active .chat-messages{padding:14px 12px}
 }
