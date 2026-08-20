@@ -1,0 +1,54 @@
+name: Ensure profile photo scripts load
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/vccf-my-profile-v2.js'
+      - 'public/vccf-profile-photo-fix.js'
+      - '.github/workflows/include-profile-photo-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-index:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(profile): load profile photo scripts') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Add profile scripts to index
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+          tags = [
+              '<script src="/vccf-my-profile-v2.js?v=profile-save-3"></script>',
+              '<script src="/vccf-profile-photo-fix.js?v=profile-save-3"></script>',
+          ]
+          marker = '</body>'
+          if marker not in s:
+              raise SystemExit('Could not find </body> in public/index.html')
+          changed = False
+          for tag in tags:
+              if tag not in s:
+                  s = s.replace(marker, f'  {tag}\n{marker}', 1)
+                  changed = True
+          if changed:
+              p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit index loader
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          if git diff --cached --quiet; then
+            echo 'Profile scripts already loaded.'
+          else
+            git commit -m 'chore(profile): load profile photo scripts'
+            git push
+          fi
