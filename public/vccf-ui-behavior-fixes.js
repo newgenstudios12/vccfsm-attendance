@@ -4,15 +4,49 @@
   window.__VCCF_UI_BEHAVIOR_FIXES__ = true;
 
   const css = `
-    /* Chat: keep the inbox/list fixed; only the active conversation scrolls. */
-    .chat-shell{min-height:0;overflow:hidden}
+    /* Chat: Messenger/WhatsApp-style two-pane layout. */
+    .main{min-height:100vh}
+    #chat.view.active{display:flex;flex-direction:column;min-height:calc(100dvh - 52px)}
+    #chat.view.active > .toolbar{flex:0 0 auto}
+    #chat.view.active .chat-shell{
+      flex:1 1 auto;
+      min-height:0;
+      height:auto;
+      max-height:none;
+      overflow:hidden;
+    }
+    .chat-shell{grid-template-columns:minmax(280px,320px) minmax(0,1fr);background:var(--panel)}
     .chat-inbox,.chat-thread{min-height:0}
-    .chat-list{overflow:hidden;min-height:0}
-    .chat-messages{min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
-    .chat-thread{overflow:hidden}
+    .chat-inbox{background:var(--panel)}
+    .chat-inbox-head{flex:0 0 auto}
+    .chat-list{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+    .chat-thread{overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
+    .chat-thread-head{flex:0 0 auto;position:relative;z-index:2;min-height:68px}
+    .chat-messages{
+      flex:1 1 auto;
+      min-height:0;
+      overflow-y:auto;
+      overflow-x:hidden;
+      overscroll-behavior:contain;
+      padding:22px 24px;
+    }
+    .chat-composer{flex:0 0 auto;position:relative;z-index:2}
+    .chat-bubble{max-width:min(74%,680px)}
     @media(max-width:820px){
+      #chat.view.active{min-height:calc(100dvh - 30px)}
+      #chat.view.active .chat-shell{grid-template-columns:1fr}
       .chat-shell{min-height:0;overflow:hidden}
-      .chat-messages{min-height:0}
+      .chat-inbox{min-height:0}
+      .chat-shell.thread-open .chat-inbox{display:none}
+      .chat-shell.thread-open .chat-thread{display:flex}
+      .chat-messages{padding:16px}
+      .chat-bubble{max-width:86%}
+    }
+    @media(max-width:600px){
+      #chat.view.active{min-height:calc(100dvh - 20px)}
+      .chat-shell{border-radius:16px}
+      .chat-inbox-head{padding:14px}
+      .chat-composer{padding:10px}
     }
 
     /* Sermon upload: persistent modal, independent of the current page/view. */
