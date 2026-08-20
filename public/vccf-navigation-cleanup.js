@@ -1,0 +1,5 @@
+(()=>{'use strict';if(window.__VCCF_NAV_CLEANUP__)return;window.__VCCF_NAV_CLEANUP__=true;
+function clean(){const nav=document.querySelector('.nav');if(!nav)return;const profiles=[...nav.querySelectorAll('button[data-view="myprofile"]')];profiles.slice(1).forEach(b=>b.remove());if(profiles[0]){profiles[0].textContent='My Profile';profiles[0].onclick=e=>{e.preventDefault();window.VCCFMyProfileV2?.open?.()};}
+if(!nav.querySelector('button[data-view="sermons"]')){const b=document.createElement('button');b.type='button';b.dataset.view='sermons';b.textContent='📖 Sermons';b.onclick=e=>{e.preventDefault();window.VCCFSermons?.open?.()};nav.appendChild(b)}
+}
+function boot(){clean();setTimeout(clean,500);setTimeout(clean,1500);new MutationObserver(clean).observe(document.body,{childList:true,subtree:true})}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();})();
