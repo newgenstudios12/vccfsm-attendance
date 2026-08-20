@@ -39,5 +39,10 @@ Use this checklist before approving UI changes.
 - Opening/closing dialogs does not create page-level horizontal overflow.
 - Dark mode remains legible at all viewports.
 
+## Deployment verification
+- Confirm the production host reports a deployment for the latest `main` commit.
+- Confirm the production deployment SHA matches the GitHub `main` SHA before calling the release complete.
+- Do not create repeated trigger commits; one production push should be enough.
+
 ## Release rule
-A UI change should not be considered responsive-ready until it passes the viewport and page smoke tests above in a Chromium browser with device emulation enabled.
+A UI change should not be considered responsive-ready until it passes the viewport and page smoke tests above in a Chromium browser with device emulation enabled and the production deployment SHA has been verified.
