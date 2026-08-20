@@ -6,7 +6,9 @@ on:
     paths:
       - 'public/vccf-pro-suite.js'
       - 'public/vccf-my-profile.js'
+      - 'public/my-profile-v2.js'
       - 'public/vccf-my-profile-v2.js'
+      - 'public/chat.js'
       - 'public/vccf-chat.js'
       - 'public/vccf-chat-v2.js'
       - 'public/vccf-sermons.js'
