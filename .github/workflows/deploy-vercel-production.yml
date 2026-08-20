@@ -3,6 +3,7 @@ name: Deploy VCCF Attendance to Vercel
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,16 +14,43 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
+      - name: Validate responsive production baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f public/index.html
+          test -f public/vccf-responsive-hardening.css
+          test -f public/vccf-chat-v2.js
+          test -f public/vccf-chat-messenger.js
+          test -f public/vccf-navigation-cleanup.js
+
+          grep -q 'name="viewport"' public/index.html
+          grep -q 'vccf-chat-messenger.js' public/vccf-navigation-cleanup.js
+          grep -q 'margin-left:76px' public/vccf-responsive-hardening.css
+          grep -q 'grid-template-columns:320px minmax(0,1fr)' public/vccf-chat-v2.js
+
+          # Guard against accidentally replacing the established mobile rail
+          # with the newer bottom-navigation experiment.
+          if grep -q 'sidebar{position:fixed;left:0;right:0;top:auto;bottom:0' public/vccf-responsive-hardening.css; then
+            echo 'ERROR: bottom-navigation override detected; preserve the existing mobile navigation.'
+            exit 1
+          fi
+
+          echo 'Responsive baseline validated for the production build.'
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # Production deploy is triggered by the merge push to main.
+      # Production deploy is triggered by the push to main.
       - name: Deploy production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
