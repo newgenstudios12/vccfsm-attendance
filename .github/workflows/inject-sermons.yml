@@ -26,6 +26,7 @@ jobs:
           tags=[
               '<script src="/vccf-sermons.js"></script>',
               '<script src="/vccf-ui-behavior-fixes.js"></script>',
+              '<script src="/vccf-chat-messenger.js"></script>',
           ]
           marker='</body>'
           if marker not in s:
@@ -37,9 +38,9 @@ jobs:
                   changed=True
           if changed:
               p.write_text(s, encoding='utf-8')
-              print('Injected missing Sermons/UI behavior modules.')
+              print('Injected missing Sermons/UI/chat behavior modules.')
           else:
-              print('Sermons/UI behavior modules already loaded.')
+              print('Sermons/UI/chat behavior modules already loaded.')
           PY
       - name: Commit injection
         run: |
@@ -49,6 +50,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes needed.'
           else
-            git commit -m 'chore(pro): load sermons and UI behavior modules'
+            git commit -m 'chore(pro): load sermons and messenger chat module'
             git push origin main
           fi
