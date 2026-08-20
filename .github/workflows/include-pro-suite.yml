@@ -10,6 +10,7 @@ on:
       - 'public/vccf-chat.js'
       - 'public/vccf-chat-v2.js'
       - 'public/vccf-sermons.js'
+      - 'public/vccf-navigation-cleanup.js'
       - 'public/vccf-profile-auto-link.js'
       - 'public/vccf-profile-member-view-fix.js'
       - 'public/index.html'
@@ -43,6 +44,7 @@ jobs:
               '<script src="/vccf-profile-member-view-fix.js"></script>',
               '<script src="/vccf-chat-v2.js"></script>',
               '<script src="/vccf-sermons.js"></script>',
+              '<script src="/vccf-navigation-cleanup.js"></script>',
           ]
           marker = '</body>'
           if marker not in s:
