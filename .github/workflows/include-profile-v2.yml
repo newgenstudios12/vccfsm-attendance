@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   patch-index:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(profile): load account profile v2') && !startsWith(github.event.head_commit.message, 'chore(profile): load secure photo save fix') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(profile): load account profile v2') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
