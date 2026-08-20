@@ -12,6 +12,7 @@ on:
       - 'public/vccf-chat.js'
       - 'public/vccf-chat-v2.js'
       - 'public/vccf-sermons.js'
+      - 'public/vccf-sermons-guard.js'
       - 'public/vccf-navigation-cleanup.js'
       - 'public/vccf-profile-auto-link.js'
       - 'public/vccf-profile-member-view-fix.js'
@@ -33,16 +34,15 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
           p=Path('public/index.html')
           s=p.read_text(encoding='utf-8')
-          # Remove obsolete/duplicate module tags before adding the canonical set.
           remove=[
             '/vccf-chat.js','/vccf-my-profile.js','/vccf-chat-v2.js',
-            '/vccf-sermons.js','/vccf-navigation-cleanup.js',
+            '/vccf-sermons.js','/vccf-sermons-guard.js','/vccf-navigation-cleanup.js',
             '/vccf-pro-suite.js','/vccf-my-profile-v2.js',
             '/vccf-profile-auto-link.js','/vccf-profile-member-view-fix.js'
           ]
-          import re
           for src in remove:
             s=re.sub(r'\s*<script[^>]+src=["\']'+re.escape(src)+r'["\'][^>]*></script>\s*','\n',s)
           tags=[
@@ -52,6 +52,7 @@ jobs:
             '<script src="/vccf-profile-member-view-fix.js"></script>',
             '<script src="/vccf-chat-v2.js"></script>',
             '<script src="/vccf-sermons.js"></script>',
+            '<script src="/vccf-sermons-guard.js"></script>',
             '<script src="/vccf-navigation-cleanup.js"></script>',
           ]
           marker='</body>'
