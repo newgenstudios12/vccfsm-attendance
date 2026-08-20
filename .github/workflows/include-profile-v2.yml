@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'public/vccf-my-profile-v2.js'
+      - 'public/vccf-profile-photo-fix.js'
       - '.github/workflows/include-profile-v2.yml'
 
 permissions:
@@ -12,23 +13,30 @@ permissions:
 
 jobs:
   patch-index:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(profile): load account profile v2') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(profile): load account profile v2') && !startsWith(github.event.head_commit.message, 'chore(profile): load secure photo save fix') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Ensure My Profile v2 is loaded
+      - name: Ensure My Profile v2 and photo save fix are loaded
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('public/index.html')
           s=p.read_text(encoding='utf-8')
-          tag='<script src="/vccf-my-profile-v2.js"></script>'
+          tags=[
+              '<script src="/vccf-my-profile-v2.js"></script>',
+              '<script src="/vccf-profile-photo-fix.js"></script>',
+          ]
           if '</body>' not in s:
               raise SystemExit('Could not find </body>')
-          if tag not in s:
-              s=s.replace('</body>',f'  {tag}\n</body>',1)
+          changed=False
+          for tag in tags:
+              if tag not in s:
+                  s=s.replace('</body>',f'  {tag}\n</body>',1)
+                  changed=True
+          if changed:
               p.write_text(s,encoding='utf-8')
           PY
       - name: Commit loader
@@ -36,4 +44,4 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/index.html
-          if git diff --cached --quiet; then echo 'Already loaded'; else git commit -m 'chore(profile): load account profile v2'; git push; fi
+          if git diff --cached --quiet; then echo 'Already loaded'; else git commit -m 'chore(profile): load secure photo save fix'; git push; fi
