@@ -4,17 +4,10 @@
   window.__VCCF_UI_BEHAVIOR_FIXES__ = true;
 
   const css = `
-    /* Chat: Messenger/WhatsApp-style two-pane layout. */
     .main{min-height:100vh}
     #chat.view.active{display:flex;flex-direction:column;min-height:calc(100dvh - 52px)}
     #chat.view.active > .toolbar{flex:0 0 auto}
-    #chat.view.active .chat-shell{
-      flex:1 1 auto;
-      min-height:0;
-      height:auto;
-      max-height:none;
-      overflow:hidden;
-    }
+    #chat.view.active .chat-shell{flex:1 1 auto;min-height:0;height:auto;max-height:none;overflow:hidden}
     .chat-shell{grid-template-columns:minmax(280px,320px) minmax(0,1fr);background:var(--panel)}
     .chat-inbox,.chat-thread{min-height:0}
     .chat-inbox{background:var(--panel)}
@@ -22,14 +15,7 @@
     .chat-list{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
     .chat-thread{overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
     .chat-thread-head{flex:0 0 auto;position:relative;z-index:2;min-height:68px}
-    .chat-messages{
-      flex:1 1 auto;
-      min-height:0;
-      overflow-y:auto;
-      overflow-x:hidden;
-      overscroll-behavior:contain;
-      padding:22px 24px;
-    }
+    .chat-messages{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:22px 24px}
     .chat-composer{flex:0 0 auto;position:relative;z-index:2}
     .chat-bubble{max-width:min(74%,680px)}
     @media(max-width:820px){
@@ -49,71 +35,25 @@
       .chat-composer{padding:10px}
     }
 
-    /* Sermon upload: persistent modal, independent of the current page/view. */
-    #vccf-sermon-upload-modal{position:fixed;inset:0;z-index:1000;display:none;place-items:center;padding:20px;background:rgba(0,0,0,.58)}
-    #vccf-sermon-upload-modal.open{display:grid}
-    #vccf-sermon-upload-modal .vccf-sermon-upload-card{width:min(680px,100%);max-height:min(90vh,760px);overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.24)}
-    #vccf-sermon-upload-modal .vccf-sermon-upload-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
-    #vccf-sermon-upload-modal .vccf-sermon-upload-head h3{margin:0}
-    #vccf-sermon-upload-modal .vccf-sermon-upload-close{width:36px;height:36px;border:0;border-radius:50%;background:var(--bg);color:var(--text);font-size:1.25rem}
-    #vccf-sermon-upload-modal .sermon-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    #vccf-sermon-upload-modal .sermon-form .full{grid-column:1/-1}
-    #vccf-sermon-upload-modal .sermon-form input,#vccf-sermon-upload-modal .sermon-form textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:11px;padding:11px;background:var(--bg);color:var(--text)}
-    #vccf-sermon-upload-modal .sermon-form textarea{min-height:100px;resize:vertical}
-    #vccf-sermon-upload-modal .sermon-form button{border:0;border-radius:11px;padding:11px 16px;background:var(--brand-gradient);color:#fff;font-weight:800;cursor:pointer}
-    #vccf-sermon-upload-modal .sermon-form button:disabled{opacity:.65;cursor:wait}
-    @media(max-width:700px){#vccf-sermon-upload-modal{padding:12px}#vccf-sermon-upload-modal .vccf-sermon-upload-card{border-radius:18px;padding:16px}#vccf-sermon-upload-modal .sermon-form{grid-template-columns:1fr}#vccf-sermon-upload-modal .sermon-form .full{grid-column:auto}}
+    /* Sermons: gallery-style page cards; no floating upload/download surface. */
+    #vccf-sermon-upload-modal{display:none!important;pointer-events:none!important}
+    #vccf-sermons-view .sermon-list{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:stretch}
+    #vccf-sermons-view .sermon-card{height:100%;flex-direction:column;align-items:stretch;gap:12px;border-radius:18px;padding:0;overflow:hidden;background:var(--panel);box-shadow:0 8px 24px rgba(16,24,40,.06)}
+    #vccf-sermons-view .sermon-card::before{content:"";display:block;height:6px;background:var(--brand-gradient)}
+    #vccf-sermons-view .sermon-card .sermon-icon{margin:4px 16px 0;width:52px;height:52px;border-radius:14px}
+    #vccf-sermons-view .sermon-card .sermon-info{padding:0 16px;min-height:92px}
+    #vccf-sermons-view .sermon-card .sermon-info strong{font-size:1rem;white-space:normal;line-height:1.35}
+    #vccf-sermons-view .sermon-card .sermon-actions{padding:0 16px 16px;width:100%}
+    #vccf-sermons-view .sermon-card .sermon-actions button{flex:1;min-height:40px}
+    #vccf-sermons-view .sermon-card .sermon-actions button.danger{flex:0 0 auto}
+    @media(max-width:700px){#vccf-sermons-view .sermon-list{grid-template-columns:1fr}}
   `;
-  const style = document.createElement('style');
-  style.id = 'vccf-ui-behavior-fixes-style';
-  style.textContent = css;
+  const style=document.createElement('style');
+  style.id='vccf-ui-behavior-fixes-style';
+  style.textContent=css;
   document.head.appendChild(style);
 
-  function modal() {
-    let el = document.getElementById('vccf-sermon-upload-modal');
-    if (el) return el;
-    el = document.createElement('div');
-    el.id = 'vccf-sermon-upload-modal';
-    el.innerHTML = `
-      <div class="vccf-sermon-upload-card" role="dialog" aria-modal="true" aria-labelledby="vccf-sermon-upload-title">
-        <div class="vccf-sermon-upload-head">
-          <div><h3 id="vccf-sermon-upload-title">Upload Sermon</h3><p style="margin:4px 0 0;color:var(--muted);font-size:.82rem">Upload a sermon file without leaving your current page.</p></div>
-          <button type="button" class="vccf-sermon-upload-close" aria-label="Close">×</button>
-        </div>
-        <div data-sermon-form-mount></div>
-      </div>`;
-    document.body.appendChild(el);
-    const close = () => el.classList.remove('open');
-    el.querySelector('.vccf-sermon-upload-close').addEventListener('click', close);
-    el.addEventListener('click', e => { if (e.target === el) close(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-    return el;
-  }
-
-  function wireForm(form) {
-    if (!form || form.dataset.vccfPersistentUpload === '1') return;
-    const m = modal();
-    m.querySelector('[data-sermon-form-mount]').appendChild(form);
-    form.dataset.vccfPersistentUpload = '1';
-
-    const admin = document.getElementById('vccf-sermon-admin');
-    if (admin) {
-      admin.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
-          <div><strong>Admin: Sermon Upload</strong><div style="color:var(--muted);font-size:.82rem;margin-top:4px">The upload window stays open while you navigate between pages.</div></div>
-          <button type="button" class="btn" data-open-sermon-upload>+ Upload Sermon</button>
-        </div>`;
-      const open = admin.querySelector('[data-open-sermon-upload]');
-      if (open) open.addEventListener('click', () => m.classList.add('open'));
-    }
-  }
-
-  function scan() {
-    const form = document.getElementById('vccf-sermon-form');
-    if (form) wireForm(form);
-  }
-
-  const observer = new MutationObserver(scan);
-  observer.observe(document.body, {childList:true, subtree:true});
-  scan();
+  const cleanup=()=>document.getElementById('vccf-sermon-upload-modal')?.remove();
+  cleanup();
+  new MutationObserver(cleanup).observe(document.body,{childList:true,subtree:true});
 })();
