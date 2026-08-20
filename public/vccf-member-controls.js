@@ -1,13 +1,13 @@
 (() => {
-  if (window.__VCCF_MEMBER_CONTROLS_V5__) return;
-  window.__VCCF_MEMBER_CONTROLS_V5__=true;
-  const load=()=>{const s=document.createElement('script');s.src='/vccf-member-attendance-visibility.js';s.defer=true;document.head.appendChild(s)};
-  load();
+  if (window.__VCCF_MEMBER_CONTROLS_V6__) return;
+  window.__VCCF_MEMBER_CONTROLS_V6__=true;
+  const load=src=>{const s=document.createElement('script');s.src=src;s.defer=true;document.head.appendChild(s)};
+  load('/vccf-member-attendance-visibility.js');
+  load('/vccf-avatar-fit.js');
   const $=id=>document.getElementById(id);const collator=new Intl.Collator(undefined,{sensitivity:'base',numeric:true});let sortMode='name',addressFilter='';
   const members=()=>{try{return typeof areaMembers==='function'?areaMembers():(window.db?.members||[])}catch(_){return window.db?.members||[]}};
-  const esc=v=>String(v??'').replace(/[&<>\"]/g,m=>({'&':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]));
+  const esc=v=>String(v??'').replace(/[&<>\"]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]));
 
-  // Keep the original working My Profile navigation item and remove injected duplicates.
   function dedupeProfileNav(){
     const sidebar=document.querySelector('.sidebar');if(!sidebar)return;
     const navItems=[...sidebar.querySelectorAll('.nav button,.nav a')];
