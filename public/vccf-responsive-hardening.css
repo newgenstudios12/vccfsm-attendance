@@ -1,0 +1,52 @@
+/* Responsive hardening for VCCF Attendance test branch.
+   Intentionally preserves the existing mobile navigation. */
+*{box-sizing:border-box}
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+img,canvas,video{max-width:100%}
+input,select,textarea,button{max-width:100%}
+.tablewrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.panel,.stat,.photo,.birthday-card,.qr-card,.person,.modal-card{min-width:0}
+.member-cell,.toolbar,.toolbar .left,.toolbar .right,.topbar,.userchip{min-width:0}
+.member-cell b,.account-row,.person,.photo .meta,.birthday-person{overflow-wrap:anywhere}
+.modal-card{width:min(600px,calc(100vw - 32px));max-height:calc(100vh - 32px)}
+
+/* Keep the established compact sidebar; do not convert it to bottom navigation. */
+@media(max-width:900px){
+  .main{max-width:none}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid2,.aboutgrid{grid-template-columns:minmax(0,1fr)}
+  .gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .welcome-hero{min-width:0}
+}
+
+@media(max-width:600px){
+  .main{padding:15px;min-width:0}
+  .topbar{flex-wrap:wrap}
+  .topbar h2{font-size:1.3rem}
+  .stats{grid-template-columns:minmax(0,1fr)}
+  .gallery{grid-template-columns:minmax(0,1fr)}
+  .formgrid{grid-template-columns:minmax(0,1fr)}
+  .full{grid-column:auto}
+  .toolbar .left,.toolbar .right{width:100%}
+  .toolbar .left>* ,.toolbar .right>*{min-width:0;flex:1 1 auto}
+  .search{min-width:0;width:100%}
+  .welcome-hero{padding:22px}
+  .welcome-mark{display:none}
+  .modal{padding:12px}
+  .modal-card{width:100%;max-height:calc(100vh - 24px);padding:18px}
+  .scanner{min-height:240px}
+  .qrbox{padding:14px}
+}
+
+@media(max-width:380px){
+  .main{padding:12px}
+  .panel,.stat{padding:15px}
+  .modal-card{padding:15px}
+  .btn{padding:10px 12px}
+}
+
+/* Long chat/message/file content should never expand the page width. */
+.chat-shell,.chat-inbox,.chat-thread,.chat-messages,.chat-composer{min-width:0;max-width:100%}
+.chat-bubble,.chat-preview,.chat-row{overflow-wrap:anywhere;word-break:break-word}
+.chat-messages{overflow-y:auto;overscroll-behavior:contain}
