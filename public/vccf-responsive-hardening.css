@@ -13,6 +13,11 @@ button,input,select,textarea{max-width:100%}
 .modal{padding:12px}
 .modal-card{width:min(680px,100%);max-height:calc(100dvh - 24px);padding:18px}
 
+/* Login is always above non-auth UI and remains fully interactive. */
+.login{position:relative;z-index:1000;pointer-events:auto}
+.login-card{position:relative;z-index:1001;pointer-events:auto}
+#loginForm,#loginForm *{pointer-events:auto}
+
 /* Tablet: preserve the existing compact sidebar/rail. */
 @media(max-width:900px){
   .main{padding:20px}
