@@ -27,45 +27,40 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
       - name: Ensure VCCF modules are loaded
         run: |
           python - <<'PY'
           from pathlib import Path
-          p = Path('public/index.html')
-          s = p.read_text(encoding='utf-8')
-          s = s.replace('  <script src="/vccf-chat.js"></script>\n', '')
-          s = s.replace('  <script src="/vccf-chat-v2.js"></script>\n', '')
-          tags = [
-              '<script src="/vccf-pro-suite.js"></script>',
-              '<script src="/vccf-my-profile.js"></script>',
-              '<script src="/vccf-my-profile-v2.js"></script>',
-              '<script src="/vccf-profile-auto-link.js"></script>',
-              '<script src="/vccf-profile-member-view-fix.js"></script>',
-              '<script src="/vccf-chat-v2.js"></script>',
-              '<script src="/vccf-sermons.js"></script>',
-              '<script src="/vccf-navigation-cleanup.js"></script>',
+          p=Path('public/index.html')
+          s=p.read_text(encoding='utf-8')
+          # Remove obsolete/duplicate module tags before adding the canonical set.
+          remove=[
+            '/vccf-chat.js','/vccf-my-profile.js','/vccf-chat-v2.js',
+            '/vccf-sermons.js','/vccf-navigation-cleanup.js',
+            '/vccf-pro-suite.js','/vccf-my-profile-v2.js',
+            '/vccf-profile-auto-link.js','/vccf-profile-member-view-fix.js'
           ]
-          marker = '</body>'
-          if marker not in s:
-              raise SystemExit('Could not find </body> in public/index.html')
-          changed = False
+          import re
+          for src in remove:
+            s=re.sub(r'\s*<script[^>]+src=["\']'+re.escape(src)+r'["\'][^>]*></script>\s*','\n',s)
+          tags=[
+            '<script src="/vccf-pro-suite.js"></script>',
+            '<script src="/vccf-my-profile-v2.js"></script>',
+            '<script src="/vccf-profile-auto-link.js"></script>',
+            '<script src="/vccf-profile-member-view-fix.js"></script>',
+            '<script src="/vccf-chat-v2.js"></script>',
+            '<script src="/vccf-sermons.js"></script>',
+            '<script src="/vccf-navigation-cleanup.js"></script>',
+          ]
+          marker='</body>'
+          if marker not in s: raise SystemExit('Could not find </body>')
           for tag in tags:
-              if tag not in s:
-                  s = s.replace(marker, f'  {tag}\n{marker}', 1)
-                  changed = True
-          if changed:
-              p.write_text(s, encoding='utf-8')
+            if tag not in s: s=s.replace(marker,'  '+tag+'\n'+marker,1)
+          p.write_text(s,encoding='utf-8')
           PY
-
       - name: Commit module inclusion
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/index.html
-          if git diff --cached --quiet; then
-            echo 'Modules already included.'
-          else
-            git commit -m 'chore(pro): load production UX suite'
-            git push
-          fi
+          if git diff --cached --quiet; then echo 'Modules already canonical.'; else git commit -m 'chore(pro): canonicalize production modules'; git push; fi
