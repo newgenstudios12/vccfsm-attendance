@@ -38,6 +38,7 @@ const css=`
 `;
 function addCss(){if(document.getElementById('vccf-chat-messenger-safe-style'))return;const s=document.createElement('style');s.id='vccf-chat-messenger-safe-style';s.textContent=css;document.head.appendChild(s)}
 function bindComposer(){const input=document.getElementById('vccfChatInput');if(!input||input.dataset.messengerSafeBound)return;input.dataset.messengerSafeBound='1';input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,130)+'px'});input.addEventListener('focus',()=>setTimeout(()=>{const box=document.getElementById('vccfChatMessages');if(box)box.scrollTop=box.scrollHeight},60))}
-function start(){addCss();bindComposer()}
+function loadSermonVisibility(){if(document.getElementById('vccf-sermon-visibility-loader'))return;const s=document.createElement('script');s.id='vccf-sermon-visibility-loader';s.src='/vccf-sermon-visibility.js';s.defer=true;document.head.appendChild(s)}
+function start(){addCss();bindComposer();loadSermonVisibility()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
