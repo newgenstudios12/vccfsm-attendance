@@ -12,8 +12,23 @@ function setVisible(el,visible){
 
 function sync(){
   const sermonView=document.getElementById('vccf-sermons-view');
+  const main=document.querySelector('.main');
   const active=document.querySelector('.view.active');
   const isSermons=!!(active&&active.id==='vccf-sermons-view');
+
+  // Sermons must behave like Gallery: a normal full-width view inside .main,
+  // never as a sibling of .main inside the flex .app shell.
+  if(sermonView&&main&&sermonView.parentElement!==main)main.appendChild(sermonView);
+  if(sermonView){
+    sermonView.style.position='static';
+    sermonView.style.width='100%';
+    sermonView.style.maxWidth='none';
+    sermonView.style.margin='0';
+    sermonView.style.float='none';
+    sermonView.style.inset='auto';
+    sermonView.style.zIndex='auto';
+  }
+
   setVisible(sermonView,isSermons);
 
   document.querySelectorAll('.sermons-shell,.sermon-admin,.sermon-list').forEach(el=>{
@@ -25,8 +40,7 @@ function sync(){
 
 function onNavigationClick(e){
   const btn=e.target.closest?.('.nav [data-view]');
-  if(btn && btn.dataset.view!=='sermons')setTimeout(sync,0);
-  if(btn && btn.dataset.view==='sermons')setTimeout(sync,0);
+  if(btn)setTimeout(sync,0);
 }
 
 document.addEventListener('click',onNavigationClick,true);
