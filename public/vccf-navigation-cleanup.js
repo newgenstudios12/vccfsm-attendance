@@ -1,5 +1,10 @@
 (()=>{'use strict';if(window.__VCCF_NAV_CLEANUP_V2__)return;window.__VCCF_NAV_CLEANUP_V2__=true;
-function clean(){const nav=document.querySelector('.nav');if(!nav)return;
+function loadMessenger(){
+ if(window.__VCCF_CHAT_MESSENGER__)return;
+ if(document.querySelector('script[data-vccf-chat-messenger]'))return;
+ const s=document.createElement('script');s.src='/vccf-chat-messenger.js';s.async=true;s.dataset.vccfChatMessenger='1';document.head.appendChild(s);
+}
+function clean(){const nav=document.querySelector('.nav');loadMessenger();if(!nav)return;
  const profileBtns=[...nav.querySelectorAll('button')].filter(b=>{const t=(b.textContent||'').replace(/[\u200b\uFEFF]/g,'').trim().toLowerCase();return t==='my profile'||t.includes('my profile')});
  profileBtns.slice(1).forEach(b=>b.remove());
  if(profileBtns[0]){profileBtns[0].textContent='My Profile';profileBtns[0].onclick=e=>{e.preventDefault();window.VCCFMyProfileV2?.open?.()};}
