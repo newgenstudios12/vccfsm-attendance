@@ -1,5 +1,6 @@
 (()=>{'use strict';if(window.__VCCF_NAV_CLEANUP_V2__)return;window.__VCCF_NAV_CLEANUP_V2__=true;
 function loadMessenger(){
+ if(!document.querySelector('.nav') && !document.querySelector('.app.active'))return;
  if(window.__VCCF_CHAT_MESSENGER__)return;
  if(document.querySelector('script[data-vccf-chat-messenger]'))return;
  const s=document.createElement('script');s.src='/vccf-chat-messenger.js';s.async=true;s.dataset.vccfChatMessenger='1';document.head.appendChild(s);
