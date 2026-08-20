@@ -22,7 +22,7 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # Trigger a real main push so the production deployment path runs for the latest app changes.
+      # Production deploy is triggered by the merge push to main.
       - name: Deploy production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
