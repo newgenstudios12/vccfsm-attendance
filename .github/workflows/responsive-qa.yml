@@ -1,0 +1,98 @@
+name: Responsive QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  responsive-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start static site
+        run: |
+          python3 -m http.server 4173 --directory public > /tmp/vccf-http.log 2>&1 &
+          echo $! > /tmp/vccf-http.pid
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:4173/ > /dev/null
+
+      - name: Run responsive smoke tests
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+
+          const viewports = [
+            { name: 'small-phone', width: 375, height: 667 },
+            { name: 'phone', width: 390, height: 844 },
+            { name: 'tablet', width: 768, height: 1024 },
+            { name: 'desktop-small', width: 1024, height: 768 },
+            { name: 'desktop', width: 1440, height: 900 },
+          ];
+
+          const assets = [
+            '/vccf-responsive-hardening.css',
+            '/vccf-chat-v2.js',
+            '/vccf-chat-messenger.js',
+          ];
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+
+            for (const asset of assets) {
+              const response = await page.request.get(`http://127.0.0.1:4173${asset}`);
+              if (!response.ok()) throw new Error(`Asset failed: ${asset} (${response.status()})`);
+            }
+
+            for (const viewport of viewports) {
+              await page.setViewportSize({ width: viewport.width, height: viewport.height });
+              await page.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' });
+
+              const result = await page.evaluate(() => ({
+                scrollWidth: document.documentElement.scrollWidth,
+                clientWidth: document.documentElement.clientWidth,
+                loginForm: !!document.querySelector('#loginForm'),
+                loginButton: !!document.querySelector('#loginForm button'),
+                nav: !!document.querySelector('.nav'),
+              }));
+
+              if (result.scrollWidth > result.clientWidth + 1) {
+                throw new Error(`${viewport.name}: horizontal overflow ${result.scrollWidth}px > ${result.clientWidth}px`);
+              }
+              if (!result.loginForm || !result.loginButton) {
+                throw new Error(`${viewport.name}: login form is not present/clickable in the initial page`);
+              }
+              console.log(`${viewport.name}: OK (${result.clientWidth}px)`);
+            }
+
+            await browser.close();
+          })().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Dump server log on failure
+        if: failure()
+        run: cat /tmp/vccf-http.log || true
