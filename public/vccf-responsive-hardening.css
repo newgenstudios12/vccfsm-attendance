@@ -1,0 +1,96 @@
+/* VCCF responsive hardening */
+html{overflow-x:hidden}
+body{overflow-x:hidden;min-width:0}
+img,video,canvas,svg{max-width:100%}
+button,input,select,textarea{max-width:100%}
+.main,.view,.panel,.toolbar,.topbar,.grid2,.aboutgrid,.formgrid,.gallery,.chat-shell,.chat-inbox,.chat-thread,.sermons-shell,.sermon-card{min-width:0}
+.panel,.stat,.photo,.person,.sermon-card,.birthday-person,.account-row,.setting{overflow-wrap:anywhere}
+.tablewrap{-webkit-overflow-scrolling:touch;max-width:100%}
+.table{min-width:700px}
+.formgrid>*{min-width:0}
+.search{max-width:100%}
+/* Keep dialogs inside the viewport on small screens. */
+.modal{padding:12px}
+.modal-card{width:min(680px,100%);max-height:calc(100dvh - 24px);padding:18px}
+
+/* Tablet: preserve a compact rail but give content all available width. */
+@media(max-width:900px){
+  .main{padding:20px}
+  .topbar{gap:12px}
+  .topbar .userchip{min-width:0}
+  .toolbar .left,.toolbar .right{min-width:0}
+  .toolbar .search{flex:1 1 220px;min-width:0}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid2,.aboutgrid{grid-template-columns:minmax(0,1fr)}
+  .gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* Phone: use a bottom navigation instead of a cramped fixed sidebar. */
+@media(max-width:600px){
+  .app.active{display:block}
+  .sidebar{position:fixed;left:0;right:0;top:auto;bottom:0;width:100%;height:68px;padding:6px 8px;border-right:0;border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(16,24,40,.10);z-index:100}
+  [data-theme=dark] .sidebar{box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+  .side-logo,.side-bottom{display:none}
+  .nav{display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;height:100%;align-items:center}
+  .nav::-webkit-scrollbar{display:none}
+  .nav button{flex:0 0 62px;height:56px;padding:7px 5px;border-radius:12px;text-align:center;font-size:0;white-space:nowrap}
+  .nav button:before{font-size:1.2rem;display:block;line-height:22px;margin-bottom:2px}
+  .nav button.active{background:#6d45e814;color:var(--brand)}
+  .main{margin-left:0;width:100%;max-width:none;padding:14px 14px 84px}
+  .topbar{align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
+  .topbar h2{font-size:1.25rem}
+  .userchip{max-width:100%}
+  .userchip>div{min-width:0}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .stat{padding:15px;border-radius:16px}
+  .stat strong{font-size:1.55rem}
+  .grid2,.aboutgrid{grid-template-columns:1fr;gap:12px}
+  .panel{padding:15px;border-radius:17px}
+  .toolbar{align-items:stretch}
+  .toolbar .left,.toolbar .right{width:100%}
+  .toolbar .left>* ,.toolbar .right>*{flex:1 1 auto;min-width:0}
+  .search{width:100%;min-width:0}
+  .formgrid{grid-template-columns:1fr;gap:10px}
+  .formgrid .full{grid-column:auto}
+  .gallery{grid-template-columns:1fr;gap:12px}
+  .featured-mini img{height:200px}
+  .qr-area-grid{grid-template-columns:1fr}
+  .birthday-list{grid-template-columns:1fr}
+  .account-row,.setting{align-items:flex-start;flex-direction:column}
+  .profile-upload{align-items:flex-start;flex-wrap:wrap}
+  .photo-actions,.sermon-actions{width:100%}
+  .photo-actions>* ,.sermon-actions>*{flex:1 1 auto}
+  .modal-card{border-radius:18px;padding:16px}
+}
+
+/* Very small phones. */
+@media(max-width:380px){
+  .main{padding-left:10px;padding-right:10px}
+  .stats{grid-template-columns:1fr}
+  .stat strong{font-size:1.45rem}
+  .nav button{flex-basis:58px}
+}
+
+/* Chat: make its own height/scroll model reliable at every viewport size. */
+#chat.view.active{min-width:0}
+#chat.view.active .chat-shell{min-width:0;max-width:100%;overflow:hidden}
+#chat.view.active .chat-list,#chat.view.active .chat-messages{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+#chat.view.active .chat-bubble{overflow-wrap:anywhere}
+@media(max-width:600px){
+  #chat.view.active{min-height:calc(100dvh - 84px);max-width:100%}
+  #chat.view.active .chat-shell{border-radius:14px}
+  #chat.view.active .chat-messages{padding:14px 12px}
+}
+
+/* Sermons: card/list never forces horizontal scrolling. */
+#vccf-sermons-view,.sermons-shell{min-width:0;max-width:100%}
+.sermon-card{min-width:0}
+.sermon-info{min-width:0;overflow:hidden}
+@media(max-width:600px){
+  .sermon-form{grid-template-columns:1fr!important}
+  .sermon-form .full{grid-column:auto!important}
+  .sermon-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px}
+  .sermon-icon{grid-row:1}
+  .sermon-info{grid-column:2}
+  .sermon-actions{grid-column:1/-1}
+}
