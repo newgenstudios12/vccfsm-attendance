@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - 'public/vccf-my-profile-v2.js'
-      - 'public/vccf-profile-photo-fix.js'
       - '.github/workflows/include-profile-v2.yml'
 
 permissions:
@@ -13,35 +12,34 @@ permissions:
 
 jobs:
   patch-index:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(profile): load account profile v2') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(profile): load profile v2 script') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Ensure My Profile v2 and photo save fix are loaded
+      - name: Ensure only My Profile v2 is loaded
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('public/index.html')
           s=p.read_text(encoding='utf-8')
-          tags=[
-              '<script src="/vccf-my-profile-v2.js"></script>',
-              '<script src="/vccf-profile-photo-fix.js"></script>',
-          ]
+          lines=s.splitlines()
+          out=[]
+          for line in lines:
+              if 'vccf-my-profile.js' in line or 'vccf-profile-photo-fix.js' in line or 'vccf-my-profile-v2.js' in line:
+                  continue
+              out.append(line)
+          s='\n'.join(out)+'\n'
+          tag='  <script src="/vccf-my-profile-v2.js?v=profile-final"></script>'
           if '</body>' not in s:
-              raise SystemExit('Could not find </body>')
-          changed=False
-          for tag in tags:
-              if tag not in s:
-                  s=s.replace('</body>',f'  {tag}\n</body>',1)
-                  changed=True
-          if changed:
-              p.write_text(s,encoding='utf-8')
+              raise SystemExit('Could not find </body> in public/index.html')
+          s=s.replace('</body>',tag+'\n</body>',1)
+          p.write_text(s,encoding='utf-8')
           PY
-      - name: Commit loader
+      - name: Commit profile loader
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/index.html
-          if git diff --cached --quiet; then echo 'Already loaded'; else git commit -m 'chore(profile): load secure photo save fix'; git push; fi
+          if git diff --cached --quiet; then echo 'Profile loader already clean'; else git commit -m 'chore(profile): load profile v2 script'; git push; fi
