@@ -9,38 +9,43 @@ permissions:
 
 jobs:
   inject:
-    if: ${{ !startsWith(github.event.head_commit.message, 'ci: ensure sermons is loaded') && !startsWith(github.event.head_commit.message, 'chore(pro): load production UX suite') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'ci: ensure sermons are loaded') && !startsWith(github.event.head_commit.message, 'chore(pro): load sermons and messenger chat module') && !startsWith(github.event.head_commit.message, 'fix(responsive): load responsive hardening stylesheet') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 1
-      - name: Inject Sermons and UI behavior scripts
+      - name: Inject required frontend modules and responsive stylesheet
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('public/index.html')
           s=p.read_text(encoding='utf-8')
-          tags=[
+          script_tags=[
               '<script src="/vccf-sermons.js"></script>',
               '<script src="/vccf-ui-behavior-fixes.js"></script>',
               '<script src="/vccf-chat-messenger.js"></script>',
           ]
-          marker='</body>'
-          if marker not in s:
-              raise SystemExit('index.html has no </body> marker')
+          css_tag='<link rel="stylesheet" href="/vccf-responsive-hardening.css">'
+          body='</body>'
+          head='</head>'
           changed=False
-          for tag in tags:
+          for tag in script_tags:
               if tag not in s:
-                  s=s.replace(marker, '  '+tag+'\n'+marker, 1)
+                  if body not in s: raise SystemExit('index.html has no </body> marker')
+                  s=s.replace(body, '  '+tag+'\n'+body, 1)
                   changed=True
+          if css_tag not in s:
+              if head not in s: raise SystemExit('index.html has no </head> marker')
+              s=s.replace(head, '  '+css_tag+'\n'+head, 1)
+              changed=True
           if changed:
               p.write_text(s, encoding='utf-8')
-              print('Injected missing Sermons/UI/chat behavior modules.')
+              print('Injected required Sermons/UI/chat modules and responsive stylesheet.')
           else:
-              print('Sermons/UI/chat behavior modules already loaded.')
+              print('Required frontend modules and responsive stylesheet already loaded.')
           PY
       - name: Commit injection
         run: |
@@ -50,6 +55,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes needed.'
           else
-            git commit -m 'chore(pro): load sermons and messenger chat module'
+            git commit -m 'chore(pro): load responsive hardening stylesheet'
             git push origin main
           fi
