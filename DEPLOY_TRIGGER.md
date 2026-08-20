@@ -1,3 +1,3 @@
 # Deployment trigger
 
-This file triggers a fresh Vercel production deployment from `main`.
+Deploy: sermons gallery and scrollable iPad navigation update.
