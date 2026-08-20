@@ -16,23 +16,30 @@ jobs:
         with:
           ref: main
           fetch-depth: 1
-      - name: Inject Sermons script
+      - name: Inject Sermons and UI behavior scripts
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('public/index.html')
           s=p.read_text(encoding='utf-8')
-          tag='<script src="/vccf-sermons.js"></script>'
-          if tag not in s:
-              marker='</body>'
-              if marker not in s:
-                  raise SystemExit('index.html has no </body> marker')
-              s=s.replace(marker, '  '+tag+'\n'+marker, 1)
+          tags=[
+              '<script src="/vccf-sermons.js"></script>',
+              '<script src="/vccf-ui-behavior-fixes.js"></script>',
+          ]
+          marker='</body>'
+          if marker not in s:
+              raise SystemExit('index.html has no </body> marker')
+          changed=False
+          for tag in tags:
+              if tag not in s:
+                  s=s.replace(marker, '  '+tag+'\n'+marker, 1)
+                  changed=True
+          if changed:
               p.write_text(s, encoding='utf-8')
-              print('Injected Sermons module.')
+              print('Injected missing Sermons/UI behavior modules.')
           else:
-              print('Sermons module already loaded.')
+              print('Sermons/UI behavior modules already loaded.')
           PY
       - name: Commit injection
         run: |
@@ -42,6 +49,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes needed.'
           else
-            git commit -m 'chore(pro): load sermons navigation'
+            git commit -m 'chore(pro): load sermons and UI behavior modules'
             git push origin main
           fi
