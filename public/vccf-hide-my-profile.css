@@ -1,7 +1,7 @@
-/* Safe fallback: hide the retired My Profile navigation item when it is present. */
-.nav button[data-view="profile"],
-.nav button[data-view="my-profile"],
-.nav a[data-view="profile"],
-.nav a[data-view="my-profile"],
-.nav a[href="#profile"],
-.nav a[href*="my-profile"] { display: none !important; }
+/* Safe fallback: remove duplicate My Profile navigation entries while preserving other profile access. */
+.sidebar .nav button[data-view="profile"],
+.sidebar .nav button[data-view="my-profile"],
+.sidebar .nav a[data-view="profile"],
+.sidebar .nav a[data-view="my-profile"],
+.sidebar .nav a[href="#profile"],
+.sidebar .nav a[href*="my-profile"] { display: none !important; }
