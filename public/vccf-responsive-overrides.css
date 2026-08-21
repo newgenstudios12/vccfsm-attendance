@@ -1,0 +1,4 @@
+/* VCCF navigation duplicate guard: keep the first My Profile item and hide any later duplicate. */
+.nav button[data-view="myprofile"] ~ button[data-view="myprofile"] {
+  display: none !important;
+}
