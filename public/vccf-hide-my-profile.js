@@ -1,8 +1,8 @@
-/* VCCF: keep the first My Profile navigation entry and remove only duplicates. */
+/* VCCF: keep one My Profile entry without removing live navigation nodes. */
 (function () {
   'use strict';
 
-  function removeDuplicateMyProfile() {
+  function stabilizeMyProfile() {
     var navItems = Array.prototype.slice.call(
       document.querySelectorAll('.sidebar .nav button, .sidebar .nav a')
     );
@@ -11,17 +11,21 @@
       return text === 'my profile';
     });
 
-    /* Preserve the first/original item and remove every later duplicate. */
-    matches.slice(1).forEach(function (el) {
-      el.remove();
+    /* Keep the first entry. Hide later duplicates instead of removing DOM nodes,
+       so other navigation scripts cannot lose references to their controls. */
+    matches.forEach(function (el, index) {
+      var duplicate = index > 0;
+      el.hidden = duplicate;
+      el.setAttribute('aria-hidden', duplicate ? 'true' : 'false');
+      if (duplicate) el.style.display = 'none';
+      else el.style.removeProperty('display');
     });
   }
 
   function run() {
-    removeDuplicateMyProfile();
-    /* Some navigation items are inserted after initial page setup. */
-    window.setTimeout(removeDuplicateMyProfile, 300);
-    window.setTimeout(removeDuplicateMyProfile, 1000);
+    stabilizeMyProfile();
+    window.setTimeout(stabilizeMyProfile, 300);
+    window.setTimeout(stabilizeMyProfile, 1000);
   }
 
   if (document.readyState === 'loading') {
