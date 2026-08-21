@@ -1,0 +1,1 @@
+Production deployment trigger for final login-owner fix. The application login handler is now isolated from the diagnostic handler and post-login refresh conflicts.
