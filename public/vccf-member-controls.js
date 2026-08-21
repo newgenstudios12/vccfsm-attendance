@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__VCCF_MEMBER_CONTROLS_V8__)return;
-  window.__VCCF_MEMBER_CONTROLS_V8__=true;
+  if(window.__VCCF_MEMBER_CONTROLS_V9__)return;
+  window.__VCCF_MEMBER_CONTROLS_V9__=true;
   window.__VCCF_PRO_WATCHING__=true;
   const load=src=>{const s=document.createElement('script');s.src=src;s.defer=true;document.head.appendChild(s)};
   load('/vccf-member-attendance-visibility.js');
@@ -46,6 +46,8 @@
   async function updateOrgStats(){
     const c=window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);if(!c)return;
     try{
+      const {data:{session}}=await c.auth.getSession();
+      if(!session)return;
       const [{data:members,error:me},{data:attendance,error:ae}]=await Promise.all([c.from('members').select('id,created_at,area_id'),c.from('attendance').select('member_id,area_id,checked_in_at')]);
       if(me||ae)return;
       const list=members||[], sunday=latestSunday(), sundayRows=(attendance||[]).filter(a=>dateKey(a.checked_in_at)===sunday);
@@ -62,9 +64,15 @@
     const base=window.refresh;if(typeof base!=='function')return;
     window.__VCCF_ORG_STATS_INSTALLED__=true;window.refresh=function(...args){const result=base.apply(this,args);updateOrgStats();return result};updateOrgStats();
   }
+  function bindAuthStats(){
+    if(window.__VCCF_ORG_STATS_AUTH_BOUND__)return;
+    const c=window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);if(!c?.auth?.onAuthStateChange)return;
+    window.__VCCF_ORG_STATS_AUTH_BOUND__=true;
+    c.auth.onAuthStateChange((event,session)=>{if(session&&(event==='SIGNED_IN'||event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED'))setTimeout(()=>{installOrgStats();updateOrgStats()},150)});
+  }
   function boot(){
-    dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();
-    [100,350,800,1500,3000].forEach(ms=>setTimeout(()=>{dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();installOrgStats();updateOrgStats()},ms));
+    dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();bindAuthStats();installOrgStats();updateOrgStats();
+    [250,750,1500,3000].forEach(ms=>setTimeout(()=>{dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();bindAuthStats();installOrgStats();updateOrgStats()},ms));
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   window.addEventListener('vccf-app-ready',boot);
