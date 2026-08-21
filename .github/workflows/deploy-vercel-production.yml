@@ -1,5 +1,6 @@
 name: Deploy VCCF Attendance to Vercel
 
+# Prebuilt production deployment workflow.
 on:
   push:
     branches: [main]
