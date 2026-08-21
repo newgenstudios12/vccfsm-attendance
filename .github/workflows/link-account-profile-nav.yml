@@ -33,14 +33,21 @@ jobs:
               if account_tag not in text:
                   raise SystemExit('Could not find account profile navigation script tag.')
               text = text.replace(account_tag, account_tag + '\n<!-- VCCF_NAV_CLEANUP_V1 -->\n' + cleanup_tag, 1)
+          login_marker = 'VCCF_FINAL_LOGIN_V1'
+          login_tag = '<script src="/vccf-login-final.js"></script>'
+          if login_marker not in text:
+              cleanup_anchor = cleanup_tag
+              if cleanup_anchor not in text:
+                  raise SystemExit('Could not find navigation cleanup script tag.')
+              text = text.replace(cleanup_anchor, cleanup_anchor + '\n<!-- VCCF_FINAL_LOGIN_V1 -->\n' + login_tag, 1)
           path.write_text(text, encoding='utf-8')
 
       - name: Commit link
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.email '41898282+users.noreply.github.com'
           git add public/index.html
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'Link navigation duplicate cleanup'
+          git commit -m 'Link final login handler'
           git push
