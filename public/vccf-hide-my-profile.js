@@ -1,6 +1,7 @@
-/* VCCF: intentionally hide the retired My Profile navigation item. */
+/* VCCF: hide the retired My Profile navigation item without observing the document. */
 (function () {
   'use strict';
+
   function hideMyProfile() {
     var selectors = [
       '.nav button[data-view="profile"]',
@@ -15,10 +16,19 @@
       el.setAttribute('aria-hidden', 'true');
     });
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', hideMyProfile, { once: true });
-  } else {
+
+  function boot() {
     hideMyProfile();
+    window.requestAnimationFrame(hideMyProfile);
+    setTimeout(hideMyProfile, 0);
+    setTimeout(hideMyProfile, 250);
+    setTimeout(hideMyProfile, 700);
+    window.addEventListener('vccf-app-ready', hideMyProfile, { once: true });
   }
-  new MutationObserver(hideMyProfile).observe(document.documentElement, { childList: true, subtree: true });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
 })();
