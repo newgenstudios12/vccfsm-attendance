@@ -1,25 +1,23 @@
-/* VCCF: remove the duplicate My Profile navigation entry while preserving profile access elsewhere. */
+/* VCCF: safely hide only explicit legacy My Profile navigation items. */
 (function () {
   'use strict';
-  function isDuplicateMyProfile(el) {
-    if (!el || !el.closest) return false;
-    var nav = el.closest('.sidebar .nav, .nav');
-    if (!nav) return false;
-    var text = (el.textContent || '').trim().replace(/\s+/g, ' ').toLowerCase();
-    var view = String(el.getAttribute('data-view') || '').toLowerCase();
-    var href = String(el.getAttribute('href') || '').toLowerCase();
-    return view === 'profile' || view === 'my-profile' || href === '#profile' || href.indexOf('my-profile') !== -1 || text === 'my profile';
-  }
   function hideMyProfile() {
-    document.querySelectorAll('.sidebar .nav button, .sidebar .nav a, .nav button, .nav a').forEach(function (el) {
-      if (isDuplicateMyProfile(el)) {
-        el.hidden = true;
-        el.setAttribute('aria-hidden', 'true');
-        el.style.display = 'none';
-      }
+    var selectors = [
+      '.sidebar .nav button[data-view="profile"]',
+      '.sidebar .nav button[data-view="my-profile"]',
+      '.sidebar .nav a[data-view="profile"]',
+      '.sidebar .nav a[data-view="my-profile"]',
+      '.sidebar .nav a[href="#profile"]',
+      '.sidebar .nav a[href*="my-profile"]'
+    ];
+    document.querySelectorAll(selectors.join(',')).forEach(function (el) {
+      el.hidden = true;
+      el.setAttribute('aria-hidden', 'true');
     });
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hideMyProfile, { once: true });
-  else hideMyProfile();
-  new MutationObserver(hideMyProfile).observe(document.documentElement, { childList: true, subtree: true });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hideMyProfile, { once: true });
+  } else {
+    hideMyProfile();
+  }
 })();
