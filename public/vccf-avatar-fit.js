@@ -1,7 +1,7 @@
 (() => {
   'use strict';
-  if (window.__VCCF_AVATAR_FIT_V1__) return;
-  window.__VCCF_AVATAR_FIT_V1__ = true;
+  if (window.__VCCF_AVATAR_FIT_V2__) return;
+  window.__VCCF_AVATAR_FIT_V2__ = true;
 
   const css = `
     .userchip .avatar,
@@ -52,16 +52,14 @@
       style.textContent = css;
       document.head.appendChild(style);
     }
-    document.querySelectorAll('.userchip .avatar img, .topbar .avatar img, .vccf-account-avatar img').forEach(img => {
-      img.style.setProperty('object-fit', 'cover', 'important');
-      img.style.setProperty('object-position', 'center center', 'important');
-      img.style.setProperty('width', '100%', 'important');
-      img.style.setProperty('height', '100%', 'important');
-    });
   };
 
-  document.addEventListener('DOMContentLoaded', apply);
-  window.addEventListener('vccf-app-ready', () => setTimeout(apply, 100));
-  new MutationObserver(apply).observe(document.documentElement, { childList: true, subtree: true });
-  apply();
+  // Apply only at stable lifecycle points. Do not observe the entire DOM:
+  // avatar image updates can mutate the DOM and cause a visible flicker loop.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', apply, { once: true });
+  } else {
+    apply();
+  }
+  window.addEventListener('vccf-app-ready', () => setTimeout(apply, 100), { once: true });
 })();
