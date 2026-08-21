@@ -47,3 +47,4 @@ const boot=()=>setTimeout(()=>{
 },250);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
+// VCCF production deployment trigger
