@@ -1,23 +1,32 @@
-/* VCCF: safely hide only explicit legacy My Profile navigation items. */
+/* VCCF: keep the first My Profile navigation entry and remove only duplicates. */
 (function () {
   'use strict';
-  function hideMyProfile() {
-    var selectors = [
-      '.sidebar .nav button[data-view="profile"]',
-      '.sidebar .nav button[data-view="my-profile"]',
-      '.sidebar .nav a[data-view="profile"]',
-      '.sidebar .nav a[data-view="my-profile"]',
-      '.sidebar .nav a[href="#profile"]',
-      '.sidebar .nav a[href*="my-profile"]'
-    ];
-    document.querySelectorAll(selectors.join(',')).forEach(function (el) {
-      el.hidden = true;
-      el.setAttribute('aria-hidden', 'true');
+
+  function removeDuplicateMyProfile() {
+    var navItems = Array.prototype.slice.call(
+      document.querySelectorAll('.sidebar .nav button, .sidebar .nav a')
+    );
+    var matches = navItems.filter(function (el) {
+      var text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      return text === 'my profile';
+    });
+
+    /* Preserve the first/original item and remove every later duplicate. */
+    matches.slice(1).forEach(function (el) {
+      el.remove();
     });
   }
+
+  function run() {
+    removeDuplicateMyProfile();
+    /* Some navigation items are inserted after initial page setup. */
+    window.setTimeout(removeDuplicateMyProfile, 300);
+    window.setTimeout(removeDuplicateMyProfile, 1000);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', hideMyProfile, { once: true });
+    document.addEventListener('DOMContentLoaded', run, { once: true });
   } else {
-    hideMyProfile();
+    run();
   }
 })();
