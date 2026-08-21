@@ -1,0 +1,21 @@
+name: Verify post-login stability
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify login ownership and reload safety
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          login=Path('public/vccf-login-final.js').read_text()
+          assert 'form.onsubmit=' in login
+          for f in ['public/vccf-profile-auto-link.js','public/vccf-profile-member-view-fix.js']:
+              assert 'location.reload()' not in Path(f).read_text(), f
+          print('stability checks passed')
+          PY
