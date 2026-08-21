@@ -1,4 +1,5 @@
 /* VCCF: hide the retired My Profile navigation item without observing the document. */
+/* PRODUCTION_BASELINE_NAV_FIX */
 (function () {
   'use strict';
 
