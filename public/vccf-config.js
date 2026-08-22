@@ -91,7 +91,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
       ]);
       if(!userData?.user) return;
       const role=profile?.role||'admin';
-      const visibleMembers=(members||[]).filter(m=>role==='admin'||role===undefined?true:(role==='area_leader'?m.area_id===profile.area_id:m.id===profile.member_id));
+      const visibleMembers=(members||[]);
       const visibleIds=new Set(visibleMembers.map(m=>m.id));
       const sundayDate=latestSunday();
       const sunday=(attendance||[]).filter(a=>visibleIds.has(a.member_id)&&new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'})===sundayDate);
