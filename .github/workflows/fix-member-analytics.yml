@@ -1,0 +1,44 @@
+name: Fix member analytics visibility
+
+on:
+  push:
+    branches: [fix/member-analytics-all-areas]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply targeted member analytics fix
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('public/vccf-config.js')
+          text = path.read_text(encoding='utf-8')
+          old = "const visibleMembers=(members||[]).filter(m=>role==='admin'||role===undefined?true:(role==='area_leader'?m.area_id===profile.area_id:m.id===profile.member_id));"
+          new = "const visibleMembers=(members||[]);"
+          if old not in text:
+              raise SystemExit('Target analytics filter not found; refusing to modify the file.')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          print('Applied targeted member analytics visibility fix.')
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/vccf-config.js
+          git commit -m 'fix: show all-area analytics to members'
+          git push
+
+      - name: Remove temporary workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/fix-member-analytics.yml
+          git commit -m 'chore: remove temporary analytics patch workflow'
+          git push
