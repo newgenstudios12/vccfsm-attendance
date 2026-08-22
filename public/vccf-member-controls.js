@@ -1,6 +1,6 @@
 (()=>{
-  if(window.__VCCF_MEMBER_CONTROLS_V9__)return;
-  window.__VCCF_MEMBER_CONTROLS_V9__=true;
+  if(window.__VCCF_MEMBER_CONTROLS_V10__)return;
+  window.__VCCF_MEMBER_CONTROLS_V10__=true;
   window.__VCCF_PRO_WATCHING__=true;
   const load=src=>{const s=document.createElement('script');s.src=src;s.defer=true;document.head.appendChild(s)};
   load('/vccf-member-attendance-visibility.js');
@@ -10,71 +10,28 @@
   let sortMode='name',addressFilter='';
   const allMembers=()=>{try{return Array.isArray(db?.members)?db.members:[]}catch(_){return[]}};
   const esc=v=>String(v??'').replace(/[&<>\"]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]));
-
-  function dedupeProfileNav(){
-    const sidebar=document.querySelector('.sidebar');if(!sidebar)return;
-    const items=[...sidebar.querySelectorAll('.nav button,.nav a')];
-    const matches=items.filter(el=>{const text=(el.textContent||'').replace(/\s+/g,' ').trim();const view=(el.dataset?.view||'').toLowerCase();return /^(my\s*profile|profile)$/i.test(text)||view==='myprofile'||view==='profile'||view==='my-profile'});
-    if(!matches.length)return;
-    const primary=matches.find(el=>(el.dataset?.view||'').toLowerCase()==='myprofile')||matches[0];
-    matches.filter(el=>el!==primary).forEach(el=>el.remove());
-    primary.dataset.view='myprofile';primary.textContent='My Profile';primary.classList.remove('hidden');primary.hidden=false;primary.removeAttribute('aria-hidden');primary.style.removeProperty('display');
-  }
-  function ensureAttendanceNav(){
-    const nav=document.querySelector('.nav');if(!nav)return;
-    let b=nav.querySelector('button[data-view="attendance"]');
-    if(!b){b=document.createElement('button');b.type='button';b.dataset.view='attendance';b.textContent='Attendance';const ref=nav.querySelector('button[data-view="selfcheck"]');if(ref)nav.insertBefore(b,ref);else nav.appendChild(b)}
-    b.classList.remove('hidden');b.hidden=false;b.removeAttribute('aria-hidden');b.style.removeProperty('display');b.onclick=()=>{if(typeof openView==='function')openView('attendance')};
-  }
-  function patchPermissions(){
-    if(!window.__VCCF_APPLY_PERMISSIONS_WRAPPED__&&typeof applyPermissions==='function'){
-      window.__VCCF_APPLY_PERMISSIONS_WRAPPED__=true;const original=applyPermissions;applyPermissions=function(){original();ensureAttendanceNav()};
-    }
-    try{areaMembers=function(){return allMembers()}}catch(_){ }
-  }
-  function refreshMemberControls(){
-    const section=$('members'),toolbar=section?.querySelector('.toolbar');if(!toolbar)return;
-    let box=$('vccfMemberControls');
-    if(!box){box=document.createElement('div');box.id='vccfMemberControls';box.style.cssText='display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px';toolbar.insertAdjacentElement('afterend',box);box.innerHTML='<span id="vccfMemberCount" style="font-weight:800;color:var(--muted);padding:10px 2px"></span><label style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem">Sort by: <select id="vccfSortBy" class="search" style="min-width:150px"><option value="name">Name</option><option value="address">Address</option></select></label><label style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem">Filter by: Address <select id="vccfFilterByAddress" class="search" style="min-width:230px"></select></label>';$('vccfSortBy').onchange=e=>{sortMode=e.target.value;renderMembers&&renderMembers();setTimeout(refreshMemberControls,0)};$('vccfFilterByAddress').onchange=e=>{addressFilter=e.target.value;applyAddressFilter()}}
-    const s=$('vccfFilterByAddress');if(s){const vals=[...new Set(allMembers().map(m=>String(m.address||'').trim()).filter(Boolean))].sort(collator.compare);s.innerHTML='<option value="">All addresses</option>'+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__blank__">No address</option>';s.value=addressFilter}
-    applyAddressFilter();
-  }
-  function applyAddressFilter(){const rows=[...($('memberRows')?.rows||[])];rows.forEach(r=>{const a=(r.cells[3]?.textContent||'').trim();r.style.display=addressFilter==='__blank__'?!a:(!addressFilter||a===addressFilter)?'':'none'});const e=$('vccfMemberCount');if(e)e.textContent=`Total members: ${allMembers().length} · Showing: ${rows.filter(r=>r.style.display!=='none').length}`}
-
+  function dedupeProfileNav(){const sidebar=document.querySelector('.sidebar');if(!sidebar)return;const items=[...sidebar.querySelectorAll('.nav button,.nav a')];const matches=items.filter(el=>{const text=(el.textContent||'').replace(/\s+/g,' ').trim();const view=(el.dataset?.view||'').toLowerCase();return /^(my\s*profile|profile)$/i.test(text)||view==='myprofile'||view==='profile'||view==='my-profile'});if(!matches.length)return;const primary=matches.find(el=>(el.dataset?.view||'').toLowerCase()==='myprofile')||matches[0];matches.filter(el=>el!==primary).forEach(el=>el.remove());primary.dataset.view='myprofile';primary.textContent='My Profile';primary.classList.remove('hidden');primary.hidden=false;primary.removeAttribute('aria-hidden');primary.style.removeProperty('display');}
+  function ensureAttendanceNav(){const nav=document.querySelector('.nav');if(!nav)return;let b=nav.querySelector('button[data-view="attendance"]');if(!b){b=document.createElement('button');b.type='button';b.dataset.view='attendance';b.textContent='Attendance';const ref=nav.querySelector('button[data-view="selfcheck"]');if(ref)nav.insertBefore(b,ref);else nav.appendChild(b)}b.classList.remove('hidden');b.hidden=false;b.removeAttribute('aria-hidden');b.style.removeProperty('display');b.onclick=()=>{if(typeof openView==='function')openView('attendance')};}
+  function patchPermissions(){if(!window.__VCCF_APPLY_PERMISSIONS_WRAPPED__&&typeof applyPermissions==='function'){window.__VCCF_APPLY_PERMISSIONS_WRAPPED__=true;const original=applyPermissions;applyPermissions=function(){original();ensureAttendanceNav()};}try{areaMembers=function(){return allMembers()}}catch(_){}}
+  function refreshMemberControls(){const section=$('members'),toolbar=section?.querySelector('.toolbar');if(!toolbar)return;let box=$('vccfMemberControls');if(!box){box=document.createElement('div');box.id='vccfMemberControls';box.style.cssText='display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 16px';toolbar.insertAdjacentElement('afterend',box);box.innerHTML='<span id="vccfMemberCount" style="font-weight:800;color:var(--muted);padding:10px 2px"></span><label style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem">Sort by: <select id="vccfSortBy" class="search" style="min-width:150px"><option value="name">Name</option><option value="address">Address</option></select></label><label style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:.85rem">Filter by: Address <select id="vccfFilterByAddress" class="search" style="min-width:230px"></select></label>';$('vccfSortBy').onchange=e=>{sortMode=e.target.value;renderMembers&&renderMembers();setTimeout(refreshMemberControls,0)};$('vccfFilterByAddress').onchange=e=>{addressFilter=e.target.value;applyAddressFilter()}}
+    const s=$('vccfFilterByAddress');if(s){const vals=[...new Set(allMembers().map(m=>String(m.address||'').trim()).filter(Boolean))].sort(collator.compare);s.innerHTML='<option value="">All addresses</option>'+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__blank__">No address</option>';s.value=addressFilter}applyAddressFilter();}
+  function applyAddressFilter(){const rows=[...($('memberRows')?.rows||[])];rows.forEach(r=>{const a=(r.cells[3]?.textContent||'').trim();r.style.display=addressFilter==='__blank__'?!a:(!addressFilter||a===addressFilter)?'':'none'});const e=$('vccfMemberCount');if(e)e.textContent=`Total members: ${allMembers().length} · Showing: ${rows.filter(r=>r.style.display!=='none').length}`;}
   const dateKey=d=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(d));
   const latestSunday=()=>{const d=new Date(dateKey(new Date())+'T12:00:00+08:00');d.setDate(d.getDate()-d.getDay());return dateKey(d)};
+  let statsTimer=0,statsInFlight=false,statsLastRun=0;
+  function scheduleOrgStats(delay=120){clearTimeout(statsTimer);statsTimer=setTimeout(updateOrgStats,delay);}
   async function updateOrgStats(){
+    if(statsInFlight)return;
+    const now=Date.now();if(now-statsLastRun<1000)return;
     const c=window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);if(!c)return;
-    try{
-      const {data:{session}}=await c.auth.getSession();
-      if(!session)return;
-      const [{data:members,error:me},{data:attendance,error:ae}]=await Promise.all([c.from('members').select('id,created_at,area_id'),c.from('attendance').select('member_id,area_id,checked_in_at')]);
-      if(me||ae)return;
-      const list=members||[], sunday=latestSunday(), sundayRows=(attendance||[]).filter(a=>dateKey(a.checked_in_at)===sunday);
-      const freshCut=Date.now()-30*86400000, fresh=list.filter(m=>m.created_at&&new Date(m.created_at).getTime()>=freshCut).length, rate=list.length?Math.round(sundayRows.length/list.length*100):0;
-      if($('totalMembers'))$('totalMembers').textContent=String(list.length);
-      if($('sundayAttendance'))$('sundayAttendance').textContent=String(sundayRows.length);
-      if($('attendanceRate'))$('attendanceRate').textContent=rate+'%';
-      if($('newMembers'))$('newMembers').textContent=String(fresh);
-      const label=$('newMembers')?.previousElementSibling;if(label)label.textContent='New Members (30d)';
-    }catch(e){console.warn('VCCF organization stats update failed:',e)}
+    statsInFlight=true;
+    try{const {data:{session}}=await c.auth.getSession();if(!session)return;const [{data:members,error:me},{data:attendance,error:ae}]=await Promise.all([c.from('members').select('id,created_at,area_id'),c.from('attendance').select('member_id,area_id,checked_in_at')]);if(me||ae)return;const list=members||[],sunday=latestSunday(),sundayRows=(attendance||[]).filter(a=>dateKey(a.checked_in_at)===sunday);const freshCut=Date.now()-30*86400000,fresh=list.filter(m=>m.created_at&&new Date(m.created_at).getTime()>=freshCut).length,rate=list.length?Math.round(sundayRows.length/list.length*100):0;statsLastRun=Date.now();if($('totalMembers'))$('totalMembers').textContent=String(list.length);if($('sundayAttendance'))$('sundayAttendance').textContent=String(sundayRows.length);if($('attendanceRate'))$('attendanceRate').textContent=rate+'%';if($('newMembers'))$('newMembers').textContent=String(fresh);const label=$('newMembers')?.previousElementSibling;if(label)label.textContent='New Members (30d)';}
+    catch(e){console.warn('VCCF organization stats update failed:',e)}finally{statsInFlight=false;}
   }
-  function installOrgStats(){
-    if(window.__VCCF_ORG_STATS_INSTALLED__)return;
-    const base=window.refresh;if(typeof base!=='function')return;
-    window.__VCCF_ORG_STATS_INSTALLED__=true;window.refresh=function(...args){const result=base.apply(this,args);updateOrgStats();return result};updateOrgStats();
-  }
-  function bindAuthStats(){
-    if(window.__VCCF_ORG_STATS_AUTH_BOUND__)return;
-    const c=window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);if(!c?.auth?.onAuthStateChange)return;
-    window.__VCCF_ORG_STATS_AUTH_BOUND__=true;
-    c.auth.onAuthStateChange((event,session)=>{if(session&&(event==='SIGNED_IN'||event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED'))setTimeout(()=>{installOrgStats();updateOrgStats()},150)});
-  }
-  function boot(){
-    dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();bindAuthStats();installOrgStats();updateOrgStats();
-    [250,750,1500,3000].forEach(ms=>setTimeout(()=>{dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();bindAuthStats();installOrgStats();updateOrgStats()},ms));
-  }
+  function installOrgStats(){if(window.__VCCF_ORG_STATS_INSTALLED__)return;const base=window.refresh;if(typeof base!=='function')return;window.__VCCF_ORG_STATS_INSTALLED__=true;window.refresh=function(...args){const result=base.apply(this,args);scheduleOrgStats();return result};scheduleOrgStats();}
+  function bindAuthStats(){if(window.__VCCF_ORG_STATS_AUTH_BOUND__)return;const c=window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);if(!c?.auth?.onAuthStateChange)return;window.__VCCF_ORG_STATS_AUTH_BOUND__=true;c.auth.onAuthStateChange((event,session)=>{if(session&&(event==='SIGNED_IN'||event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED'))scheduleOrgStats(180)});}
+  function boot(){dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();bindAuthStats();installOrgStats();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
   window.addEventListener('vccf-app-ready',boot);
-  document.addEventListener('click',e=>{if(e.target.closest('.nav button,.nav a'))setTimeout(()=>{dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls();installOrgStats();updateOrgStats()},80)});
+  document.addEventListener('click',e=>{if(e.target.closest('.nav button,.nav a'))setTimeout(()=>{dedupeProfileNav();ensureAttendanceNav();patchPermissions();refreshMemberControls()},80)});
 })();
