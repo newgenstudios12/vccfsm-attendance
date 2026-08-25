@@ -31,7 +31,6 @@
       const joined=m.created_at?new Date(m.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}):null;
       const eligible=!joined||joined<=oldest;
       const fourConsecutiveMisses=eligible&&sundays.every(d=>!(by.get(String(m.id))?.has(d)));
-      // Status is derived from actual attendance for the current four-Sunday window.
       const next=fourConsecutiveMisses?'inactive':'active';
       if(m.status!==next)updates.push({id:m.id,status:next});
     }
@@ -88,6 +87,21 @@
   async function fixRecentAttendance(){
     const el=document.getElementById('recentAttendance');if(!el||!window.db?.attendance)return;const rows=window.db.attendance.slice(-8).reverse();el.innerHTML=rows.map(a=>{const m=window.db.members.find(x=>String(x.id)===String(a.memberId))||{name:a.name||'Unknown member',area:a.area||'',photo:''};return `<tr><td><div class="member-cell">${typeof window.memberAvatar==='function'?window.memberAvatar(m,true):''}<b style="color:var(--text)">${esc(m.name)}</b></div></td><td><span class="tag">${esc(m.area||a.area||'')}</span></td><td>${esc(a.time)}</td><td>✓ Present</td></tr>`}).join('')||'<tr><td colspan="4" style="color:var(--muted)">No attendance recorded yet.</td></tr>'}
 
+  async function renderSundayAnalytics(){
+    const section=document.getElementById('analytics')||document.querySelector('[data-view="analytics"]');if(!section)return;
+    const p=await profile();if(!p)return;
+    const role=roleName(p.role);let ids=null;
+    const {data:members}=await supa.from('members').select('id,area_id');
+    if(role!=='admin'&&role!=='area leader')ids=p.member_id?[String(p.member_id)]:[];
+    else if(role==='area leader')ids=(members||[]).filter(m=>String(m.area_id)===String(p.area_id)).map(m=>String(m.id));
+    const {data:attendance}=await supa.from('attendance').select('member_id,checked_in_at');
+    const sundays=sundayList(8).reverse();const allowed=ids?new Set(ids):null;
+    const counts=sundays.map(d=>{const seen=new Set();(attendance||[]).forEach(a=>{const ad=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});if(ad===d&&(!allowed||allowed.has(String(a.member_id))))seen.add(String(a.member_id))});return {date:d,count:seen.size}});
+    let panel=document.getElementById('vccfSundayAnalytics');if(!panel){panel=document.createElement('div');panel.id='vccfSundayAnalytics';panel.className='panel';section.prepend(panel)}
+    const max=Math.max(1,...counts.map(x=>x.count));
+    panel.innerHTML=`<div class="toolbar"><div><h3 style="margin:0">Attendance Overview</h3><p style="color:var(--muted);margin:4px 0 0">Sunday attendance only. ${role==='admin'?'All members':role==='area leader'?'Your area':'Your attendance'}</p></div></div><div style="height:260px;display:flex;align-items:flex-end;gap:10px;padding:20px 8px 4px;border-top:1px solid var(--line);overflow-x:auto">${counts.map(x=>{const h=Math.max(4,Math.round(x.count/max*190));const label=new Date(x.date+'T12:00:00+08:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});return `<div style="min-width:54px;height:220px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px"><b>${x.count}</b><div title="${label}: ${x.count}" style="width:34px;height:${h}px;border-radius:7px 7px 2px 2px;background:var(--accent,#2563eb)"></div><small style="color:var(--muted);white-space:nowrap">${label}</small></div>`}).join('')}</div>`;
+  }
+
   async function renderStats(){
     const dashboard=document.getElementById('dashboard');if(!dashboard)return;const p=await profile();if(!p||!['admin','area leader'].includes(roleName(p.role)))return;const rows=await loadStatusesIntoDb();
     let panel=document.getElementById('memberStatsFilter');if(!panel){panel=document.createElement('div');panel.id='memberStatsFilter';panel.className='panel';panel.style.marginTop='16px';dashboard.appendChild(panel)}
@@ -103,6 +117,7 @@
     running=true;
     try{
       if(document.getElementById('dashboard')?.classList.contains('active')){await renderVideo();await renderStats();await fixRecentAttendance()}
+      if(document.getElementById('analytics')?.classList.contains('active')||document.querySelector('[data-view="analytics"].active'))await renderSundayAnalytics()
       if(document.getElementById('members')?.classList.contains('active')){if(typeof window.renderMembers==='function')window.renderMembers();await enhanceMembers();await enhanceOwnMemberStatus()}
       if(document.getElementById('attendance')?.classList.contains('active'))await fixAttendanceNames()
     }catch(e){console.warn('VCCF UI enhancement:',e)}
