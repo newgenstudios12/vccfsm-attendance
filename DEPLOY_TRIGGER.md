@@ -1,3 +1,3 @@
 # Deployment trigger
 
-Deploy: remove overlapping attendance overview.
+Deploy: keep Sunday overview on Analytics and remove heat analytics.
