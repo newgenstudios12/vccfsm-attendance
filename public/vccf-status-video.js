@@ -25,21 +25,21 @@
   async function calculateStatuses(){
     const {data:members,error}=await supa.from('members').select('id,display_name,area_id,created_at,status');if(error||!members)return [];
     const {data:attendance}=await supa.from('attendance').select('member_id,checked_in_at');const sundays=sundayList(4),oldest=sundays[3];const by=new Map();
-    (attendance||[]).forEach(a=>{const d=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});if(sundays.includes(d)){if(!by.has(a.member_id))by.set(a.member_id,new Set());by.get(a.member_id).add(d)}});
+    (attendance||[]).forEach(a=>{const d=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});if(sundays.includes(d)){if(!by.has(String(a.member_id)))by.set(String(a.member_id),new Set());by.get(String(a.member_id)).add(d)}});
     const updates=[];
     for(const m of members){
       const joined=m.created_at?new Date(m.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}):null;
       const eligible=!joined||joined<=oldest;
-      const fourConsecutiveMisses=eligible&&sundays.every(d=>!(by.get(m.id)?.has(d)));
-      // Preserve the stored status unless the four-consecutive-Sundays rule explicitly requires inactivity.
-      const next=fourConsecutiveMisses?'inactive':(m.status||'active');
+      const fourConsecutiveMisses=eligible&&sundays.every(d=>!(by.get(String(m.id))?.has(d)));
+      // Status is derived from actual attendance for the current four-Sunday window.
+      const next=fourConsecutiveMisses?'inactive':'active';
       if(m.status!==next)updates.push({id:m.id,status:next});
     }
     for(const u of updates)await supa.from('members').update({status:u.status,status_updated_at:new Date().toISOString()}).eq('id',u.id);
-    return members.map(m=>({...m,status:updates.find(x=>x.id===m.id)?.status||m.status||'active'}));
+    return members.map(m=>({...m,status:updates.find(x=>x.id===m.id)?.status||((m.status==='inactive'&&members.find(x=>x.id===m.id))?m.status:'active')}));
   }
 
-  async function loadStatusesIntoDb(){const rows=await calculateStatuses();const map=new Map(rows.map(x=>[x.id,x.status]));(window.db?.members||[]).forEach(m=>m.status=map.get(m.id)||m.status||'active');return rows}
+  async function loadStatusesIntoDb(){const rows=await calculateStatuses();const map=new Map(rows.map(x=>[String(x.id),x.status]));(window.db?.members||[]).forEach(m=>m.status=map.get(String(m.id))||m.status||'active');return rows}
 
   async function enhanceMembers(){
     const section=document.getElementById('members');if(!section)return;document.getElementById('memberStatusPanel')?.remove();
@@ -52,9 +52,9 @@
     if(actionsIndex<0){const th=document.createElement('th');th.textContent='Actions';th.dataset.vccfActions='1';head.appendChild(th);actionsIndex=head.cells.length-1}
     const visible=(window.db?.members||[]).filter(m=>roleName(p.role)==='admin'||String(m.areaId)===String(p.area_id));
     [...body.rows].forEach(row=>{
-      const idCell=row.cells[0]?.querySelector('small');const id=idCell?.textContent?.trim();const m=visible.find(x=>x.id===id);if(!m)return;
+      const idCell=row.cells[0]?.querySelector('small');const id=idCell?.textContent?.trim();const m=visible.find(x=>String(x.id)===String(id));if(!m)return;
       const cell=row.cells[statusIndex]||row.insertCell(statusIndex);cell.innerHTML=`<select class="vccf-inline-status" style="border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--panel);color:var(--text);font-weight:800"><option value="active">Active</option><option value="inactive">Inactive</option></select>`;cell.querySelector('select').value=m.status||'active';
-      cell.querySelector('select').onchange=async e=>{const me=await profile();if(!me||!['admin','area leader'].includes(roleName(me.role))){toast('You do not have permission.');return}if(roleName(me.role)==='area leader'&&String(m.areaId)!==String(me.area_id)){toast('You can only change members in your area.');e.target.value=m.status||'active';return}const r=await supa.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);if(r.error){toast(r.error.message);e.target.value=m.status||'active';return}m.status=e.target.value;const local=(window.db?.members||[]).find(x=>x.id===m.id);if(local)local.status=m.status;toast(`Member set to ${e.target.value}.`)};
+      cell.querySelector('select').onchange=async e=>{const me=await profile();if(!me||!['admin','area leader'].includes(roleName(me.role))){toast('You do not have permission.');return}if(roleName(me.role)==='area leader'&&String(m.areaId)!==String(me.area_id)){toast('You can only change members in your area.');e.target.value=m.status||'active';return}const r=await supa.from('members').update({status:e.target.value,status_updated_at:new Date().toISOString()}).eq('id',m.id);if(r.error){toast(r.error.message);e.target.value=m.status||'active';return}m.status=e.target.value;const local=(window.db?.members||[]).find(x=>String(x.id)===String(m.id));if(local)local.status=m.status;toast(`Member set to ${e.target.value}.`)};
       const actionCell=row.cells[actionsIndex]||row.insertCell(actionsIndex);actionCell.dataset.vccfActionsCell='1';
       if(roleName(p.role)==='admin'&&!actionCell.querySelector('.vccf-delete-member')){
         const b=document.createElement('button');b.className='btn danger vccf-delete-member';b.textContent='Delete';
@@ -72,10 +72,10 @@
   }
 
   async function fixAttendanceNames(){
-    if(!window.db?.attendance)return;const render=()=>{const rows=[...window.db.attendance].reverse();const el=document.getElementById('attendanceRows');if(!el)return;el.innerHTML=rows.map(a=>{const m=window.db.members.find(x=>x.id===a.memberId)||{name:a.name||'Unknown member',area:a.area||'',photo:''};return `<tr><td><div class="member-cell">${typeof window.memberAvatar==='function'?window.memberAvatar(m,true):`<span class="member-avatar sm">${(m.name||'?').slice(0,1)}</span>`}<div><b style="color:var(--text)">${esc(m.name)}</b><br><small style="color:var(--muted)">${esc(m.id||a.id||'')}</small></div></div></td><td><span class="tag">${esc(m.area||a.area||'')}</span></td><td>${esc(a.date)}</td><td>${esc(a.time)}</td><td>✓ Present</td></tr>`}).join('')||'<tr><td colspan="5" style="color:var(--muted)">No attendance recorded yet.</td></tr>'};render()}
+    if(!window.db?.attendance)return;const render=()=>{const rows=[...window.db.attendance].reverse();const el=document.getElementById('attendanceRows');if(!el)return;el.innerHTML=rows.map(a=>{const m=window.db.members.find(x=>String(x.id)===String(a.memberId))||{name:a.name||'Unknown member',area:a.area||'',photo:''};return `<tr><td><div class="member-cell">${typeof window.memberAvatar==='function'?window.memberAvatar(m,true):`<span class="member-avatar sm">${(m.name||'?').slice(0,1)}</span>`}<div><b style="color:var(--text)">${esc(m.name)}</b><br><small style="color:var(--muted)">${esc(m.id||a.id||'')}</small></div></div></td><td><span class="tag">${esc(m.area||a.area||'')}</span></td><td>${esc(a.date)}</td><td>${esc(a.time)}</td><td>✓ Present</td></tr>`}).join('')||'<tr><td colspan="5" style="color:var(--muted)">No attendance recorded yet.</td></tr>'};render()}
 
   async function fixRecentAttendance(){
-    const el=document.getElementById('recentAttendance');if(!el||!window.db?.attendance)return;const rows=window.db.attendance.slice(-8).reverse();el.innerHTML=rows.map(a=>{const m=window.db.members.find(x=>x.id===a.memberId)||{name:a.name||'Unknown member',area:a.area||'',photo:''};return `<tr><td><div class="member-cell">${typeof window.memberAvatar==='function'?window.memberAvatar(m,true):''}<b style="color:var(--text)">${esc(m.name)}</b></div></td><td><span class="tag">${esc(m.area||a.area||'')}</span></td><td>${esc(a.time)}</td><td>✓ Present</td></tr>`}).join('')||'<tr><td colspan="4" style="color:var(--muted)">No attendance recorded yet.</td></tr>'}
+    const el=document.getElementById('recentAttendance');if(!el||!window.db?.attendance)return;const rows=window.db.attendance.slice(-8).reverse();el.innerHTML=rows.map(a=>{const m=window.db.members.find(x=>String(x.id)===String(a.memberId))||{name:a.name||'Unknown member',area:a.area||'',photo:''};return `<tr><td><div class="member-cell">${typeof window.memberAvatar==='function'?window.memberAvatar(m,true):''}<b style="color:var(--text)">${esc(m.name)}</b></div></td><td><span class="tag">${esc(m.area||a.area||'')}</span></td><td>${esc(a.time)}</td><td>✓ Present</td></tr>`}).join('')||'<tr><td colspan="4" style="color:var(--muted)">No attendance recorded yet.</td></tr>'}
 
   async function renderStats(){
     const dashboard=document.getElementById('dashboard');if(!dashboard)return;const p=await profile();if(!p||!['admin','area leader'].includes(roleName(p.role)))return;const rows=await loadStatusesIntoDb();
