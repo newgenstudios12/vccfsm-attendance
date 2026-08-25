@@ -1,0 +1,61 @@
+name: Safe navigation patch
+on:
+  push:
+    branches:
+      - safe-nav-scroll-icons-20260825
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ github.event.head_commit.message != 'fix: make navigation scrollable with icons' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply navigation layout and icon CSS
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '</style>'
+          patch = '''
+/* Safe navigation UX: independent scrolling + icons on all viewports */
+.sidebar{display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
+.nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;padding-right:2px}
+.side-bottom{position:static;margin-top:auto;flex:0 0 auto;padding-top:12px}
+.nav button{display:flex;align-items:center;gap:10px}
+.nav button:before{display:inline-grid;place-items:center;flex:0 0 22px;width:22px;height:22px;font-size:1rem;line-height:1}
+.nav button[data-view="dashboard"]:before{content:"⌂"}
+.nav button[data-view="members"]:before{content:"♙"}
+.nav button[data-view="attendance"]:before{content:"✓"}
+.nav button[data-view="gallery"]:before{content:"▧"}
+.nav button[data-view="about"]:before{content:"ⓘ"}
+.nav button[data-view="settings"]:before{content:"⚙"}
+.nav button[data-view="selfcheck"]:before{content:"✓"}
+@media(max-width:900px){
+  .sidebar{overflow:hidden}
+  .nav{overflow-y:auto;overflow-x:hidden}
+  .nav button{justify-content:center;gap:0}
+  .nav button:before{font-size:1.2rem}
+}
+'''
+          if patch.strip() not in s:
+              if marker not in s:
+                  raise SystemExit('style closing tag not found')
+              s = s.replace(marker, patch + marker, 1)
+              p.write_text(s, encoding='utf-8')
+          else:
+              print('patch already present')
+      - name: Validate and commit patch
+        shell: bash
+        run: |
+          test -s public/index.html
+          grep -q 'Safe navigation UX' public/index.html
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/safe-nav-patch.yml
+          git add public/index.html .github/workflows/safe-nav-patch.yml
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m 'fix: make navigation scrollable with icons'
+          git push origin HEAD:safe-nav-scroll-icons-20260825
