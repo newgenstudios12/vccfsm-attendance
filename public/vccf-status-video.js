@@ -87,10 +87,21 @@
   async function fixRecentAttendance(){
     const el=document.getElementById('recentAttendance');if(!el||!window.db?.attendance)return;const rows=window.db.attendance.slice(-8).reverse();el.innerHTML=rows.map(a=>{const m=window.db.members.find(x=>String(x.id)===String(a.memberId))||{name:a.name||'Unknown member',area:a.area||'',photo:''};return `<tr><td><div class="member-cell">${typeof window.memberAvatar==='function'?window.memberAvatar(m,true):''}<b style="color:var(--text)">${esc(m.name)}</b></div></td><td><span class="tag">${esc(m.area||a.area||'')}</span></td><td>${esc(a.time)}</td><td>✓ Present</td></tr>`}).join('')||'<tr><td colspan="4" style="color:var(--muted)">No attendance recorded yet.</td></tr>'}
 
+  function removeLegacyAttendanceOverviews(section,current){
+    const candidates=new Set();
+    section.querySelectorAll('.panel, [data-attendance-overview], h1, h2, h3, h4').forEach(node=>{
+      const text=(node.textContent||'').replace(/\s+/g,' ').trim();
+      if(!/^(?:Sunday\s+)?Attendance Overview(?:\b|\s)/i.test(text)&&!/Attendance Overview/i.test(text))return;
+      const target=node.closest('.panel,[data-attendance-overview]')||node;
+      if(target&&target!==current)candidates.add(target);
+    });
+    candidates.forEach(node=>node.remove());
+  }
+
   async function renderSundayAnalytics(){
     const section=document.getElementById('analytics')||document.querySelector('[data-view="analytics"]');if(!section)return;
     const current=document.getElementById('vccfSundayAnalytics');
-    [...section.querySelectorAll('.panel')].forEach(x=>{if(x!==current&&/Attendance Overview/i.test(x.textContent||''))x.remove()});
+    removeLegacyAttendanceOverviews(section,current);
     const p=await profile();if(!p)return;
     const role=roleName(p.role);let ids=null;
     const {data:members}=await supa.from('members').select('id,area_id');
@@ -102,12 +113,13 @@
     let panel=document.getElementById('vccfSundayAnalytics');if(!panel){panel=document.createElement('div');panel.id='vccfSundayAnalytics';panel.className='panel';section.prepend(panel)}
     const max=Math.max(1,...counts.map(x=>x.count));
     panel.innerHTML=`<div class="toolbar"><div><h3 style="margin:0">Sunday Attendance Overview</h3><p style="color:var(--muted);margin:4px 0 0">Sunday attendance only · ${role==='admin'?'All members':role==='area leader'?'Your area':'Your attendance'}</p></div></div><div style="height:260px;display:flex;align-items:flex-end;gap:10px;padding:20px 8px 4px;border-top:1px solid var(--line);overflow-x:auto">${counts.map(x=>{const h=Math.max(4,Math.round(x.count/max*190));const label=new Date(x.date+'T12:00:00+08:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});return `<div style="min-width:54px;height:220px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px"><b>${x.count}</b><div title="${label}: ${x.count}" style="width:34px;height:${h}px;border-radius:7px 7px 2px 2px;background:var(--accent,#2563eb)"></div><small style="color:var(--muted);white-space:nowrap">${label}</small></div>`}).join('')}</div>`;
+    removeLegacyAttendanceOverviews(section,panel);
   }
 
   async function renderStats(){
     const dashboard=document.getElementById('dashboard');if(!dashboard)return;const p=await profile();if(!p||!['admin','area leader'].includes(roleName(p.role)))return;const rows=await loadStatusesIntoDb();
     let panel=document.getElementById('memberStatsFilter');if(!panel){panel=document.createElement('div');panel.id='memberStatsFilter';panel.className='panel';panel.style.marginTop='16px';dashboard.appendChild(panel)}
-    const areas=window.db?.areas||[];const assigned=roleName(p.role)==='area leader'?areas.filter(a=>String(a.id)===String(p.area_id)):areas;const current=document.getElementById('memberStatsArea')?.value||'all';
+    const areas=window.db?.areas||[];const assigned=roleName(p.role)==='area leader'?areas.filter(a=>String(a.id)===String(p.area_id)):areas;
     panel.innerHTML=`<div class="toolbar"><div><h3 style="margin:0">Member Statistics</h3><p style="color:var(--muted);margin:4px 0 0">Choose total membership or a specific area.</p></div><select id="memberStatsArea" style="min-width:180px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--panel);color:var(--text)"><option value="all">${roleName(p.role)==='admin'?'All Areas':'My Area'}</option>${assigned.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('')}</select></div><div id="memberStatsCards" class="stats" style="grid-template-columns:repeat(3,1fr)"></div>`;
     const draw=()=>{const sel=document.getElementById('memberStatsArea').value;const vis=sel==='all'?rows:rows.filter(m=>String(m.area_id)===String(sel));document.getElementById('memberStatsCards').innerHTML=`<div class="stat"><small>Total Members</small><strong>${vis.length}</strong></div><div class="stat"><small>Active Members</small><strong>${vis.filter(m=>m.status==='active').length}</strong></div><div class="stat"><small>Inactive Members</small><strong>${vis.filter(m=>m.status==='inactive').length}</strong></div>`};document.getElementById('memberStatsArea').onchange=draw;draw();
   }
