@@ -1,3 +1,3 @@
 # Deployment trigger
 
-Deploy: keep Sunday overview on Analytics and remove heat analytics.
+Deploy: anchor Sunday attendance overview to Analytics and remove old heat analytics.
