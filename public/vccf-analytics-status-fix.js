@@ -41,6 +41,36 @@
     });
   }
 
+  function removeHeatAnalytics() {
+    document.querySelectorAll('.view, .panel, [data-analytics], section, main, article').forEach(node => {
+      if (node.id === 'analytics') return;
+      const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+      if (/heat\s*analytics|attendance\s*heatmap|heatmap/i.test(text)) {
+        const target = node.closest('.panel[data-analytics], [data-analytics], .panel') || node;
+        if (target.id !== 'analytics' && target.id !== 'vccfSundayAnalytics') target.remove();
+      }
+    });
+  }
+
+  function enforceSundayOverviewPlacement() {
+    const analytics = document.getElementById('analytics');
+    const graph = document.getElementById('vccfSundayAnalytics');
+    if (!analytics || !graph) return;
+
+    const owner = graph.closest('.view');
+    if (owner && owner !== analytics) analytics.appendChild(graph);
+    if (!analytics.contains(graph)) analytics.prepend(graph);
+
+    document.querySelectorAll('#vccfSundayAnalytics').forEach((node, index) => {
+      if (index > 0) node.remove();
+    });
+  }
+
+  function cleanAnalyticsLayout() {
+    removeHeatAnalytics();
+    enforceSundayOverviewPlacement();
+  }
+
   async function getData() {
     const c = client();
     if (!c) return null;
@@ -98,6 +128,7 @@
 
   async function refresh() {
     try {
+      cleanAnalyticsLayout();
       const data = await getData();
       if (!data) return;
       const rows = calculate(data.members, data.attendance);
@@ -105,6 +136,7 @@
       const active = rows.length - inactive;
       writeStats(rows.length, active, inactive);
       updateStatusControls(rows);
+      cleanAnalyticsLayout();
     } catch (error) {
       console.warn('VCCF analytics status fix:', error);
     }
@@ -121,7 +153,7 @@
 
   document.addEventListener('DOMContentLoaded', schedule);
   document.addEventListener('click', event => {
-    const button = event.target.closest?.('[data-view="members"],[data-view="dashboard"]');
+    const button = event.target.closest?.('[data-view="members"],[data-view="dashboard"],[data-view="analytics"],[data-view="attendance"]');
     if (button) setTimeout(refresh, 250);
   });
 })();
