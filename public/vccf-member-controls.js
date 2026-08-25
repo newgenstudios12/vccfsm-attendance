@@ -6,6 +6,7 @@
   load('/vccf-member-attendance-visibility.js');
   load('/vccf-avatar-fit.js');
   load('/vccf-delete-controls.js');
+  load('/vccf-member-statistics.js');
   const $=id=>document.getElementById(id);
   const collator=new Intl.Collator(undefined,{sensitivity:'base',numeric:true});
   let sortMode='name',addressFilter='';
