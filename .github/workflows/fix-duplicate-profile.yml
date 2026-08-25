@@ -1,0 +1,55 @@
+name: Fix duplicate My Profile
+on:
+  push:
+    branches: [main]
+jobs:
+  patch:
+    if: ${{ github.event.head_commit.message != 'fix: keep one My Profile navigation item' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install profile deduplication guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/index.html')
+          s=p.read_text()
+          script='<script src="/vccf-profile-nav-dedupe.js"></script>'
+          if script not in s:
+              anchor='<script src="/vccf-account-profile-nav.js"></script>'
+              if anchor not in s: raise SystemExit('profile nav script anchor not found')
+              s=s.replace(anchor,anchor+'\n'+script,1)
+              p.write_text(s)
+          Path('public/vccf-profile-nav-dedupe.js').write_text(r'''(()=>{
+'use strict';
+function dedupe(){
+  const nav=document.querySelector('.nav'); if(!nav)return;
+  const candidates=[...nav.querySelectorAll('button,a,[role="button"]')].filter(el=>{
+    const text=(el.textContent||'').trim().toLowerCase();
+    const view=(el.getAttribute('data-view')||'').toLowerCase();
+    return view==='profile'||text==='my profile';
+  });
+  if(candidates.length<2)return;
+  const keep=candidates.find(el=>(el.getAttribute('data-view')||'').toLowerCase()==='profile')||candidates[0];
+  let seen=false;
+  candidates.forEach(el=>{
+    if(el===keep&&!seen){seen=true;return;}
+    el.remove();
+  });
+}
+const schedule=()=>setTimeout(dedupe,120);
+window.addEventListener('DOMContentLoaded',schedule);
+window.addEventListener('vccf-app-ready',schedule);
+window.addEventListener('hashchange',schedule);
+new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true});
+})();
+''')
+          PY
+          rm -f .github/workflows/fix-duplicate-profile.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add public/index.html public/vccf-profile-nav-dedupe.js .github/workflows/fix-duplicate-profile.yml
+          git commit -m "fix: keep one My Profile navigation item"
+          git push
