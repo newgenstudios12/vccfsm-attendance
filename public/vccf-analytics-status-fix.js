@@ -13,9 +13,7 @@
   }
 
   function manilaDate(value) {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit'
-    }).format(new Date(value));
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
   }
 
   function recentSundays() {
@@ -23,10 +21,7 @@
     const d = new Date(`${today}T12:00:00+08:00`);
     d.setDate(d.getDate() - d.getDay());
     const out = [];
-    for (let i = 0; i < 4; i++) {
-      out.push(manilaDate(d));
-      d.setDate(d.getDate() - 7);
-    }
+    for (let i = 0; i < 4; i++) { out.push(manilaDate(d)); d.setDate(d.getDate() - 7); }
     return out;
   }
 
@@ -41,29 +36,39 @@
     });
   }
 
+  function findAnalyticsView() {
+    return document.getElementById('analytics')
+      || document.querySelector('.view[data-view="analytics"]')
+      || [...document.querySelectorAll('.view')].find(v => /Leadership analytics|Attendance overview|Attendance activity/i.test(v.textContent || ''))
+      || null;
+  }
+
   function removeHeatAnalytics() {
-    document.querySelectorAll('.view, .panel, [data-analytics], section, main, article').forEach(node => {
-      if (node.id === 'analytics') return;
+    const analytics = findAnalyticsView();
+    if (!analytics) return;
+    analytics.querySelectorAll('.panel, [data-analytics], section, article').forEach(node => {
       const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
-      if (/heat\s*analytics|attendance\s*heatmap|heatmap/i.test(text)) {
-        const target = node.closest('.panel[data-analytics], [data-analytics], .panel') || node;
-        if (target.id !== 'analytics' && target.id !== 'vccfSundayAnalytics') target.remove();
+      if (/heat\s*analytics|attendance\s*heatmap|heatmap|^Attendance activity\b|^Daily check-?ins over the selected range/i.test(text)) {
+        if (node.id !== 'vccfSundayAnalytics') node.remove();
       }
     });
   }
 
   function enforceSundayOverviewPlacement() {
-    const analytics = document.getElementById('analytics');
+    const analytics = findAnalyticsView();
     const graph = document.getElementById('vccfSundayAnalytics');
     if (!analytics || !graph) return;
 
-    const owner = graph.closest('.view');
-    if (owner && owner !== analytics) analytics.appendChild(graph);
-    if (!analytics.contains(graph)) analytics.prepend(graph);
+    const copies = [...document.querySelectorAll('#vccfSundayAnalytics')];
+    copies.slice(1).forEach(node => node.remove());
+    if (!analytics.contains(graph)) analytics.appendChild(graph);
 
-    document.querySelectorAll('#vccfSundayAnalytics').forEach((node, index) => {
-      if (index > 0) node.remove();
+    Object.assign(graph.style, {
+      position: 'static', inset: 'auto', float: 'none', transform: 'none',
+      left: 'auto', top: 'auto', right: 'auto', bottom: 'auto',
+      width: '100%', maxWidth: '100%', margin: '18px 0 0', clear: 'both'
     });
+    graph.dataset.analyticsOwner = 'main-analytics';
   }
 
   function cleanAnalyticsLayout() {
@@ -76,19 +81,14 @@
     if (!c) return null;
     const { data: auth, error: authError } = await c.auth.getUser();
     if (authError || !auth?.user) return null;
-    const { data: profile, error: profileError } = await c.from('profiles')
-      .select('user_id,role,area_id').eq('user_id', auth.user.id).maybeSingle();
+    const { data: profile, error: profileError } = await c.from('profiles').select('user_id,role,area_id').eq('user_id', auth.user.id).maybeSingle();
     if (profileError || !profile || !['admin', 'area leader'].includes(roleName(profile.role))) return null;
-
     let memberQuery = c.from('members').select('id,display_name,area_id,created_at,status').order('display_name');
     if (roleName(profile.role) === 'area leader') memberQuery = memberQuery.eq('area_id', profile.area_id);
     const { data: members, error: membersError } = await memberQuery;
     if (membersError) throw membersError;
-
-    const { data: attendance, error: attendanceError } = await c.from('attendance')
-      .select('member_id,checked_in_at');
+    const { data: attendance, error: attendanceError } = await c.from('attendance').select('member_id,checked_in_at');
     if (attendanceError) throw attendanceError;
-
     return { profile, members: members || [], attendance: attendance || [] };
   }
 
@@ -102,14 +102,12 @@
       if (!seen.has(id)) seen.set(id, new Set());
       seen.get(id).add(day);
     }
-
     return members.map(member => {
       const joined = member.created_at ? manilaDate(member.created_at) : null;
       const eligible = !joined || joined <= sundays[3];
-      const hasAllFour = sundays.every(day => seen.get(String(member.id))?.has(day));
       const hasRecentAttendance = sundays.some(day => seen.get(String(member.id))?.has(day));
       const inactive = eligible && !hasRecentAttendance;
-      return { ...member, effectiveStatus: inactive ? 'inactive' : 'active', hasAllFour };
+      return { ...member, effectiveStatus: inactive ? 'inactive' : 'active' };
     });
   }
 
@@ -120,9 +118,7 @@
       if (!row) return;
       select.value = row.effectiveStatus;
       select.style.color = row.effectiveStatus === 'inactive' ? '#dc3545' : '#198754';
-      select.title = row.effectiveStatus === 'inactive'
-        ? 'Inactive: no attendance recorded on any of the last four Sundays.'
-        : 'Active: attendance recorded within the last four Sundays.';
+      select.title = row.effectiveStatus === 'inactive' ? 'Inactive: no attendance recorded on any of the last four Sundays.' : 'Active: attendance recorded within the last four Sundays.';
     });
   }
 
@@ -144,6 +140,9 @@
 
   window.vccfRefreshMemberAnalyticsStatus = refresh;
 
+  let observerTimer = null;
+  const queueClean = () => { clearTimeout(observerTimer); observerTimer = setTimeout(cleanAnalyticsLayout, 40); };
+
   function schedule() {
     refresh();
     setTimeout(refresh, 800);
@@ -151,7 +150,11 @@
     setTimeout(refresh, 3500);
   }
 
-  document.addEventListener('DOMContentLoaded', schedule);
+  document.addEventListener('DOMContentLoaded', () => {
+    schedule();
+    new MutationObserver(queueClean).observe(document.body, { childList: true, subtree: true });
+  });
+
   document.addEventListener('click', event => {
     const button = event.target.closest?.('[data-view="members"],[data-view="dashboard"],[data-view="analytics"],[data-view="attendance"]');
     if (button) setTimeout(refresh, 250);
