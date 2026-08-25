@@ -89,6 +89,8 @@
 
   async function renderSundayAnalytics(){
     const section=document.getElementById('analytics')||document.querySelector('[data-view="analytics"]');if(!section)return;
+    const oldOverview=[...section.querySelectorAll('.panel')].find(x=>!x.id && /Attendance Overview/i.test(x.textContent||''));
+    oldOverview?.remove();
     const p=await profile();if(!p)return;
     const role=roleName(p.role);let ids=null;
     const {data:members}=await supa.from('members').select('id,area_id');
