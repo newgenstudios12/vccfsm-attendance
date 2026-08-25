@@ -41,6 +41,17 @@
 
   async function loadStatusesIntoDb(){const rows=await calculateStatuses();const map=new Map(rows.map(x=>[String(x.id),x.status]));(window.db?.members||[]).forEach(m=>m.status=map.get(String(m.id))||m.status||'active');return rows}
 
+  async function enhanceOwnMemberStatus(){
+    const section=document.getElementById('members');if(!section)return;
+    const p=await profile();if(!p||roleName(p.role)==='admin'||roleName(p.role)==='area leader')return;
+    const memberId=p.member_id;if(!memberId)return;
+    const {data,error}=await supa.from('members').select('status').eq('id',memberId).maybeSingle();if(error||!data)return;
+    let panel=document.getElementById('memberOwnStatus');
+    if(!panel){panel=document.createElement('div');panel.id='memberOwnStatus';panel.style.cssText='margin:0 0 16px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);display:flex;align-items:center;justify-content:space-between;gap:12px';section.prepend(panel)}
+    const inactive=String(data.status||'active').toLowerCase()==='inactive';
+    panel.innerHTML=`<div><b>My Status</b><div style="color:var(--muted);font-size:.82rem;margin-top:3px">Your current membership status</div></div><span style="font-weight:800" class="tag ${inactive?'danger':''}">${inactive?'Inactive':'Active'}</span>`;
+  }
+
   async function enhanceMembers(){
     const section=document.getElementById('members');if(!section)return;document.getElementById('memberStatusPanel')?.remove();
     const p=await profile();if(!p||!['admin','area leader'].includes(roleName(p.role)))return;
@@ -92,7 +103,7 @@
     running=true;
     try{
       if(document.getElementById('dashboard')?.classList.contains('active')){await renderVideo();await renderStats();await fixRecentAttendance()}
-      if(document.getElementById('members')?.classList.contains('active')){if(typeof window.renderMembers==='function')window.renderMembers();await enhanceMembers()}
+      if(document.getElementById('members')?.classList.contains('active')){if(typeof window.renderMembers==='function')window.renderMembers();await enhanceMembers();await enhanceOwnMemberStatus()}
       if(document.getElementById('attendance')?.classList.contains('active'))await fixAttendanceNames()
     }catch(e){console.warn('VCCF UI enhancement:',e)}
     finally{running=false}
