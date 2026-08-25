@@ -1,0 +1,29 @@
+name: Safe self check-in fix
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch self check-in button behavior
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/index.html')
+          s=p.read_text()
+          old='''function renderSelfCheck(){const box=$("selfCheckMember");if(!session){box.innerHTML="Please sign in.";return}const m=session.memberId?db.members.find(x=>x.id===session.memberId):null;if(session.role==="Member"){if(!m){box.innerHTML=`<b>Member profile not linked</b><br><span style="color:var(--muted)">Please contact an administrator.</span>`;$("selfCheckBtn").disabled=true;return}box.innerHTML=`<b>${m.name}</b><br><span style="color:var(--muted)">${m.area} · ${m.id}</span>`;const already=db.attendance.some(a=>a.memberId===m.id&&a.date===today());$("selfCheckBtn").disabled=!isSunday()||already;$("selfCheckBtn").style.opacity=$("selfCheckBtn").disabled?".55":"1";$("selfCheckMessage").textContent=!isSunday()?"Self check-in opens on Sunday.":already?"You're already checked in for today. Thank you for worshipping with us!":"Tap the button below to record your own attendance."}else{box.innerHTML=`<b>${session.name}</b><br><span style="color:var(--muted)">${session.role}${session.area?" · "+session.area:""}</span>`;$("selfCheckBtn").disabled=!isSunday()||!session.memberId;$("selfCheckBtn").style.opacity=$("selfCheckBtn").disabled?".55":"1";$("selfCheckMessage").textContent=isSunday()?"You may use self check-in for your own linked account.":"Self check-in opens on Sunday."}}'''
+          new='''function renderSelfCheck(){const box=$("selfCheckMember");if(!session){box.innerHTML="Please sign in.";return}const m=session.memberId?db.members.find(x=>x.id===session.memberId):null;if(session.role==="Member"){if(!m){box.innerHTML=`<b>Member profile not linked</b><br><span style="color:var(--muted)">Please contact an administrator.</span>`;$("selfCheckBtn").disabled=false;$("selfCheckBtn").style.opacity=".65";return}box.innerHTML=`<b>${m.name}</b><br><span style="color:var(--muted)">${m.area} · ${m.id}</span>`;const already=db.attendance.some(a=>a.memberId===m.id&&a.date===today());$("selfCheckBtn").disabled=false;$("selfCheckBtn").style.opacity="1";$("selfCheckMessage").textContent=already?"You're already checked in for today. Thank you for worshipping with us!":!isSunday()?"Self check-in is available on Sunday. Tap the button to see the current availability.":"Tap the button below to record your own attendance."}else{box.innerHTML=`<b>${session.name}</b><br><span style="color:var(--muted)">${session.role}${session.area?" · "+session.area:""}</span>`;$("selfCheckBtn").disabled=false;$("selfCheckBtn").style.opacity="1";$("selfCheckMessage").textContent=!session.memberId?"This account has no linked member profile.":isSunday()?"You may use self check-in for your own linked account.":"Self check-in is available on Sunday. Tap the button to see the current availability."}}'''
+          if old not in s:
+              raise SystemExit('target self-check function not found; aborting without changes')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          git commit -m 'fix: make self check-in button responsive'
+          git push
