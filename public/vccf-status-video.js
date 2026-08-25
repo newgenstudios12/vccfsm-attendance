@@ -5,7 +5,7 @@
   const toast=m=>{const x=document.getElementById('toast');if(x){x.textContent=m;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2800)}};
   const roleName=r=>String(r||'').toLowerCase().replace(/_/g,' ');
   const phDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const sundayList=(n=4)=>{const d=new Date(phDate()+'T12:00:00+08:00');d.setDate(d.getDate()-d.getDay());const out=[];for(let i=0;i<n;i++){out.push(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(d));d.setDate(d.getDate()-7)}return out};
+  const sundayList=(n=8)=>{const d=new Date(phDate()+'T12:00:00+08:00');d.setDate(d.getDate()-d.getDay());const out=[];for(let i=0;i<n;i++){out.push(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(d));d.setDate(d.getDate()-7)}return out};
   async function profile(){const {data:{user}}=await supa.auth.getUser();if(!user)return null;const {data}=await supa.from('profiles').select('role,area_id,member_id').eq('user_id',user.id).maybeSingle();return data?{...data,user_id:user.id}:null}
   function youtubeId(raw){if(!raw)return '';const s=raw.trim();if(/^[A-Za-z0-9_-]{11}$/.test(s))return s;try{const u=new URL(s);if(u.hostname.includes('youtu.be'))return u.pathname.slice(1).split('/')[0];if(u.searchParams.get('v'))return u.searchParams.get('v');const m=u.pathname.match(/\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})/);if(m)return m[1]}catch(e){}const m=s.match(/([A-Za-z0-9_-]{11})/);return m?m[1]:''}
 
@@ -89,19 +89,19 @@
 
   async function renderSundayAnalytics(){
     const section=document.getElementById('analytics')||document.querySelector('[data-view="analytics"]');if(!section)return;
-    const oldOverview=[...section.querySelectorAll('.panel')].find(x=>!x.id && /Attendance Overview/i.test(x.textContent||''));
-    oldOverview?.remove();
+    const current=document.getElementById('vccfSundayAnalytics');
+    [...section.querySelectorAll('.panel')].forEach(x=>{if(x!==current&&/Attendance Overview/i.test(x.textContent||''))x.remove()});
     const p=await profile();if(!p)return;
     const role=roleName(p.role);let ids=null;
     const {data:members}=await supa.from('members').select('id,area_id');
     if(role!=='admin'&&role!=='area leader')ids=p.member_id?[String(p.member_id)]:[];
     else if(role==='area leader')ids=(members||[]).filter(m=>String(m.area_id)===String(p.area_id)).map(m=>String(m.id));
     const {data:attendance}=await supa.from('attendance').select('member_id,checked_in_at');
-    const sundays=sundayList(8).reverse();const allowed=ids?new Set(ids):null;
-    const counts=sundays.map(d=>{const seen=new Set();(attendance||[]).forEach(a=>{const ad=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});if(ad===d&&(!allowed||allowed.has(String(a.member_id))))seen.add(String(a.member_id))});return {date:d,count:seen.size}});
+    const sundays=sundayList(8);const allowed=ids?new Set(ids):null;
+    const counts=sundays.slice().reverse().map(d=>{const seen=new Set();(attendance||[]).forEach(a=>{const ad=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});if(ad===d&&(!allowed||allowed.has(String(a.member_id))))seen.add(String(a.member_id))});return {date:d,count:seen.size}});
     let panel=document.getElementById('vccfSundayAnalytics');if(!panel){panel=document.createElement('div');panel.id='vccfSundayAnalytics';panel.className='panel';section.prepend(panel)}
     const max=Math.max(1,...counts.map(x=>x.count));
-    panel.innerHTML=`<div class="toolbar"><div><h3 style="margin:0">Attendance Overview</h3><p style="color:var(--muted);margin:4px 0 0">Sunday attendance only. ${role==='admin'?'All members':role==='area leader'?'Your area':'Your attendance'}</p></div></div><div style="height:260px;display:flex;align-items:flex-end;gap:10px;padding:20px 8px 4px;border-top:1px solid var(--line);overflow-x:auto">${counts.map(x=>{const h=Math.max(4,Math.round(x.count/max*190));const label=new Date(x.date+'T12:00:00+08:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});return `<div style="min-width:54px;height:220px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px"><b>${x.count}</b><div title="${label}: ${x.count}" style="width:34px;height:${h}px;border-radius:7px 7px 2px 2px;background:var(--accent,#2563eb)"></div><small style="color:var(--muted);white-space:nowrap">${label}</small></div>`}).join('')}</div>`;
+    panel.innerHTML=`<div class="toolbar"><div><h3 style="margin:0">Sunday Attendance Overview</h3><p style="color:var(--muted);margin:4px 0 0">Sunday attendance only · ${role==='admin'?'All members':role==='area leader'?'Your area':'Your attendance'}</p></div></div><div style="height:260px;display:flex;align-items:flex-end;gap:10px;padding:20px 8px 4px;border-top:1px solid var(--line);overflow-x:auto">${counts.map(x=>{const h=Math.max(4,Math.round(x.count/max*190));const label=new Date(x.date+'T12:00:00+08:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});return `<div style="min-width:54px;height:220px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px"><b>${x.count}</b><div title="${label}: ${x.count}" style="width:34px;height:${h}px;border-radius:7px 7px 2px 2px;background:var(--accent,#2563eb)"></div><small style="color:var(--muted);white-space:nowrap">${label}</small></div>`}).join('')}</div>`;
   }
 
   async function renderStats(){
