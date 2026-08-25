@@ -1,3 +1,3 @@
 # Deployment trigger
 
-Deploy: anchor Sunday attendance overview to Analytics and remove old heat analytics.
+Deploy: match Analytics page to the Sunday attendance mockup layout.
