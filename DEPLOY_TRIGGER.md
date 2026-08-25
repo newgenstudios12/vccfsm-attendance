@@ -1,3 +1,3 @@
 # Deployment trigger
 
-Deploy: full Analytics replacement matching the clean Sunday attendance dashboard mockup.
+Deploy: Analytics V4 fix — take ownership of Analytics container and prevent legacy overlap.
