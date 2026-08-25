@@ -1,3 +1,3 @@
 # Deployment trigger
 
-Deploy: replace Analytics with the clean Sunday attendance dashboard mockup layout.
+Deploy: full Analytics replacement matching the clean Sunday attendance dashboard mockup.
