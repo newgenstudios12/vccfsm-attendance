@@ -1,0 +1,94 @@
+/* VCCF responsive navigation safety overrides */
+
+/* Keep the fixed sidebar within the viewport and let only the navigation area scroll. */
+.sidebar {
+  height: 100dvh;
+  min-height: 100vh;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding-right: 3px;
+  padding-bottom: 12px;
+}
+
+.nav button {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+/* Keep sign-out/theme/account controls visible while the nav list scrolls. */
+.side-bottom {
+  position: static;
+  flex: 0 0 auto;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.side-bottom > * {
+  max-width: 100%;
+}
+
+/* Make the scrollbar discoverable without consuming much sidebar width. */
+.nav::-webkit-scrollbar {
+  width: 7px;
+}
+
+.nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav::-webkit-scrollbar-thumb {
+  background: rgba(109, 69, 232, .28);
+  border-radius: 999px;
+}
+
+.nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(109, 69, 232, .45);
+}
+
+/* Preserve the compact icon-only mobile/sidebar mode while allowing all items to scroll. */
+@media (max-width: 900px) {
+  .sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  .nav {
+    padding-bottom: 10px;
+    padding-right: 1px;
+  }
+
+  .nav button {
+    min-height: 46px;
+  }
+
+  .side-bottom {
+    margin-top: 8px;
+    padding-top: 10px;
+  }
+}
+
+/* Extra-small phones: keep the panel touch-friendly and prevent accidental horizontal overflow. */
+@media (max-width: 600px) {
+  .sidebar {
+    overflow: hidden;
+  }
+
+  .nav {
+    touch-action: pan-y;
+  }
+}
