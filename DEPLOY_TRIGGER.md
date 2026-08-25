@@ -1,3 +1,3 @@
 # Deployment trigger
 
-Deploy: match Analytics page to the Sunday attendance mockup layout.
+Deploy: replace Analytics with the clean Sunday attendance dashboard mockup layout.
