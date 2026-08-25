@@ -5,6 +5,7 @@
   const load=src=>{const s=document.createElement('script');s.src=src;s.defer=true;document.head.appendChild(s)};
   load('/vccf-member-attendance-visibility.js');
   load('/vccf-avatar-fit.js');
+  load('/vccf-delete-controls.js');
   const $=id=>document.getElementById(id);
   const collator=new Intl.Collator(undefined,{sensitivity:'base',numeric:true});
   let sortMode='name',addressFilter='';
