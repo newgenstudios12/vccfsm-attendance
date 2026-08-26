@@ -63,23 +63,14 @@ async function renderVideo(){
   const currentRole=panel.dataset.videoRole||'';
   const currentMode=panel.dataset.videoMode||'';
   const nextMode=id?'video':'empty';
-
-  // Keep the live YouTube iframe untouched when the URL/role/mode have not changed.
-  // Replacing the iframe unnecessarily causes visible flashing and playback resets.
   if(panel.dataset.videoUrl===url&&currentId===id&&currentRole===role&&currentMode===nextMode&&(!id||currentSrc===nextSrc))return true;
-
   panel.dataset.videoUrl=url;
   panel.dataset.videoId=id;
   panel.dataset.videoRole=role;
   panel.dataset.videoMode=nextMode;
   panel.dataset.vccfVideoError='';
-
   const header=`<div class="toolbar" style="margin-bottom:10px"><div><h3 style="margin:0">VCCF Video</h3><p style="color:var(--muted);margin:4px 0 0">Featured YouTube video for the VCCF Connect dashboard.</p></div>${role==='admin'?'<button class="btn" id="editDashboardVideo">Edit video</button>':''}</div>`;
-  panel.innerHTML=header+
-    (id
-      ?`<div style="position:relative;width:100%;padding-top:56.25%;border-radius:16px;overflow:hidden;background:#111"><iframe data-vccf-video="1" src="${nextSrc}" title="VCCF YouTube video" style="position:absolute;inset:0;width:100%;height:100%;border:0;display:block" loading="lazy" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture;web-share" allowfullscreen></iframe></div>`
-      :'<div style="padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px">No video has been added yet.</div>');
-
+  panel.innerHTML=header+(id?`<div style="position:relative;width:100%;padding-top:56.25%;border-radius:16px;overflow:hidden;background:#111"><iframe data-vccf-video="1" src="${nextSrc}" title="VCCF YouTube video" style="position:absolute;inset:0;width:100%;height:100%;border:0;display:block" loading="lazy" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture;web-share" allowfullscreen></iframe></div>`:'<div style="padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px">No video has been added yet.</div>');
   document.getElementById('editDashboardVideo')?.addEventListener('click',async()=>{
     const modal=document.getElementById('modal'),body=document.getElementById('modalBody'),title=document.getElementById('modalTitle');
     if(!modal||!body)return;
@@ -134,4 +125,13 @@ function boot(){
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
 else boot();
+
+window.addEventListener('DOMContentLoaded',()=>{
+  if(window.__VCCF_BIRTHDAY_LOADER_V1__)return;
+  window.__VCCF_BIRTHDAY_LOADER_V1__=true;
+  const s=document.createElement('script');
+  s.src='/vccf-birthday-feature.js';
+  s.async=true;
+  document.head.appendChild(s);
+},{once:true});
 })();
