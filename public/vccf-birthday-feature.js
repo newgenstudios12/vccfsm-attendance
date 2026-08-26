@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
-if(window.__VCCF_BIRTHDAY_FEATURE_V2__)return;
-window.__VCCF_BIRTHDAY_FEATURE_V2__=true;
+if(window.__VCCF_BIRTHDAY_FEATURE_V3__)return;
+window.__VCCF_BIRTHDAY_FEATURE_V3__=true;
 const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const manilaNow=()=>new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'}));
 const esc=v=>String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
@@ -25,10 +25,13 @@ function birthdayItems(){
 function renderBirthdayMonth(){
   const box=document.getElementById('birthdayFeature');
   if(!box)return;
-  const items=birthdayItems();
-  if(!items.length){box.classList.add('hidden');return;}
   const now=manilaNow();
+  const items=birthdayItems();
   box.classList.remove('hidden');
+  if(!items.length){
+    box.innerHTML=`<div style="font-size:.75rem;font-weight:900;letter-spacing:.12em;color:#e66d13">🎂 BIRTHDAY CELEBRATION</div><h3 style="margin:6px 0 6px">Birthdays in ${monthNames[now.getMonth()]}</h3><p style="margin:0;color:var(--muted)">No birthdays recorded for this month yet.</p>`;
+    return;
+  }
   box.innerHTML=`<div style="font-size:.75rem;font-weight:900;letter-spacing:.12em;color:#e66d13">🎂 BIRTHDAY CELEBRATION</div><h3 style="margin:6px 0 6px">Birthdays in ${monthNames[now.getMonth()]}</h3><p style="margin:0 0 16px;color:var(--muted)">${items.some(x=>x.isToday)?'🎉 Today’s birthday is highlighted.':'Here are this month’s birthdays.'}</p><div id="birthdayList" class="birthday-list"></div>`;
   const target=document.getElementById('birthdayList');
   if(!target)return;
@@ -45,8 +48,8 @@ function boot(){
   setInterval(stripBirthdayRequired,1000);
   window.addEventListener('vccf-app-ready',()=>setTimeout(renderBirthdayMonth,200));
   const originalRefresh=window.refresh;
-  if(typeof originalRefresh==='function'&&!window.__VCCF_BIRTHDAY_REFRESH_PATCH__){
-    window.__VCCF_BIRTHDAY_REFRESH_PATCH__=true;
+  if(typeof originalRefresh==='function'&&!window.__VCCF_BIRTHDAY_REFRESH_PATCH_V3__){
+    window.__VCCF_BIRTHDAY_REFRESH_PATCH_V3__=true;
     window.refresh=function(){
       const result=originalRefresh.apply(this,arguments);
       setTimeout(()=>{stripBirthdayRequired();renderBirthdayMonth();},75);
