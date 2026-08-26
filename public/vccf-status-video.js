@@ -134,4 +134,13 @@ window.addEventListener('DOMContentLoaded',()=>{
   s.async=true;
   document.head.appendChild(s);
 },{once:true});
+
+window.addEventListener('DOMContentLoaded',()=>{
+  if(window.__VCCF_MEMBER_ACCESS_LOADER_V1__)return;
+  window.__VCCF_MEMBER_ACCESS_LOADER_V1__=true;
+  const s=document.createElement('script');
+  s.src='/vccf-member-access.js';
+  s.async=true;
+  document.head.appendChild(s);
+},{once:true});
 })();
