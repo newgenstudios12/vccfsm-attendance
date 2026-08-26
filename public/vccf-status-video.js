@@ -18,6 +18,7 @@ function loadScript(src){if(document.querySelector(`script[src="${src}"]`))retur
 function installAppIcon(){let link=document.querySelector('link[data-vccf-app-icon]');if(!link){link=document.createElement('link');link.rel='icon';link.dataset.vccfAppIcon='1';document.head.appendChild(link)}link.type='image/svg+xml';link.href='/vccf-app-icon.svg'}
 loadScript('/vccf-member-access.js');
 loadScript('/vccf-birthday-feature.js');
+loadScript('/vccf-dashboard-integrity.js');
 installAppIcon();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
