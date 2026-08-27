@@ -1,0 +1,40 @@
+/* Final device hardening: prevent layout clipping while preserving desktop styling. */
+html,body,#app{max-width:100vw;overflow-x:hidden}
+.app.active{width:100%;max-width:100vw;min-width:0;overflow-x:hidden}
+.main{min-width:0;box-sizing:border-box}
+.view{min-width:0;max-width:100%}
+.topbar{min-width:0;flex-wrap:wrap}
+.topbar>*,.userchip{min-width:0;max-width:100%}
+.panel,.stat,.toolbar,.grid2,.aboutgrid,.gallery,.manual-panel,.manual-search-wrap,.suite-shell,.suite-card,.suite-grid,.suite-row,.suite-event,.vccf-se-card,.vccf-se-att,.vccf-se-actions,#vccfSpecialEventSession,#vccfSpecialEvents,#vccfSeConvenience{min-width:0;max-width:100%;box-sizing:border-box}
+img,video,canvas,iframe{max-width:100%;height:auto}
+button,input,select,textarea,.btn,.search{box-sizing:border-box;max-width:100%}
+.vccf-se-actions{display:flex;flex-wrap:wrap}
+.vccf-se-actions .btn{flex:0 1 auto;min-width:0}
+#vccfSeConvenience .vccf-se-tools{grid-template-columns:minmax(0,1fr) auto}
+#vccfSeConvenience input{min-width:0}
+#vccfSeScanner{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important}
+#vccfSeScanner video{width:100%!important;max-width:100%!important;height:auto!important;display:block!important}
+.tablewrap{min-width:0!important;max-width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+@media (max-width:900px){
+  .sidebar{overflow-y:auto;overflow-x:hidden;max-height:100vh}
+  .main{width:calc(100% - 68px);max-width:calc(100% - 68px);overflow-x:hidden}
+  .topbar{width:100%}
+  .topbar h2{min-width:0;overflow-wrap:anywhere}
+  .vccf-se-actions .btn{width:auto}
+}
+@media (max-width:700px){
+  .main{width:calc(100% - 68px)!important;max-width:calc(100% - 68px)!important;padding-left:8px!important;padding-right:8px!important}
+  .panel,.stat{width:100%;max-width:100%}
+  .toolbar,.toolbar .left,.toolbar .right{min-width:0!important;max-width:100%!important}
+  .toolbar .left>* ,.toolbar .right>*{max-width:100%!important}
+  .vccf-se-actions .btn{width:100%;flex:1 1 100%}
+  #vccfSeConvenience .vccf-se-tools{grid-template-columns:1fr}
+  #vccfSeConvenience .vccf-se-tools .btn{width:100%}
+  #vccfSeConvenience .vccf-se-result{width:100%;display:flex;flex-direction:column;align-items:stretch;gap:8px}
+  #vccfSeConvenience .vccf-se-result .btn{width:100%}
+  .modal-card{width:100%!important;max-width:100%!important}
+}
+@media (max-width:420px){
+  .main{padding-left:6px!important;padding-right:6px!important}
+  .panel,.stat,.vccf-se-card,#vccfSeConvenience{border-radius:13px}
+}
