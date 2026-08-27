@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
-if(window.__VCCF_REMOVE_DUPLICATE_PROFILE_V2__)return;
-window.__VCCF_REMOVE_DUPLICATE_PROFILE_V2__=true;
+if(window.__VCCF_REMOVE_DUPLICATE_PROFILE_V3__)return;
+window.__VCCF_REMOVE_DUPLICATE_PROFILE_V3__=true;
 function removeDuplicateProfiles(root=document){
   root.querySelectorAll('.sidebar .nav').forEach(nav=>{
     const items=[...nav.querySelectorAll('button,a')].filter(el=>{
@@ -15,20 +15,16 @@ function removeDuplicateProfiles(root=document){
     }
   });
 }
-function run(){removeDuplicateProfiles();}
+function loadSpecialEventAccess(){
+  if(document.getElementById('vccfSpecialEventAccessScript'))return;
+  const s=document.createElement('script');s.id='vccfSpecialEventAccessScript';s.src='/vccf-special-event-access.js';s.async=true;document.head.appendChild(s);
+}
+function loadAdminAccountManager(){
+  if(document.getElementById('vccfAdminAccountManagerScript'))return;
+  const s=document.createElement('script');s.id='vccfAdminAccountManagerScript';s.src='/vccf-admin-account-manager.js';s.async=true;document.head.appendChild(s);
+}
+function run(){removeDuplicateProfiles();loadSpecialEventAccess();loadAdminAccountManager();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
 const observer=new MutationObserver(()=>removeDuplicateProfiles());
 observer.observe(document.documentElement,{childList:true,subtree:true});
-
-// Special Event frontend access for non-admin users.
-// This file is loaded by index.html on every authenticated app session.
-function loadSpecialEventAccess(){
-  if(document.getElementById('vccfSpecialEventAccessScript'))return;
-  const s=document.createElement('script');
-  s.id='vccfSpecialEventAccessScript';
-  s.src='/vccf-special-event-access.js';
-  s.async=true;
-  document.head.appendChild(s);
-}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadSpecialEventAccess,{once:true});else loadSpecialEventAccess();
 })();
