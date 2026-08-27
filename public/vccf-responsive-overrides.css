@@ -126,3 +126,146 @@
   object-position: center;
   overflow: hidden;
 }
+
+/* Mobile content-boundary hardening. This layer uses !important deliberately so later
+   injected responsive styles cannot reintroduce horizontal overflow. */
+@media (max-width: 700px) {
+  html,
+  body {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  #app,
+  .main,
+  .view,
+  .panel,
+  .stat,
+  .toolbar,
+  .toolbar .left,
+  .toolbar .right,
+  .topbar,
+  .userchip,
+  .grid2,
+  .aboutgrid,
+  .gallery,
+  .birthday-card,
+  .birthday-list,
+  .person,
+  .account-row,
+  .manual-panel,
+  .manual-search-wrap,
+  .suite-shell,
+  .suite-card,
+  .suite-grid,
+  .suite-row,
+  .suite-event,
+  .vccf-se-grid,
+  .vccf-se-card,
+  .vccf-se-actions,
+  .vccf-se-summary,
+  [class*="vccf-se-"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .main {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .panel p,
+  .panel h1,
+  .panel h2,
+  .panel h3,
+  .panel h4,
+  .suite-card p,
+  .suite-card h1,
+  .suite-card h2,
+  .suite-card h3,
+  .suite-card h4,
+  .vccf-se-card p,
+  .vccf-se-card h1,
+  .vccf-se-card h2,
+  .vccf-se-card h3,
+  .vccf-se-card h4,
+  .welcome-hero p,
+  .birthday-person,
+  .suite-row,
+  .suite-event,
+  .account-row {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    min-width: 0 !important;
+  }
+
+  input,
+  select,
+  textarea,
+  button,
+  .btn,
+  .search,
+  .field,
+  .field input,
+  .field select,
+  .field textarea {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .manual-panel .search,
+  .manual-panel select,
+  .manual-panel button {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  img,
+  svg,
+  video,
+  canvas,
+  iframe {
+    max-width: 100% !important;
+  }
+
+  .scanner,
+  .scanner video,
+  .qrbox,
+  .qrbox canvas,
+  .qrbox img,
+  .featured-mini img,
+  .photo img,
+  .suite-avatar,
+  .member-avatar,
+  .member-avatar-placeholder {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .tablewrap {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 420px) {
+  .main {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .panel,
+  .stat,
+  .suite-card,
+  .vccf-se-card {
+    padding-left: 11px !important;
+    padding-right: 11px !important;
+  }
+}
