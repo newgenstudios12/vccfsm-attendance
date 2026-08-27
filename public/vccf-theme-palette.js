@@ -1,0 +1,10 @@
+(()=>{if(window.__VCCF_THEME_PALETTE_V1__)return;window.__VCCF_THEME_PALETTE_V1__=true;
+const themes=[['red','VCCF Red'],['blue','Blue'],['green','Green'],['purple','Purple'],['orange','Orange'],['dark-red','Dark Red'],['dark-blue','Dark Blue'],['dark-green','Dark Green'],['dark-purple','Dark Purple'],['dark-orange','Dark Orange']];
+const darkBase=['dark-red','dark-blue','dark-green','dark-purple','dark-orange'];
+const apply=t=>{const v=themes.some(x=>x[0]===t)?t:'red';document.documentElement.dataset.theme=v;document.documentElement.dataset.colorTheme=v;document.documentElement.dataset.themeMode=darkBase.includes(v)?'dark':'light';localStorage.setItem('vccf-color-theme',v);document.querySelectorAll('.vccf-theme-swatch').forEach(b=>b.classList.toggle('is-active',b.dataset.themeValue===v));const dark=darkBase.includes(v);const cb=document.getElementById('themeToggle');if(cb)cb.checked=dark;};
+const make=()=>{if(document.getElementById('vccfThemePicker'))return;const top=document.querySelector('.topbar');if(!top)return;const wrap=document.createElement('div');wrap.id='vccfThemePicker';wrap.className='vccf-theme-picker';wrap.setAttribute('aria-label','Color theme');wrap.innerHTML='<span class="vccf-theme-label">Theme</span>'+themes.map(([v,n])=>`<button type="button" class="vccf-theme-swatch" data-theme-value="${v}" aria-label="${n}" title="${n}"></button>`).join('');top.prepend(wrap);wrap.querySelectorAll('.vccf-theme-swatch').forEach(b=>b.onclick=()=>apply(b.dataset.themeValue));};
+const boot=()=>{make();apply(localStorage.getItem('vccf-color-theme')||'red');};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+const obs=new MutationObserver(()=>{make();const t=localStorage.getItem('vccf-color-theme');if(t&&document.documentElement.dataset.theme!==t)apply(t)});obs.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+setInterval(()=>{make();const t=localStorage.getItem('vccf-color-theme');if(t&&document.documentElement.dataset.theme!==t)apply(t)},1500);
+})();
