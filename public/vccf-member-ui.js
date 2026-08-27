@@ -10,11 +10,13 @@ window.__VCCF_MEMBER_ROUTE_ISOLATION__=true;
 function currentView(){
   const activeNav=document.querySelector('.nav button.active[data-view]');
   if(activeNav?.dataset.view)return activeNav.dataset.view;
+
   const activeView=document.querySelector('.main .view.active');
   if(activeView){
     const id=String(activeView.id||'').replace(/^suite2-/,'');
     if(id)return id;
   }
+
   const memberRoot=document.getElementById('members');
   if(memberRoot?.classList.contains('active'))return 'members';
   return 'dashboard';
@@ -37,16 +39,28 @@ function scheduleMemberVisibility(){
 
 function initMemberRouteIsolation(){
   scheduleMemberVisibility();
+
   document.addEventListener('click',event=>{
     if(event.target.closest?.('.nav button[data-view]'))scheduleMemberVisibility();
   },true);
+
   const observer=new MutationObserver(()=>scheduleMemberVisibility());
   observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','data-view']});
+
   window.addEventListener('hashchange',scheduleMemberVisibility);
   window.addEventListener('popstate',scheduleMemberVisibility);
   setInterval(syncMemberVisibility,1500);
 }
 
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initMemberRouteIsolation,{once:true});
-else initMemberRouteIsolation();
+function loadSpecialEvents(){
+  if(document.querySelector('script[data-vccf-special-events]'))return;
+  const s=document.createElement('script');
+  s.src='/vccf-special-events.js?v=1';
+  s.dataset.vccfSpecialEvents='1';
+  s.async=true;
+  document.head.appendChild(s);
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{initMemberRouteIsolation();loadSpecialEvents()},{once:true});
+else {initMemberRouteIsolation();loadSpecialEvents();}
 })();
