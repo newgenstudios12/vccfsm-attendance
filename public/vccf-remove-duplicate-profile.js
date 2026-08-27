@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
-if(window.__VCCF_REMOVE_DUPLICATE_PROFILE_V3__)return;
-window.__VCCF_REMOVE_DUPLICATE_PROFILE_V3__=true;
+if(window.__VCCF_REMOVE_DUPLICATE_PROFILE_V4__)return;
+window.__VCCF_REMOVE_DUPLICATE_PROFILE_V4__=true;
 function removeDuplicateProfiles(root=document){
   root.querySelectorAll('.sidebar .nav').forEach(nav=>{
     const items=[...nav.querySelectorAll('button,a')].filter(el=>{
@@ -9,22 +9,25 @@ function removeDuplicateProfiles(root=document){
       const view=String(el.dataset?.view||'').toLowerCase();
       return text==='my profile'||view==='myprofile'||view==='my-profile'||view==='profile';
     });
-    if(items.length>1){
-      // Keep the first canonical My Profile entry and remove every duplicate.
-      items.slice(1).forEach(el=>el.remove());
-    }
+    if(items.length>1)items.slice(1).forEach(el=>el.remove());
   });
 }
-function loadSpecialEventAccess(){
-  if(document.getElementById('vccfSpecialEventAccessScript'))return;
-  const s=document.createElement('script');s.id='vccfSpecialEventAccessScript';s.src='/vccf-special-event-access.js';s.async=true;document.head.appendChild(s);
+function loadScript(id,src){
+  if(document.getElementById(id))return;
+  const s=document.createElement('script');
+  s.id=id;s.src=src;s.async=true;
+  document.head.appendChild(s);
 }
-function loadAdminAccountManager(){
-  if(document.getElementById('vccfAdminAccountManagerScript'))return;
-  const s=document.createElement('script');s.id='vccfAdminAccountManagerScript';s.src='/vccf-admin-account-manager.js';s.async=true;document.head.appendChild(s);
+function loadSpecialEventAccess(){loadScript('vccfSpecialEventAccessScript','/vccf-special-event-access.js')}
+function maybeLoadAdminAccountManager(){
+  const settings=document.getElementById('settings');
+  if(settings?.classList.contains('active'))loadScript('vccfAdminAccountManagerScript','/vccf-admin-account-manager.js');
 }
-function run(){removeDuplicateProfiles();loadSpecialEventAccess();loadAdminAccountManager();}
+function run(){removeDuplicateProfiles();loadSpecialEventAccess();maybeLoadAdminAccountManager();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
-const observer=new MutationObserver(()=>removeDuplicateProfiles());
-observer.observe(document.documentElement,{childList:true,subtree:true});
+document.addEventListener('click',e=>{
+  if(e.target.closest?.('.nav button[data-view="settings"]'))setTimeout(maybeLoadAdminAccountManager,80);
+});
+const observer=new MutationObserver(()=>{removeDuplicateProfiles();maybeLoadAdminAccountManager()});
+observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
 })();
