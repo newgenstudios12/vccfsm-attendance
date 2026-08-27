@@ -9,19 +9,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Add member UI script
+      - name: Add member UI scripts
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('public/index.html')
           s=p.read_text()
           marker='<script src="/vccf-status-video.js"></script>'
-          tag='<script src="/vccf-member-ui.js"></script>'
-          if tag not in s:
-              s=s.replace(marker,marker+'\n'+tag,1)
+          tags=[
+              '<script src="/vccf-member-ui.js"></script>',
+              '<script src="/vccf-member-route-isolation.js"></script>',
+          ]
+          changed=False
+          for tag in tags:
+              if tag not in s:
+                  s=s.replace(marker,marker+'\n'+tag,1)
+                  marker=tag
+                  changed=True
+          if changed:
               p.write_text(s)
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/index.html
-          git diff --cached --quiet || (git commit -m 'Load member status UI patch' && git push)
+          git diff --cached --quiet || (git commit -m 'Load member route isolation patch' && git push)
