@@ -19,4 +19,16 @@ function run(){removeDuplicateProfiles();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
 const observer=new MutationObserver(()=>removeDuplicateProfiles());
 observer.observe(document.documentElement,{childList:true,subtree:true});
+
+// Special Event frontend access for non-admin users.
+// This file is loaded by index.html on every authenticated app session.
+function loadSpecialEventAccess(){
+  if(document.getElementById('vccfSpecialEventAccessScript'))return;
+  const s=document.createElement('script');
+  s.id='vccfSpecialEventAccessScript';
+  s.src='/vccf-special-event-access.js';
+  s.async=true;
+  document.head.appendChild(s);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadSpecialEventAccess,{once:true});else loadSpecialEventAccess();
 })();
