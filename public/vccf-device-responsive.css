@@ -1,0 +1,114 @@
+/* VCCF device-scale tuning: keep desktop unchanged; optimize iPad/tablet and phones. */
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  .sidebar { width: 220px; padding: 18px 12px; }
+  .side-logo { max-width: 170px; margin: 3px 8px 22px; }
+  .main { margin-left: 220px; width: calc(100% - 220px); padding: 20px; }
+  .topbar { gap: 12px; margin-bottom: 18px; }
+  .topbar h2 { font-size: 1.45rem; }
+  .userchip { gap: 8px; }
+  .stats { gap: 10px; }
+  .stat { padding: 16px; border-radius: 16px; }
+  .stat strong { font-size: 1.7rem; }
+  .grid2, .aboutgrid { gap: 12px; }
+  .panel { padding: 16px; border-radius: 18px; }
+  .toolbar { gap: 10px; }
+  .search { min-width: 180px; }
+  .modal { padding: 16px; }
+  .modal-card { width: min(680px, 100%); padding: 20px; }
+}
+
+@media (max-width: 900px) {
+  .main { padding: 14px; }
+  .topbar { margin-bottom: 16px; gap: 10px; }
+  .topbar h2 { font-size: 1.3rem; }
+  .topbar .userchip { max-width: 58vw; }
+  .userchip { gap: 7px; }
+  .userchip .avatar { width: 36px; height: 36px; }
+
+  .stats { gap: 9px; }
+  .stat { padding: 14px; border-radius: 15px; }
+  .stat small { font-size: .72rem; }
+  .stat strong { font-size: 1.45rem; margin-top: 5px; }
+  .panel { padding: 14px; border-radius: 17px; }
+  .grid2, .aboutgrid { gap: 10px; }
+
+  .toolbar { align-items: stretch; gap: 8px; }
+  .toolbar .left, .toolbar .right { width: 100%; }
+  .toolbar .left > *, .toolbar .right > * { min-height: 44px; }
+  .search { min-width: 0; width: 100%; padding: 10px 12px; }
+  select.search, input.search { width: 100%; }
+
+  .tablewrap { border-radius: 13px; }
+  .table { min-width: 640px; }
+  .table th, .table td { padding: 11px 12px; font-size: .82rem; }
+
+  .modal { padding: 10px; }
+  .modal-card { width: 100%; max-height: 94vh; padding: 18px; border-radius: 19px; }
+  .modal-head { margin-bottom: 14px; }
+  .formgrid { gap: 10px; }
+  .field { margin-bottom: 10px; }
+  .field input, .field select, .field textarea { min-height: 44px; }
+  .btn { min-height: 44px; padding: 10px 14px; }
+
+  .gallery { gap: 10px; }
+  .birthday-list { gap: 10px; }
+  .qr-area-grid { gap: 10px; }
+  .qr-card { padding: 13px; }
+
+  .vccf-clean-toolbar { gap: 8px; }
+  .vccf-clean-input { min-height: 44px; padding: 10px 12px; }
+  .vccf-clean-panel { border-radius: 15px; }
+  .vccf-clean-table th, .vccf-clean-table td { padding: 10px 11px; font-size: .82rem; }
+  .vccf-clean-actions-cell { gap: 5px; }
+  .vccf-clean-actions-cell .btn { min-height: 40px; padding: 8px 11px; }
+
+  .vccf-se-grid { gap: 10px; }
+  .vccf-se-card { padding: 14px; border-radius: 15px; }
+  .vccf-se-actions { gap: 6px; }
+  .vccf-se-actions .btn { min-height: 42px; }
+  .vccf-se-summary { gap: 8px; }
+  .vccf-se-summary .stat { padding: 12px; }
+  .vccf-se-summary .stat strong { font-size: 1.3rem; }
+}
+
+@media (max-width: 600px) {
+  .sidebar { width: 68px; }
+  .main { margin-left: 68px; width: calc(100% - 68px); padding: 10px; }
+  .side-logo { width: 50px; height: 34px; margin-bottom: 22px; }
+  .nav button { min-height: 44px; border-radius: 10px; }
+
+  .topbar { align-items: center; }
+  .topbar h2 { font-size: 1.18rem; }
+  .topbar .userchip { max-width: 48vw; }
+  .userchip > div:not(.avatar) { display: none; }
+  .userchip .avatar { width: 34px; height: 34px; }
+
+  .stats { grid-template-columns: 1fr 1fr; gap: 7px; }
+  .stat { padding: 11px; border-radius: 13px; }
+  .stat small { font-size: .68rem; }
+  .stat strong { font-size: 1.25rem; }
+
+  .panel { padding: 12px; border-radius: 15px; }
+  .panel h3 { font-size: 1rem; }
+  .toolbar .left, .toolbar .right { gap: 6px; }
+  .toolbar .btn { width: 100%; }
+
+  .modal { padding: 8px; }
+  .modal-card { padding: 14px; border-radius: 17px; }
+  .modal-card .btn { width: 100%; }
+
+  .profile-upload { flex-wrap: wrap; }
+  .profile-preview { flex: 0 0 76px; }
+
+  .gallery { grid-template-columns: 1fr; }
+  .featured-mini img { height: 190px; }
+}
+
+/* Safe-area support for edge-to-edge mobile browsers. */
+@supports (padding: max(0px)) {
+  @media (max-width: 900px) {
+    .main { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+    .modal { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  }
+}
