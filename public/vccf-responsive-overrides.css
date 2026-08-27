@@ -92,3 +92,37 @@
     touch-action: pan-y;
   }
 }
+
+/* VCCF member editor: keep the profile preview circular and prevent flexbox shrink. */
+.profile-preview {
+  width: 76px;
+  height: 76px;
+  min-width: 76px;
+  max-width: 76px;
+  flex: 0 0 76px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  overflow: hidden;
+  display: block;
+}
+
+.profile-upload {
+  align-items: center;
+}
+
+/* The clean Members editor uses its own avatar class; keep it equally rigid. */
+.vccf-clean-photo img,
+.vccf-clean-photo .placeholder {
+  width: 72px;
+  height: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  flex: 0 0 72px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  overflow: hidden;
+}
