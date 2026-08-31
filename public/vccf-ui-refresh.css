@@ -251,3 +251,11 @@ body{
   .sidebar,.topbar{display:none!important}
   .main{margin:0;width:100%;padding:0}
 }
+
+/* Login interaction failsafe: no injected widget may intercept the auth screen. */
+body > *:not(#login):not(#toast){pointer-events:none}
+body > #login{position:fixed!important;inset:0!important;z-index:1000000!important;pointer-events:auto!important}
+body > #login *{pointer-events:auto!important}
+body > #app{pointer-events:none}
+body > #app.active{pointer-events:auto}
+body > #app.active *{pointer-events:auto}
