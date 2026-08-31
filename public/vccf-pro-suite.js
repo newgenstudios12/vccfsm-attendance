@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
-if(window.__VCCF_PRO_SUITE_V3__)return;
-window.__VCCF_PRO_SUITE_V3__=true;
+if(window.__VCCF_PRO_SUITE_V4__)return;
+window.__VCCF_PRO_SUITE_V4__=true;
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const toast=m=>{const t=$('#toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(window.__vccfProToast);window.__vccfProToast=setTimeout(()=>t.classList.remove('show'),2600)};
@@ -15,6 +15,8 @@ function installButton(){const host=$('.userchip');if(!host||host.querySelector(
 function offlineIndicator(){if($('#vccf-online'))return;const el=document.createElement('div');el.id='vccf-online';el.className='vccf-online';document.body.appendChild(el);const paint=()=>{el.textContent=navigator.onLine?'Online':'Offline — changes may sync later';el.classList.toggle('offline',!navigator.onLine)};addEventListener('online',()=>{paint();toast('Connection restored.')});addEventListener('offline',()=>{paint();toast('You are offline.')});paint()}
 function searchBar(){const top=$('.topbar');if(!top||$('#vccfProSearch'))return;const wrap=document.createElement('div');wrap.className='vccf-pro-toolbar';wrap.innerHTML='<input id="vccfProSearch" class="vccf-pro-search" type="search" placeholder="Search members, pages, or actions…" autocomplete="off"><span class="vccf-command-hint">Press / to focus</span>';top.insertAdjacentElement('afterend',wrap);const input=$('#vccfProSearch');input.oninput=()=>{const q=input.value.trim().toLowerCase();if(!q){$$('.table tbody tr,.person,.photo').forEach(r=>r.style.display='');return}let found=0;$$('.table tbody tr,.person,.photo').forEach(r=>{const hit=(r.textContent||'').toLowerCase().includes(q);r.style.display=hit?'':'none';if(hit)found++});if(q.includes('member'))nav('members');else if(q.includes('attendance')||q.includes('check'))nav('attendance');else if(q.includes('setting'))nav('settings');else if(found&&$('#members'))nav('members')};document.addEventListener('keydown',e=>{if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){e.preventDefault();input.focus()}if(e.key==='Escape'&&document.activeElement===input){input.value='';input.dispatchEvent(new Event('input'));input.blur()}})}
 function quickActions(){const dash=document.getElementById('dashboard');if(!dash||!$('#app')?.classList.contains('active')||$('#vccfProQuick',dash))return;const wrap=document.createElement('div');wrap.id='vccfProQuick';wrap.className='vccf-pro-quick';wrap.innerHTML='<button class="vccf-pro-action" data-pro="attendance"><span>✓</span><span><b>Take attendance</b><small>Open QR/manual check-in</small></span></button><button class="vccf-pro-action" data-pro="members"><span>♙</span><span><b>Manage members</b><small>Search member profiles</small></span></button><button class="vccf-pro-action" data-pro="settings"><span>⚙</span><span><b>Open settings</b><small>Account and app controls</small></span></button>';dash.appendChild(wrap);wrap.onclick=e=>{const b=e.target.closest('[data-pro]');if(b)nav(b.dataset.pro)}}
-function boot(){cssOnce();offlineIndicator();installButton();searchBar();quickActions()}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+function boot(){if(!$('#app')?.classList.contains('active'))return;cssOnce();offlineIndicator();installButton();searchBar();quickActions()}
+function start(){if($('#app')?.classList.contains('active'))boot()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+window.addEventListener('vccf-authenticated',()=>setTimeout(boot,0),{once:true});
 })();
