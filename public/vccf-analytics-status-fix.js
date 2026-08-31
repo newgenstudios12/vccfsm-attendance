@@ -2,6 +2,60 @@
 'use strict';
 if(window.__VCCF_ANALYTICS_STATUS_FIX_V4__)return;
 window.__VCCF_ANALYTICS_STATUS_FIX_V4__=true;
+
+// VCCF LOGIN COMPATIBILITY: the legacy inline login handler treats every
+// identifier as an email. Capture the submit event before that handler so
+// usernames are normalized to the same username@vccf.local convention used
+// by the account-creation flow. Real email addresses continue to work.
+const installUsernameLogin=()=>{
+  if(document.documentElement.dataset.vccfUsernameLoginInstalled==='1')return;
+  document.documentElement.dataset.vccfUsernameLoginInstalled='1';
+  document.addEventListener('submit',async e=>{
+    const form=e.target;
+    if(!form||form.id!=='loginForm')return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const identifier=(document.getElementById('loginUser')?.value||'').trim();
+    const password=document.getElementById('loginPass')?.value||'';
+    if(!identifier){alert('Please enter your email or username.');return}
+    if(!password){alert('Please enter your password.');return}
+    const username=identifier.toLowerCase();
+    const sanitized=username.replace(/[^a-z0-9._-]/g,'');
+    const email=username.includes('@')?username:`${sanitized}@vccf.local`;
+    const button=form.querySelector('button[type="submit"],button');
+    const originalText=button?.textContent||'Sign in';
+    if(button){button.disabled=true;button.textContent='Signing in…'}
+    let box=document.getElementById('vccfLoginError');
+    if(!box){
+      box=document.createElement('div');
+      box.id='vccfLoginError';
+      box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap';
+      form.appendChild(box);
+    }
+    box.textContent='';
+    try{
+      const c=window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
+      if(!c)throw new Error('Authentication service is unavailable. Please refresh and try again.');
+      const {data,error}=await c.auth.signInWithPassword({email,password});
+      if(error)throw new Error(`Sign-in failed: ${error.message}`);
+      if(!data?.user)throw new Error('Sign-in returned no user.');
+      const {data:profile,error:profileError}=await c.from('profiles').select('user_id,role,member_id,area_id,display_name').eq('user_id',data.user.id).maybeSingle();
+      if(profileError)throw new Error(`Profile lookup failed: ${profileError.message}`);
+      if(!profile)throw new Error('Authentication succeeded, but this account has no VCCF profile. Please contact an administrator.');
+      box.style.background='#ecfdf3';box.style.color='#027a48';box.textContent='Sign-in successful. Loading VCCF…';
+      window.dispatchEvent(new CustomEvent('vccf-authenticated'));
+      await new Promise(r=>setTimeout(r,150));
+      window.location.reload();
+    }catch(err){
+      console.error('VCCF username login:',err);
+      box.style.background='#fff1f1';box.style.color='#b42318';box.textContent=err?.message||String(err);
+    }finally{
+      if(button){button.disabled=false;button.textContent=originalText}
+    }
+  },true);
+};
+installUsernameLogin();
+
 const start=()=>{
 const getClient=()=>window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
 const roleName=r=>String(r||'').trim().toLowerCase().replace(/_/g,' ');
