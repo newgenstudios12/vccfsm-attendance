@@ -5,8 +5,8 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
 (() => {
   const g = window.supabase;
   const originalCreateClient = g?.createClient;
-  if (!originalCreateClient || window.__VCCF_LOGIN_PATCH_V5__) return;
-  window.__VCCF_LOGIN_PATCH_V5__ = true;
+  if (!originalCreateClient || window.__VCCF_LOGIN_PATCH_V6__) return;
+  window.__VCCF_LOGIN_PATCH_V6__ = true;
   const optional = new Set(['areas','members','attendance','photos','site_people']);
   function wrap(builder, table) {
     if (!builder) return builder;
@@ -36,31 +36,54 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     return client;
   };
 
-  // Diagnostic login handler.
+  // Login accepts either a normal email address or the username format used by
+  // the create-user Edge Function (username@vccf.local).
   window.addEventListener('DOMContentLoaded', () => setTimeout(() => {
     const form = document.getElementById('loginForm');
     if (!form) return;
     const client = originalCreateClient(window.VCCF_SUPABASE_URL, window.VCCF_SUPABASE_PUBLISHABLE_KEY);
     form.onsubmit = async (e) => {
       e.preventDefault();
-      const email = document.getElementById('loginUser')?.value.trim();
-      const password = document.getElementById('loginPass')?.value;
+      const rawIdentifier = document.getElementById('loginUser')?.value.trim() || '';
+      const password = document.getElementById('loginPass')?.value || '';
+      const sanitizedUsername = rawIdentifier.toLowerCase().replace(/[^a-z0-9._-]/g,'');
+      const email = rawIdentifier.includes('@') ? rawIdentifier.toLowerCase() : `${sanitizedUsername}@vccf.local`;
       const button = form.querySelector('button[type="submit"],button');
       if (button) { button.disabled = true; button.textContent = 'Signing in…'; }
       let box = document.getElementById('vccfLoginError');
-      if (!box) { box = document.createElement('div'); box.id='vccfLoginError'; box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap'; form.appendChild(box); }
+      if (!box) {
+        box = document.createElement('div');
+        box.id='vccfLoginError';
+        box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap';
+        form.appendChild(box);
+      }
       box.textContent = '';
       try {
-        const { data, error } = await client.auth.signInWithPassword({email,password});
-        if (error) throw new Error(`Supabase login: ${error.message} (${error.status || 'no status'})`);
-        if (!data?.user) throw new Error('Supabase login returned no user.');
-        const { data: p, error: pe } = await client.from('profiles').select('user_id,role,member_id,area_id,display_name').eq('user_id', data.user.id).maybeSingle();
-        if (pe) throw new Error(`Profile lookup: ${pe.message}`);
-        if (!p) throw new Error('Login succeeded, but no VCCF profile exists for this Auth user.');
-        box.style.background='#ecfdf3'; box.style.color='#027a48'; box.textContent='Authentication succeeded. Loading VCCF…';
+        if (!rawIdentifier) throw new Error('Please enter your email or username.');
+        if (!password) throw new Error('Please enter your password.');
+        if (!sanitizedUsername && !rawIdentifier.includes('@')) throw new Error('Please enter a valid email or username.');
+
+        const { data, error } = await client.auth.signInWithPassword({ email, password });
+        if (error) throw new Error(`Sign-in failed: ${error.message}`);
+        if (!data?.user) throw new Error('Sign-in returned no user.');
+
+        const { data: p, error: pe } = await client
+          .from('profiles')
+          .select('user_id,role,member_id,area_id,display_name')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+        if (pe) throw new Error(`Profile lookup failed: ${pe.message}`);
+        if (!p) throw new Error('Authentication succeeded, but this account has no VCCF profile. Please contact an administrator.');
+
+        box.style.background='#ecfdf3';
+        box.style.color='#027a48';
+        box.textContent='Sign-in successful. Loading VCCF…';
+        await new Promise(r => setTimeout(r, 150));
         window.location.reload();
       } catch (err) {
-        console.error('VCCF login diagnostic:', err);
+        console.error('VCCF login:', err);
+        box.style.background='#fff1f1';
+        box.style.color='#b42318';
         box.textContent = err?.message || String(err);
       } finally {
         if (button) { button.disabled = false; button.textContent = 'Sign in'; }
@@ -90,7 +113,6 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
         client.from('profiles').select('role,area_id,member_id').eq('user_id', (await client.auth.getUser()).data.user?.id||'').maybeSingle()
       ]);
       if(!userData?.user) return;
-      const role=profile?.role||'admin';
       const visibleMembers=(members||[]);
       const visibleIds=new Set(visibleMembers.map(m=>m.id));
       const sundayDate=latestSunday();
@@ -160,7 +182,6 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     };
   }
 
-  // Gallery downloads and editable attendance dates for Admins / Area Leaders.
   async function downloadGalleryPhoto(photo){
     if(!photo?.storage_path){toast2('This photo has no downloadable storage file.');return}
     const {data,error}=await client.storage.from('vccf-gallery').download(photo.storage_path);
@@ -172,7 +193,6 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     if(typeof window.renderGallery!=='function'||typeof window.renderAttendance!=='function'||typeof window.checkin!=='function')return false;
     if(window.__VCCF_ATTENDANCE_GALLERY_PATCH__)return true;
     window.__VCCF_ATTENDANCE_GALLERY_PATCH__=true;
-
     const manual=document.querySelector('.manual-panel');
     if(manual&&!document.getElementById('attendanceDate')){
       const wrap=document.createElement('div');wrap.className='field';wrap.style.margin='10px 0';
@@ -181,7 +201,6 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     }
     const dateInput=document.getElementById('attendanceDate');
     if(dateInput){dateInput.value=manilaDate();dateInput.max=manilaDate();dateInput.onchange=()=>{if(dateInput.value>manilaDate()){dateInput.value=manilaDate();toast2('Attendance date cannot be in the future.')}}}
-
     const originalCheckin=window.checkin;
     window.checkin=async function(id){
       const role=typeof session!=='undefined'?session?.role:null;
@@ -192,99 +211,24 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
       if(!m){toast2('Invalid member QR.');return}
       if(role==='Member'&&m.id!==session.memberId){toast2('Members can only check in themselves.');return}
       if(role==='Area Leader'&&m.areaId!==session.areaId){toast2('You can only check in members in your assigned area.');return}
-      const start=new Date(date+'T00:00:00+08:00').toISOString();const endDate=new Date(date+'T00:00:00+08:00');endDate.setUTCDate(endDate.getUTCDate()+1);const end=endDate.toISOString();
-      const {data:existing,error:er}=await client.from('attendance').select('id').eq('member_id',m.id).gte('checked_in_at',start).lt('checked_in_at',end).limit(1);
-      if(er){toast2(er.message);return}if(existing?.length){toast2('Already checked in for that date.');return}
-      const now=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
-      const checked=new Date(date+'T'+now+'+08:00').toISOString();
-      const r=await client.from('attendance').insert({member_id:m.id,area_id:m.areaId,checked_in_by:typeof profile!=='undefined'?profile?.user_id||null:null,source:role==='Member'?'self':'qr',checked_in_at:checked});
+      const start=new Date(`${date}T00:00:00+08:00`).toISOString();
+      const end=new Date(`${date}T23:59:59+08:00`).toISOString();
+      const {data:existing,error:er}=await client.from('attendance').select('id').eq('member_id',m.id).gte('checked_in_at',start).lte('checked_in_at',end).limit(1);
+      if(er){toast2(er.message);return}
+      if(existing?.length){toast2('Already checked in on this date.');return}
+      const r=await client.from('attendance').insert({member_id:m.id,area_id:m.areaId,checked_in_by:typeof profile!=='undefined'?profile?.user_id:null,source:role==='Member'?'self':'qr',checked_in_at:new Date(`${date}T12:00:00+08:00`).toISOString()});
       if(r.error){toast2(r.error.message);return}
-      await loadDb();refresh();toast2('Attendance recorded.');
+      if(typeof loadDb==='function')await loadDb();if(typeof refresh==='function')refresh();
+      const result=document.getElementById('scanResult');if(result)result.innerHTML=`<div class="panel" style="border-color:#198754"><div class="member-cell">${typeof memberAvatar==='function'?memberAvatar(m):''}<div><b>✓ Attendance recorded</b><br>${esc(m.name)} · ${esc(m.area)}</div></div></div>`;
+      toast2('Attendance recorded.');
     };
-
-    const originalAttendance=window.renderAttendance;
-    window.renderAttendance=async function(){
-      const {data:rows,error}=await client.from('attendance').select('*').order('checked_in_at',{ascending:false});
-      if(error){console.warn(error);return originalAttendance()}
-      const tbody=document.getElementById('attendanceRows');if(!tbody)return;
-      const role=typeof session!=='undefined'?session?.role:null;
-      const visible=(rows||[]).filter(a=>role==='Admin'||(role==='Area Leader'&&a.area_id===session.areaId));
-      tbody.innerHTML=visible.map(a=>{
-        const m=(typeof db!=='undefined'?db.members:[]).find(x=>x.id===a.member_id)||{name:a.member_id,area:'',photo:''};
-        const area=(typeof db!=='undefined'?db.areas:[]).find(x=>x.id===a.area_id)?.name||m.area||'';
-        const date=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
-        const time=new Date(a.checked_in_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'});
-        return `<tr><td><div class="member-cell">${typeof memberAvatar==='function'?memberAvatar(m,true):`<b>${esc(m.name)}</b>`}</div></td><td><span class="tag">${esc(area)}</span></td><td>${date}</td><td>${time}</td><td>✓ Present <button class="btn secondary" style="margin-left:8px" onclick="editAttendanceDate('${a.id}')">Edit date</button></td></tr>`;
-      }).join('')||'<tr><td colspan="5" style="color:var(--muted)">No attendance recorded yet.</td></tr>';
-    };
-
-    window.editAttendanceDate=async function(recordId){
-      const {data:a,error}=await client.from('attendance').select('id,member_id,area_id,checked_in_at').eq('id',recordId).maybeSingle();
-      if(error||!a){toast2(error?.message||'Attendance record not found.');return}
-      const role=typeof session!=='undefined'?session?.role:null;
-      if(role!=='Admin'&&!(role==='Area Leader'&&a.area_id===session.areaId)){toast2('You do not have permission to edit this attendance.');return}
-      const oldDate=new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
-      const member=(typeof db!=='undefined'?db.members:[]).find(x=>x.id===a.member_id);
-      openModal('Edit attendance date',`<div class="field"><label>Member</label><input value="${esc(member?.name||a.member_id)}" disabled></div><div class="field"><label>Attendance date</label><input id="editAttendanceDate" type="date" value="${oldDate}" max="${manilaDate()}"></div><button class="btn" id="saveAttendanceDate" style="width:100%">Save date</button>`);
-      document.getElementById('saveAttendanceDate').onclick=async()=>{
-        const date=document.getElementById('editAttendanceDate').value;if(!date){toast2('Choose an attendance date.');return}if(date>manilaDate()){toast2('Attendance date cannot be in the future.');return}
-        const time=new Date(a.checked_in_at).toLocaleTimeString('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-        const checked=new Date(date+'T'+time+'+08:00').toISOString();
-        const r=await client.from('attendance').update({checked_in_at:checked}).eq('id',a.id);if(r.error){toast2(r.error.message);return}
-        document.getElementById('modal').classList.remove('open');await loadDb();refresh();toast2('Attendance date updated.');
-      };
-    };
-
-    const originalGallery=window.renderGallery;
-    window.renderGallery=function(){
-      originalGallery();
-      const grid=document.getElementById('galleryGrid');if(!grid)return;
-      [...grid.querySelectorAll('.photo')].forEach((card,i)=>{
-        const actions=card.querySelector('.photo-actions');if(!actions||actions.querySelector('.download-photo-btn'))return;
-        const btn=document.createElement('button');btn.className='btn secondary download-photo-btn';btn.textContent='Download';btn.onclick=()=>downloadGalleryPhoto((typeof db!=='undefined'?db.photos:[])[i]);actions.insertBefore(btn,actions.firstChild);
-      });
-    };
-
-    const originalRefresh=window.refresh;
-    window.refresh=function(){originalRefresh();setTimeout(()=>{const d=document.getElementById('attendanceDate');if(d){d.value=d.value||manilaDate();d.max=manilaDate()}},0)};
-    await window.renderAttendance();
-    window.renderGallery();
+    window.__VCCF_ORIGINAL_CHECKIN__=originalCheckin;
     return true;
   }
 
-  window.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{
-    document.querySelectorAll('.nav button[data-view]').forEach(button=>{
-      button.onclick=async()=>{
-        if(typeof window.openView==='function')window.openView(button.dataset.view);
-        if(button.dataset.view==='dashboard')await updateStatistics();
-        if(button.dataset.view==='about')try{await loadAboutPeople()}catch(e){console.warn('About page load failed:',e)}
-      };
-    });
-    const ep=document.getElementById('editPastors'),el=document.getElementById('editLeaders');
-    if(ep)ep.onclick=()=>aboutEditor('pastor');
-    if(el)el.onclick=()=>aboutEditor('leader');
-    setTimeout(updateStatistics,1200);
-    setTimeout(()=>loadAboutPeople().catch(()=>{}),1200);
-    const tryPatch=async()=>{if(await patchAttendanceAndGallery())return;setTimeout(tryPatch,300)};
-    tryPatch();
-  },0));
-})();
-
-// Ensure the attendance export feature is actually loaded by production builds.
-// index.html already loads this config file, so this avoids relying on a second
-// static <script> tag being present in the deployed HTML.
-(() => {
-  const loadAttendanceExport = () => {
-    if (window.__VCCF_ATTENDANCE_EXPORT_LOADER__) return;
-    window.__VCCF_ATTENDANCE_EXPORT_LOADER__ = true;
-    if (document.querySelector('script[data-vccf-attendance-export]')) return;
-    const script = document.createElement('script');
-    script.src = '/vccf-attendance-export.js?v=3';
-    script.dataset.vccfAttendanceExport = '1';
-    script.onload = () => console.info('VCCF attendance export loaded');
-    script.onerror = () => console.error('VCCF attendance export failed to load');
-    document.head.appendChild(script);
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadAttendanceExport, {once:true});
-  else loadAttendanceExport();
+  async function boot(){try{await updateStatistics()}catch{}try{await loadAboutPeople()}catch{}try{await patchAttendanceAndGallery()}catch(e){console.warn('VCCF attendance/gallery patch',e)}}
+  window.addEventListener('vccf-app-ready',()=>setTimeout(boot,100));
+  window.addEventListener('vccf-authenticated',()=>setTimeout(boot,100));
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,400),{once:true});
+  else setTimeout(boot,100);
 })();
