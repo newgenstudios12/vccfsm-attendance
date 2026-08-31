@@ -1,6 +1,6 @@
 // Public Supabase client configuration.
 window.VCCF_SUPABASE_URL = 'https://hvnlstaecjqhjtiojutd.supabase.co';
-window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
+window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77rJ2O2w_XBXBXc3g';
 
 (() => {
   const g = window.supabase;
@@ -78,6 +78,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
         box.style.background='#ecfdf3';
         box.style.color='#027a48';
         box.textContent='Sign-in successful. Loading VCCF…';
+        window.dispatchEvent(new CustomEvent('vccf-authenticated'));
         await new Promise(r => setTimeout(r, 150));
         window.location.reload();
       } catch (err) {
@@ -159,7 +160,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     const photoRows=arr.map((p,i)=>`<div class="panel" style="margin-bottom:12px;padding:14px"><div style="display:flex;gap:12px;align-items:center"><div id="aboutPrev_${i}" style="width:64px;height:64px;border-radius:50%;overflow:hidden;background:#d719201a;display:grid;place-items:center;font-weight:900">${esc((p.name||'?').split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase())}</div><div style="flex:1"><b>${esc(p.name)}</b><div style="font-size:.8rem;color:var(--muted)">Profile picture</div><input id="aboutFile_${i}" type="file" accept="image/*" style="margin-top:6px"></div></div></div>`).join('');
     const modal=document.getElementById('modal'),body=document.getElementById('modalBody'),head=document.getElementById('modalTitle');
     head.textContent=title;
-    body.innerHTML=`<div class="field"><label>One person per line: Name | Description</label><textarea id="peopleText" rows="${Math.max(5,arr.length+2)}">${arr.map(p=>p.name+' | '+(p.description||'')).join('\n')}</textarea></div>${photoRows}<button class="btn" id="saveAboutPeople" style="width:100%">Save</button>`;
+    body.innerHTML=`<div class="field"><label>One person per line: Name | Description</label><textarea id="peopleText" rows="${Math.max(5,arr.length+2)}">${arr.map(p=>p.name+' | '+(p.description||'')).join('\\n')}</textarea></div>${photoRows}<button class="btn" id="saveAboutPeople" style="width:100%">Save</button>`;
     modal.classList.add('open');
     for(let i=0;i<arr.length;i++){
       const old=(await client.from('photos').select('storage_path,title').eq('title',ABOUT_PHOTO_PREFIX+arr[i].id).order('created_at',{ascending:false}).limit(1)).data?.[0];
@@ -169,7 +170,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     }
     document.getElementById('saveAboutPeople').onclick=async()=>{
       try{
-        const parsed=document.getElementById('peopleText').value.split('\n').map(x=>x.trim()).filter(Boolean).map(line=>{const [name,...rest]=line.split('|');return{name:name.trim(),description:rest.join('|').trim()}});
+        const parsed=document.getElementById('peopleText').value.split('\\n').map(x=>x.trim()).filter(Boolean).map(line=>{const [name,...rest]=line.split('|');return{name:name.trim(),description:rest.join('|').trim()}});
         for(let i=0;i<parsed.length;i++){
           let p=arr[i];
           if(p){const r=await client.from('site_people').update({name:parsed[i].name,description:parsed[i].description}).eq('id',p.id);if(r.error)throw r.error}
@@ -231,4 +232,20 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
   window.addEventListener('vccf-authenticated',()=>setTimeout(boot,100));
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,400),{once:true});
   else setTimeout(boot,100);
+
+  // Explicitly load the Church Management suite after authentication. The base
+  // app shell does not include this module directly, so keep the loader here.
+  const loadChurchManagement=()=>{
+    if(document.getElementById('vccf-church-management-suite-loader')) return;
+    const s=document.createElement('script');
+    s.id='vccf-church-management-suite-loader';
+    s.src='/vccf-church-management-suite.js?v=20260901';
+    s.async=true;
+    s.onload=()=>window.dispatchEvent(new CustomEvent('vccf-church-management-suite-loaded'));
+    s.onerror=()=>console.warn('VCCF Church Management suite could not load');
+    document.head.appendChild(s);
+  };
+  window.addEventListener('vccf-authenticated',()=>setTimeout(loadChurchManagement,50));
+  window.addEventListener('vccf-app-ready',()=>setTimeout(loadChurchManagement,50));
+  if(document.getElementById('app')?.classList.contains('active')) setTimeout(loadChurchManagement,50);
 })();
