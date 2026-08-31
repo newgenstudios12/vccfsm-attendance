@@ -1,0 +1,45 @@
+name: Load church management suite
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/vccf-church-management-suite.js'
+      - '.github/workflows/load-church-management-suite.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  include-suite:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(suite):') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Include suite module in app shell
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+          tag = '<script src="/vccf-church-management-suite.js"></script>'
+          if tag not in s:
+              marker='</body>'
+              if marker not in s:
+                  raise SystemExit('index.html has no </body> marker')
+              s=s.replace(marker, '  '+tag+'\n'+marker, 1)
+              p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit suite inclusion
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          if git diff --cached --quiet; then
+            echo 'Suite module already included.'
+          else
+            git commit -m 'chore(suite): load church management suite'
+            git push
+          fi
