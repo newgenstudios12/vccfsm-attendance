@@ -12,6 +12,8 @@ on:
       - 'public/vccf-sermons.js'
       - 'public/vccf-profile-auto-link.js'
       - 'public/vccf-profile-member-view-fix.js'
+      - 'public/vccf-church-management-suite.js'
+      - 'public/vccf-church-management-suite-patch.js'
       - 'public/index.html'
       - '.github/workflows/include-pro-suite.yml'
 
@@ -20,7 +22,7 @@ permissions:
 
 jobs:
   patch-index:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(pro):') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(pro):') && !startsWith(github.event.head_commit.message, 'chore(suite):') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +45,8 @@ jobs:
               '<script src="/vccf-profile-member-view-fix.js"></script>',
               '<script src="/vccf-chat-v2.js"></script>',
               '<script src="/vccf-sermons.js"></script>',
+              '<script src="/vccf-church-management-suite.js"></script>',
+              '<script src="/vccf-church-management-suite-patch.js"></script>',
           ]
           marker = '</body>'
           if marker not in s:
@@ -64,6 +68,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'Modules already included.'
           else
-            git commit -m 'chore(pro): load production UX suite'
+            git commit -m 'chore(suite): load church management suite'
             git push
           fi
