@@ -1,6 +1,6 @@
 // Public Supabase client configuration.
 window.VCCF_SUPABASE_URL = 'https://hvnlstaecjqhjtiojutd.supabase.co';
-window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77rJ2O2w_XBXBXc3g';
+window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77Rj2O2w_XBXBXc3g';
 
 (() => {
   const g = window.supabase;
