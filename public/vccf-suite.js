@@ -31,3 +31,111 @@ function registerPwa(){if('serviceWorker'in navigator)navigator.serviceWorker.re
 async function init(){await load();addNav();addViews();quickActions();renderAnalytics();renderEvents();renderNotifications();renderProfile();registerPwa();const n=S.notifications.filter(x=>!x.is_read).length;const b=document.querySelector('[data-suite-v2="notifications"]');if(b)b.innerHTML=`<span aria-hidden="true">●</span> Notifications${n?` <span class="suite-badge" style="margin-left:auto">${n}</span>`:''}`}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(init,500),{once:true});else setTimeout(init,100);client.auth.onAuthStateChange(()=>setTimeout(init,250));
 })();
+
+/* VCCF CHURCH MANAGEMENT VISIBILITY HOTFIX */
+(()=>{
+  'use strict';
+  if(window.__VCCF_CHURCH_MANAGEMENT_VISIBILITY_FIX__) return;
+  window.__VCCF_CHURCH_MANAGEMENT_VISIBILITY_FIX__=true;
+  const ready=fn=>document.readyState==='loading'?document.addEventListener('DOMContentLoaded',()=>setTimeout(fn,800),{once:true}):setTimeout(fn,150);
+  const sb=()=>window.supabase?.createClient?.(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
+  const esc=v=>String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
+  const money=v=>'₱'+Number(v||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  async function init(){
+    const nav=document.querySelector('.nav'),main=document.querySelector('.main');
+    if(!nav||!main||!sb)return;
+    const client=sb();
+    const {data:{user}}=await client.auth.getUser();
+    if(!user)return;
+    const {data:profile}=await client.from('profiles').select('user_id,role,member_id').eq('user_id',user.id).maybeSingle();
+    if(!profile)return;
+    if(nav.querySelector('[data-church-management]')) return;
+    const button=document.createElement('button');
+    button.type='button'; button.dataset.churchManagement='1';
+    button.innerHTML='⛪ <span>Church Management</span>';
+    button.title='Church Management';
+    button.style.cssText='display:flex;align-items:center;gap:9px;width:100%;';
+    nav.appendChild(button);
+    const style=document.createElement('style');
+    style.textContent=`#churchManagementView{display:none}#churchManagementView.active{display:block}.cm-shell{display:grid;gap:14px}.cm-tabs{display:flex;gap:8px;overflow:auto;padding:3px 0 8px}.cm-tabs button{white-space:nowrap;border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:9px 12px;border-radius:11px;font-weight:800}.cm-tabs button.active{background:var(--brand-gradient);color:#fff;border-color:transparent}.cm-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.cm-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;min-width:0}.cm-kpi{font-size:1.7rem;font-weight:900;letter-spacing:-.04em}.cm-muted{color:var(--muted);font-size:.82rem}.cm-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.cm-actions{display:flex;gap:8px;flex-wrap:wrap}.cm-tablewrap{overflow:auto;border:1px solid var(--line);border-radius:14px}.cm-table{width:100%;border-collapse:collapse;min-width:820px}.cm-table th,.cm-table td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:.82rem}.cm-table th{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}.cm-form{display:grid;gap:10px}.cm-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cm-form input,.cm-form select,.cm-form textarea{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:10px;padding:10px}.cm-full{grid-column:1/-1}.cm-secret{border:1px solid #ffd9d9;background:#fff8f8;border-radius:12px;padding:10px;font-size:.78rem}.cm-empty{padding:30px;text-align:center;color:var(--muted)}@media(max-width:950px){.cm-grid{grid-template-columns:1fr 1fr}}@media(max-width:650px){.cm-grid{grid-template-columns:1fr}.cm-form-grid{grid-template-columns:1fr}.cm-full{grid-column:auto}.cm-card{padding:14px}.cm-actions .btn{flex:1 1 130px}}`;
+    document.head.appendChild(style);
+    const view=document.createElement('section'); view.id='churchManagementView'; view.className='view'; main.appendChild(view);
+    let tab='overview';
+    const admin=['admin','pastor'].includes(profile.role);
+    const mine=profile.member_id;
+    async function render(){
+      const tabs=[['overview','Overview'],['giving','₱ Tithes & Offerings'],['care','Pastoral Care'],['prayer','Prayer Requests'],['ministries','Ministries'],['events','Events'],['documents','Documents'],['reports','Reports']].filter(x=>x[0]!=='giving'||admin);
+      if(tab==='giving'&&!admin)tab='overview';
+      view.innerHTML=`<div class="cm-shell"><div class="cm-toolbar"><div><div class="cm-muted">VCCF Santa Maria</div><h2 style="margin:3px 0">Church Management</h2></div></div><div class="cm-tabs">${tabs.map(([id,label])=>`<button data-cm-tab="${id}" class="${tab===id?'active':''}">${label}</button>`).join('')}</div><div id="cmContent"></div></div>`;
+      view.querySelector('.cm-tabs').onclick=e=>{const b=e.target.closest('[data-cm-tab]');if(!b)return;tab=b.dataset.cmTab;render()};
+      const c=view.querySelector('#cmContent');
+      if(tab==='overview')c.innerHTML=await overview();
+      if(tab==='giving')c.innerHTML=await giving();
+      if(tab==='care')c.innerHTML=await care();
+      if(tab==='prayer')c.innerHTML=await prayer();
+      if(tab==='ministries')c.innerHTML=await ministries();
+      if(tab==='events')c.innerHTML=await events();
+      if(tab==='documents')c.innerHTML=await documents();
+      if(tab==='reports')c.innerHTML=await reports();
+      bind();
+    }
+    async function overview(){
+      const [{count:membersCount},{count:attCount},{count:eventCount}]=await Promise.all([client.from('members').select('*',{count:'exact',head:true}),client.from('attendance').select('*',{count:'exact',head:true}),client.from('vccf_events').select('*',{count:'exact',head:true})]);
+      const g=admin?await client.from('giving_records').select('amount').gte('given_on',new Date().toISOString().slice(0,7)+'-01'):null;
+      const gt=(g?.data||[]).reduce((s,r)=>s+Number(r.amount||0),0);
+      return `<div class="cm-grid"><div class="cm-card"><div class="cm-muted">Members</div><div class="cm-kpi">${membersCount||0}</div></div><div class="cm-card"><div class="cm-muted">Attendance records</div><div class="cm-kpi">${attCount||0}</div></div><div class="cm-card"><div class="cm-muted">Upcoming events</div><div class="cm-kpi">${eventCount||0}</div></div>${admin?`<div class="cm-card"><div class="cm-muted">Giving this month</div><div class="cm-kpi">${money(gt)}</div><div class="cm-muted">Authorized access</div></div>`:''}</div><div class="cm-grid" style="margin-top:14px"><div class="cm-card"><h3>What you can manage</h3><div class="cm-muted">${admin?'Giving, pastoral care, prayer requests, ministries, events, member documents and reports.':'Your permitted church-management information and requests.'}</div></div></div>`;
+    }
+    async function giving(){
+      const {data,error}=await client.from('giving_records').select('id,member_id,given_on,giving_type,amount,payment_method,reference_no,notes,recorded_by,created_at').order('given_on',{ascending:false}).limit(500);
+      if(error)throw error;
+      const ids=[...new Set((data||[]).map(x=>x.member_id))];
+      const {data:ms}=ids.length?await client.from('members').select('id,display_name,first_name,last_name').in('id',ids):{data:[]};
+      const names=new Map((ms||[]).map(m=>[m.id,m.display_name||[m.first_name,m.last_name].filter(Boolean).join(' ')||'Member']));
+      const total=(data||[]).reduce((s,r)=>s+Number(r.amount||0),0);
+      return `<div class="cm-grid"><div class="cm-card"><div class="cm-muted">Total records</div><div class="cm-kpi">${data?.length||0}</div></div><div class="cm-card"><div class="cm-muted">Total recorded</div><div class="cm-kpi">${money(total)}</div></div><div class="cm-card"><div class="cm-muted">Tithes</div><div class="cm-kpi">${money((data||[]).filter(r=>String(r.giving_type).toLowerCase()==='tithe').reduce((s,r)=>s+Number(r.amount||0),0))}</div></div><div class="cm-card"><div class="cm-muted">Offerings</div><div class="cm-kpi">${money((data||[]).filter(r=>String(r.giving_type).toLowerCase()!=='tithe').reduce((s,r)=>s+Number(r.amount||0),0))}</div></div></div><div class="cm-card" style="margin-top:14px"><div class="cm-toolbar"><div><h3 style="margin:0">Tithes & Offerings</h3><div class="cm-muted">Private financial ledger · admin/pastor access only</div></div><button class="btn" id="cmAddGiving">+ Record Giving</button></div><div class="cm-tablewrap" style="margin-top:12px"><table class="cm-table"><thead><tr><th>Date</th><th>Member</th><th>Type</th><th>Amount</th><th>Payment</th><th>Reference</th></tr></thead><tbody>${(data||[]).map(r=>`<tr><td>${esc(r.given_on)}</td><td>${esc(names.get(r.member_id)||r.member_id)}</td><td>${esc(r.giving_type)}</td><td>${money(r.amount)}</td><td>${esc(r.payment_method)}</td><td>${esc(r.reference_no||'—')}</td></tr>`).join('')||'<tr><td colspan="6" class="cm-empty">No giving records yet.</td></tr>'}</tbody></table></div></div>`;
+    }
+    async function care(){
+      const {data,error}=await client.from('pastoral_followups').select('id,member_id,status,reason,followup_on,notes,assigned_to,created_at').order('followup_on',{ascending:true}).limit(300);if(error)throw error;
+      return `<div class="cm-card"><div class="cm-toolbar"><div><h3 style="margin:0">Pastoral Follow-up</h3><div class="cm-muted">${isLeaderOrAdmin()?'Leadership follow-up queue':'Your permitted care records'}</div></div>${isLeaderOrAdmin()?'<button class="btn" id="cmAddCare">+ Add Follow-up</button>':''}</div><div class="cm-tablewrap" style="margin-top:12px"><table class="cm-table"><thead><tr><th>Follow-up</th><th>Member</th><th>Status</th><th>Reason</th><th>Notes</th></tr></thead><tbody>${(data||[]).map(r=>`<tr><td>${esc(r.followup_on||'—')}</td><td>${esc(r.member_id)}</td><td>${esc(r.status||'Open')}</td><td>${esc(r.reason||'')}</td><td>${esc(r.notes||'')}</td></tr>`).join('')||'<tr><td colspan="5" class="cm-empty">No follow-ups yet.</td></tr>'}</tbody></table></div></div>`;
+    }
+    async function prayer(){
+      const {data,error}=await client.from('prayer_requests').select('id,member_id,title,request_text,status,is_private,created_at').order('created_at',{ascending:false}).limit(300);if(error)throw error;
+      return `<div class="cm-card"><div class="cm-toolbar"><div><h3 style="margin:0">Prayer Requests</h3><div class="cm-muted">Submit and track prayer needs.</div></div><button class="btn" id="cmAddPrayer">+ Prayer Request</button></div><div class="cm-tablewrap" style="margin-top:12px"><table class="cm-table"><thead><tr><th>Date</th><th>Title</th><th>Status</th><th>Private</th><th>Request</th></tr></thead><tbody>${(data||[]).map(r=>`<tr><td>${new Date(r.created_at).toLocaleDateString('en-PH')}</td><td>${esc(r.title||'Prayer request')}</td><td>${esc(r.status||'Open')}</td><td>${r.is_private?'Yes':'No'}</td><td>${esc(r.request_text||'')}</td></tr>`).join('')||'<tr><td colspan="5" class="cm-empty">No prayer requests yet.</td></tr>'}</tbody></table></div></div>`;
+    }
+    async function ministries(){
+      const {data,error}=await client.from('ministries').select('id,name,description,is_active').order('name');if(error)throw error;
+      return `<div class="cm-card"><div class="cm-toolbar"><div><h3 style="margin:0">Ministries</h3><div class="cm-muted">Manage ministry participation.</div></div>${admin?'<button class="btn" id="cmAddMinistry">+ Add Ministry</button>':''}</div><div class="cm-grid" style="margin-top:12px">${(data||[]).map(m=>`<div class="cm-card"><h3>${esc(m.name)}</h3><div class="cm-muted">${esc(m.description||'')}</div><div style="margin-top:10px">${m.is_active?'Active':'Inactive'}</div></div>`).join('')||'<div class="cm-empty">No ministries yet.</div>'}</div></div>`;
+    }
+    async function events(){
+      const {data,error}=await client.from('vccf_events').select('*').order('event_date',{ascending:true}).limit(100);if(error)throw error;
+      return `<div class="cm-card"><div class="cm-toolbar"><div><h3 style="margin:0">Calendar & Events</h3><div class="cm-muted">Church events and registration.</div></div>${admin?'<button class="btn" id="cmAddEvent">+ Add Event</button>':''}</div><div style="display:grid;gap:10px;margin-top:12px">${(data||[]).map(e=>`<div class="cm-card"><div class="cm-toolbar"><div><b>${esc(e.title)}</b><div class="cm-muted">${esc(e.event_date)} ${esc(e.event_time||'')} · ${esc(e.location||'')}</div></div></div><div style="margin-top:6px">${esc(e.description||'')}</div></div>`).join('')||'<div class="cm-empty">No events yet.</div>'}</div></div>`;
+    }
+    async function documents(){return `<div class="cm-card"><h3>Member Documents</h3><div class="cm-muted">Private document storage is enabled. The document viewer/upload controls can be used from the member profile and authorized leadership areas.</div></div>`}
+    async function reports(){return `<div class="cm-card"><h3>Reports</h3><div class="cm-muted">Use this area for consolidated attendance, giving, ministry and pastoral reports. Financial reports remain restricted to authorized roles.</div><div class="cm-actions" style="margin-top:12px"><button class="btn secondary" id="cmExportGiving">Export Giving CSV</button></div></div>`}
+    function isLeaderOrAdmin(){return admin||profile.role==='area_leader'||profile.role==='pastor'}
+    function bind(){
+      view.querySelector('#cmAddGiving')?.addEventListener('click',()=>givingModal());
+      view.querySelector('#cmAddPrayer')?.addEventListener('click',()=>prayerModal());
+      view.querySelector('#cmAddCare')?.addEventListener('click',()=>careModal());
+      view.querySelector('#cmAddMinistry')?.addEventListener('click',()=>ministryModal());
+      view.querySelector('#cmAddEvent')?.addEventListener('click',()=>eventModal());
+      view.querySelector('#cmExportGiving')?.addEventListener('click',exportGiving);
+    }
+    function openModal(title,body){const m=document.getElementById('modal');if(!m)return;document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;m.classList.add('open')}
+    async function givingModal(){
+      const {data:ms}=await client.from('members').select('id,display_name,first_name,last_name').order('display_name');
+      openModal('Record Tithes / Offering',`<form id="cmGivingForm" class="cm-form"><div class="cm-form-grid"><div><label>Date</label><input id="cmGDate" type="date" value="${new Date().toISOString().slice(0,10)}" required></div><div><label>Member</label><select id="cmGMember" required>${(ms||[]).map(m=>`<option value="${m.id}">${esc(m.display_name||[m.first_name,m.last_name].filter(Boolean).join(' ')||'Member')}</option>`).join('')}</select></div><div><label>Type</label><select id="cmGType"><option>Tithe</option><option>Offering</option><option>Missions</option><option>Building Fund</option><option>Special Offering</option></select></div><div><label>Amount</label><input id="cmGAmount" type="number" min="0.01" step="0.01" required></div><div><label>Payment method</label><select id="cmGPayment"><option>Cash</option><option>GCash</option><option>Bank Transfer</option><option>Other</option></select></div><div><label>Reference no.</label><input id="cmGRef"></div><div class="cm-full"><label>Notes</label><textarea id="cmGNotes" rows="3"></textarea></div></div><button class="btn" style="width:100%">Save giving record</button></form>`);
+      document.getElementById('cmGivingForm').onsubmit=async e=>{e.preventDefault();const r=await client.from('giving_records').insert({member_id:document.getElementById('cmGMember').value,given_on:document.getElementById('cmGDate').value,giving_type:document.getElementById('cmGType').value,amount:Number(document.getElementById('cmGAmount').value),payment_method:document.getElementById('cmGPayment').value,reference_no:document.getElementById('cmGRef').value.trim()||null,notes:document.getElementById('cmGNotes').value.trim()||null,recorded_by:profile.user_id});if(r.error)return alert(r.error.message);document.getElementById('modal').classList.remove('open');tab='giving';render()}
+    }
+    async function prayerModal(){openModal('New Prayer Request',`<form id="cmPrayerForm" class="cm-form"><div><label>Title</label><input id="cmPTitle" required></div><div><label>Prayer request</label><textarea id="cmPText" rows="5" required></textarea></div><label><input id="cmPPrivate" type="checkbox" checked> Keep private</label><button class="btn">Submit prayer request</button></form>`);document.getElementById('cmPrayerForm').onsubmit=async e=>{e.preventDefault();const r=await client.from('prayer_requests').insert({member_id:profile.member_id,title:document.getElementById('cmPTitle').value.trim(),request_text:document.getElementById('cmPText').value.trim(),is_private:document.getElementById('cmPPrivate').checked,status:'Open'});if(r.error)return alert(r.error.message);document.getElementById('modal').classList.remove('open');tab='prayer';render()}}
+    async function careModal(){const {data:ms}=await client.from('members').select('id,display_name,first_name,last_name').order('display_name');openModal('Pastoral Follow-up',`<form id="cmCareForm" class="cm-form"><div><label>Member</label><select id="cmCMember">${(ms||[]).map(m=>`<option value="${m.id}">${esc(m.display_name||[m.first_name,m.last_name].filter(Boolean).join(' ')||'Member')}</option>`).join('')}</select></div><div><label>Follow-up date</label><input id="cmCDate" type="date"></div><div><label>Reason</label><input id="cmCReason"></div><div><label>Notes</label><textarea id="cmCNotes" rows="4"></textarea></div><button class="btn">Save follow-up</button></form>`);document.getElementById('cmCareForm').onsubmit=async e=>{e.preventDefault();const r=await client.from('pastoral_followups').insert({member_id:document.getElementById('cmCMember').value,followup_on:document.getElementById('cmCDate').value||null,reason:document.getElementById('cmCReason').value.trim()||null,notes:document.getElementById('cmCNotes').value.trim()||null,status:'Open',assigned_to:profile.user_id});if(r.error)return alert(r.error.message);document.getElementById('modal').classList.remove('open');tab='care';render()}}
+    async function ministryModal(){openModal('Add Ministry',`<form id="cmMinForm" class="cm-form"><div><label>Name</label><input id="cmMName" required></div><div><label>Description</label><textarea id="cmMDesc" rows="3"></textarea></div><button class="btn">Save ministry</button></form>`);document.getElementById('cmMinForm').onsubmit=async e=>{e.preventDefault();const r=await client.from('ministries').insert({name:document.getElementById('cmMName').value.trim(),description:document.getElementById('cmMDesc').value.trim()||null,is_active:true});if(r.error)return alert(r.error.message);document.getElementById('modal').classList.remove('open');tab='ministries';render()}}
+    async function eventModal(){openModal('Add Event',`<form id="cmEventForm" class="cm-form"><div class="cm-form-grid"><div><label>Title</label><input id="cmETitle" required></div><div><label>Date</label><input id="cmEDate" type="date" required></div><div><label>Time</label><input id="cmETime" type="time"></div><div><label>Location</label><input id="cmELoc"></div><div class="cm-full"><label>Description</label><textarea id="cmEDesc" rows="4"></textarea></div></div><button class="btn">Save event</button></form>`);document.getElementById('cmEventForm').onsubmit=async e=>{e.preventDefault();const r=await client.from('vccf_events').insert({title:document.getElementById('cmETitle').value.trim(),event_date:document.getElementById('cmEDate').value,event_time:document.getElementById('cmETime').value||null,location:document.getElementById('cmELoc').value.trim()||null,description:document.getElementById('cmEDesc').value.trim()||null,created_by:profile.user_id});if(r.error)return alert(r.error.message);document.getElementById('modal').classList.remove('open');tab='events';render()}}
+    async function exportGiving(){const {data,error}=await client.from('giving_records').select('given_on,giving_type,amount,payment_method,reference_no,member_id').order('given_on',{ascending:false});if(error)return alert(error.message);const rows=[['Date','Type','Amount','Payment','Reference','Member ID'],...(data||[]).map(r=>[r.given_on,r.giving_type,r.amount,r.payment_method,r.reference_no||'',r.member_id])];const csv=rows.map(r=>r.map(x=>`"${String(x??'').replaceAll('"','""')}"`).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='vccf-giving-records.csv';a.click()}
+    button.onclick=e=>{e.preventDefault();e.stopPropagation();document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));view.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));button.classList.add('active');document.getElementById('pageTitle').textContent='Church Management';render()};
+    const compact=()=>{if(window.innerWidth<=900){button.style.justifyContent='center';button.querySelector('span').style.display='none'}else{button.style.justifyContent='flex-start';button.querySelector('span').style.display='inline'}};
+    compact();window.addEventListener('resize',compact,{passive:true});
+    const originalOpenView=window.openView; if(typeof originalOpenView==='function'&&!originalOpenView.__cmWrapped){const wrapped=function(v){view.classList.remove('active');if(view===document.querySelector('.view.active')){}return originalOpenView(v)};wrapped.__cmWrapped=true;window.openView=wrapped}
+  }
+  ready(init);
+})();
