@@ -281,12 +281,27 @@
     setInterval(() => { patchAddressField(); saveAddressAfterMemberSubmit(); }, 500);
   }
 
+  function loadChurchManagementSuite() {
+    if (window.__VCCF_CHURCH_SUITE_LOADER__) return;
+    window.__VCCF_CHURCH_SUITE_LOADER__ = true;
+    const files = ['/vccf-church-management-suite.js','/vccf-church-management-suite-patch.js'];
+    files.forEach((src, i) => {
+      if (document.querySelector(`script[src="${src}"]`)) return;
+      const s = document.createElement('script');
+      s.src = src;
+      s.async = false;
+      if (i === files.length - 1) s.onload = () => console.debug('VCCF Church Management Suite loaded');
+      document.head.appendChild(s);
+    });
+  }
+
   function startEnhancements() {
     installThemeButtons();
     enableUsernameLogin();
     observeMemberModal();
     watchThemeChanges();
     syncLogos(currentTheme());
+    loadChurchManagementSuite();
   }
 
   async function start() {
