@@ -1,19 +1,21 @@
 (()=>{
 'use strict';
-if(window.__VCCF_NAV_FINAL_FIX_V5__)return;
-window.__VCCF_NAV_FINAL_FIX_V5__=true;
+if(window.__VCCF_NAV_FINAL_FIX_V6__)return;
+window.__VCCF_NAV_FINAL_FIX_V6__=true;
 
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const labels={dashboard:'Dashboard',members:'Members',attendance:'Attendance',selfcheck:'Self Check-In',gallery:'Gallery',about:'About VCCF',settings:'Settings',analytics:'Analytics',events:'Events',notifications:'Notifications',profile:'My Profile',sermons:'Sermons','church-management':'Church Management'};
 const ids={dashboard:'dashboard',members:'members',attendance:'attendance',selfcheck:'selfcheck',gallery:'gallery',about:'about',settings:'settings',analytics:'suite2-analytics',events:'suite2-events',notifications:'suite2-notifications',profile:'suite2-profile',sermons:'sermons'};
 const textOf=(el)=>(String(el?.textContent||'').replace(/\s+/g,' ').trim().toLowerCase());
+const appActive=()=>!!$('#app')?.classList.contains('active');
 
 function setTitle(v){const t=$('#pageTitle');if(t&&labels[v])t.textContent=labels[v]}
 function markActive(btn){$$('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active')}
 function closeDrawer(){$('body')?.classList.remove('vccf-mobile-drawer-open');$('.vccf-mobile-backdrop')?.classList.remove('open');$('.sidebar')?.classList.remove('vccf-drawer-open')}
 
 function showView(view,button){
+  if(!appActive())return false;
   if(view==='church-management')return showChurchManagement(button);
   const target=$(('#'+(ids[view]||view)));
   if(!target)return false;
@@ -31,6 +33,7 @@ function showView(view,button){
 }
 
 function ensureChurchSuiteLoader(){
+  if(!appActive())return;
   if($('script[data-vccf-church-suite-loader="1"]'))return;
   const s=document.createElement('script');
   s.src='/vccf-church-management-suite.js?v=final6';
@@ -40,6 +43,7 @@ function ensureChurchSuiteLoader(){
 }
 
 function ensureChurchManagement(){
+  if(!appActive())return null;
   const main=$('.main');
   if(!main)return null;
   let hub=$('#churchSuiteView');
@@ -53,6 +57,7 @@ function ensureChurchManagement(){
 }
 
 function showChurchManagement(button){
+  if(!appActive())return false;
   const hub=ensureChurchManagement();
   if(!hub){ensureChurchSuiteLoader();return false}
   $$('.main .view').forEach(v=>v.classList.remove('active'));
@@ -65,6 +70,7 @@ function showChurchManagement(button){
 }
 
 function ensureChurchNav(){
+  if(!appActive())return null;
   const nav=$('.nav');
   if(!nav)return;
   let b=nav.querySelector('[data-vccf-church-nav="1"]');
@@ -81,6 +87,7 @@ function ensureChurchNav(){
 }
 
 function removeDuplicateChurchAttendance(){
+  if(!appActive())return;
   const nav=$('.nav');
   if(!nav)return;
   const items=$$('button,a',nav);
@@ -95,6 +102,7 @@ function removeDuplicateChurchAttendance(){
 }
 
 function removeDuplicateProfileButtons(){
+  if(!appActive())return;
   const nav=$('.nav');
   if(!nav)return;
   const items=$$('button,a',nav).filter(el=>{
@@ -105,38 +113,31 @@ function removeDuplicateProfileButtons(){
   if(items.length>1)items.slice(1).forEach(x=>x.remove());
 }
 
-function dedupeNavigation(){removeDuplicateChurchAttendance();removeDuplicateProfileButtons();}
+function dedupeNavigation(){if(!appActive())return;removeDuplicateChurchAttendance();removeDuplicateProfileButtons()}
 
 function repairShellVisibility(){
   const login=$('#login'),app=$('#app');
-  if(!login||!app)return;
-  const appActive=app.classList.contains('active');
-  if(appActive){
-    login.style.setProperty('display','none','important');
-    app.style.setProperty('display','flex','important');
-    if(!$('.main .view.active')){
-      const dash=$('#dashboard');
-      if(dash)dash.classList.add('active');
-    }
-  }else{
-    app.style.setProperty('display','none','important');
-    login.style.setProperty('display','grid','important');
-  }
+  if(!login||!app||!appActive())return;
+  login.style.setProperty('display','none','important');
+  app.style.setProperty('display','flex','important');
+  if(!$('.main .view.active'))$('#dashboard')?.classList.add('active');
 }
 
 function installResponsiveSafetyStyle(){
-  if($('#vccf-nav-final-v5-style'))return;
+  if(!appActive()||$('#vccf-nav-final-v6-style'))return;
   const s=document.createElement('style');
-  s.id='vccf-nav-final-v5-style';
+  s.id='vccf-nav-final-v6-style';
   s.textContent='.nav{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important}.nav button{pointer-events:auto!important;touch-action:manipulation!important;flex:0 0 auto!important}.nav-label{pointer-events:none}@media(max-width:700px){html,body{max-width:100%;overflow-x:hidden}.main{width:100%!important;margin-left:0!important;padding-bottom:96px!important}.sidebar{max-width:100vw}.nav{max-width:100%;min-width:0}}';
   document.head.appendChild(s);
 }
 
 function bindNav(){
+  if(!appActive())return;
   const nav=$('.nav');
-  if(!nav||nav.dataset.vccfNavV5Bound==='1')return;
-  nav.dataset.vccfNavV5Bound='1';
+  if(!nav||nav.dataset.vccfNavV6Bound==='1')return;
+  nav.dataset.vccfNavV6Bound='1';
   nav.addEventListener('click',e=>{
+    if(!appActive())return;
     const b=e.target.closest?.('button');
     if(!b||!nav.contains(b))return;
     const view=b.dataset.view||b.dataset.suiteV2||b.dataset.vccfCoreNav;
@@ -146,26 +147,34 @@ function bindNav(){
   },true);
 }
 
+function observeApp(){
+  const app=$('#app');
+  if(!app||app.dataset.vccfNavVisibilityObservedV6==='1')return;
+  app.dataset.vccfNavVisibilityObservedV6='1';
+  new MutationObserver(()=>{if(appActive())repairShellVisibility()}).observe(app,{attributes:true,attributeFilter:['class']});
+}
+
+function observeNav(){
+  if(!appActive())return;
+  const nav=$('.nav');
+  if(!nav||nav.dataset.vccfNavDedupeObservedV6==='1')return;
+  nav.dataset.vccfNavDedupeObservedV6='1';
+  new MutationObserver(()=>{if(appActive()){ensureChurchNav();dedupeNavigation();bindNav();}}).observe(nav,{childList:true});
+}
+
 function boot(){
+  if(!appActive())return;
   installResponsiveSafetyStyle();
   repairShellVisibility();
   ensureChurchNav();
   dedupeNavigation();
   bindNav();
-  const app=$('#app');
-  if(app&&!app.dataset.vccfNavVisibilityObserved){
-    app.dataset.vccfNavVisibilityObserved='1';
-    new MutationObserver(()=>repairShellVisibility()).observe(app,{attributes:true,attributeFilter:['class']});
-  }
-  const nav=$('.nav');
-  if(nav&&!nav.dataset.vccfNavDedupeObserved){
-    nav.dataset.vccfNavDedupeObserved='1';
-    new MutationObserver(()=>{ensureChurchNav();dedupeNavigation();bindNav();}).observe(nav,{childList:true});
-  }
+  observeApp();
+  observeNav();
 }
 
-window.addEventListener('error',()=>setTimeout(repairShellVisibility,0));
-window.addEventListener('unhandledrejection',()=>setTimeout(repairShellVisibility,0));
+window.addEventListener('error',()=>{if(appActive())setTimeout(repairShellVisibility,0)});
+window.addEventListener('unhandledrejection',()=>{if(appActive())setTimeout(repairShellVisibility,0)});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.addEventListener('load',boot);
 window.addEventListener('vccf-authenticated',()=>setTimeout(boot,80));
