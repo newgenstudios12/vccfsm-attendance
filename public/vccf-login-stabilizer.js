@@ -1,23 +1,14 @@
 (()=>{
 'use strict';
-if(window.__VCCF_LOGIN_STABILIZER_V1__)return;
-window.__VCCF_LOGIN_STABILIZER_V1__=true;
+if(window.__VCCF_LOGIN_STABILIZER_V2__)return;
+window.__VCCF_LOGIN_STABILIZER_V2__=true;
 const $=id=>document.getElementById(id);
-const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const withTimeout=async(p,ms,label)=>{
   let timer;
-  try{
-    return await Promise.race([
-      p,
-      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label||'Request timed out. Please try again.')),ms)})
-    ]);
-  }finally{clearTimeout(timer)}
+  try{return await Promise.race([p,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label||'Request timed out. Please try again.')),ms)})]);}
+  finally{clearTimeout(timer)}
 };
-function normalizeIdentifier(raw){
-  const s=String(raw||'').trim();
-  if(!s)return '';
-  return s.includes('@')?s.toLowerCase():`${s.toLowerCase().replace(/[^a-z0-9._-]/g,'')}@vccf.local`;
-}
+function normalizeIdentifier(raw){const s=String(raw||'').trim();if(!s)return '';return s.includes('@')?s.toLowerCase():`${s.toLowerCase().replace(/[^a-z0-9._-]/g,'')}@vccf.local`}
 function activate(profileRow,identifier){
   const roleLabel=profileRow.role==='admin'?'Admin':profileRow.role==='area_leader'?'Area Leader':'Member';
   window.session={username:identifier,name:profileRow.display_name||identifier,role:roleLabel,area:'',areaId:profileRow.area_id,memberId:profileRow.member_id,memberCode:null};
@@ -43,15 +34,8 @@ function install(){
     const password=String($('loginPass')?.value||'');
     const button=form.querySelector('button[type="submit"],button');
     let box=$('vccfLoginError');
-    if(!box){
-      box=document.createElement('div');
-      box.id='vccfLoginError';
-      box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;font-size:.85rem;white-space:pre-wrap';
-      form.appendChild(box);
-    }
-    box.textContent='';
-    box.style.background='transparent';
-    box.style.color='var(--text)';
+    if(!box){box=document.createElement('div');box.id='vccfLoginError';box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;font-size:.85rem;white-space:pre-wrap';form.appendChild(box)}
+    box.textContent='';box.style.background='transparent';box.style.color='var(--text)';
     if(button){button.disabled=true;button.textContent='Signing in…'}
     try{
       if(!identifier)throw new Error('Please enter your username or email.');
@@ -59,24 +43,15 @@ function install(){
       if(!window.supabase?.createClient)throw new Error('Authentication service is unavailable. Please refresh and try again.');
       if(!window.VCCF_SUPABASE_URL||!window.VCCF_SUPABASE_PUBLISHABLE_KEY)throw new Error('Supabase configuration is missing.');
       const client=window.supabase.createClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
-      const email=normalizeIdentifier(identifier);
-      const auth=await withTimeout(client.auth.signInWithPassword({email,password}),12000,'Sign-in request timed out. Please check your connection and try again.');
+      const auth=await withTimeout(client.auth.signInWithPassword({email:normalizeIdentifier(identifier),password}),12000,'Sign-in request timed out. Please check your connection and try again.');
       if(auth.error)throw new Error(auth.error.message);
-      const user=auth.data?.user;
-      if(!user)throw new Error('Authentication returned no user.');
-      const profileResult=await withTimeout(
-        client.from('profiles').select('user_id,role,member_id,area_id,display_name').eq('user_id',user.id).maybeSingle(),
-        8000,
-        'Your account signed in, but the VCCF profile lookup timed out. Please try again.'
-      );
+      const user=auth.data?.user;if(!user)throw new Error('Authentication returned no user.');
+      const profileResult=await withTimeout(client.from('profiles').select('user_id,role,member_id,area_id,display_name').eq('user_id',user.id).maybeSingle(),8000,'Your account signed in, but the VCCF profile lookup timed out. Please try again.');
       if(profileResult.error)throw new Error(`Profile lookup failed: ${profileResult.error.message}`);
       if(!profileResult.data)throw new Error('Authentication succeeded, but this account has no VCCF profile.');
       activate(profileResult.data,identifier);
-      box.style.background='#ecfdf3';
-      box.style.color='#027a48';
-      box.textContent='Sign-in successful.';
+      box.style.background='#ecfdf3';box.style.color='#027a48';box.textContent='Sign-in successful.';
       if(button){button.disabled=false;button.textContent='Sign in'}
-      // Do not block the login UI on unrelated dashboard tables.
       setTimeout(()=>{
         if(typeof window.loadDb==='function'){
           withTimeout(Promise.resolve().then(()=>window.loadDb()),15000,'Dashboard data is taking longer than expected.')
@@ -84,19 +59,13 @@ function install(){
             .catch(err=>console.warn('Post-login dashboard load:',err));
         }
       },0);
-      setTimeout(()=>{
-        try{window.scrollTo({top:0,behavior:'smooth'})}catch{}
-      },50);
+      setTimeout(()=>{try{window.scrollTo({top:0,behavior:'smooth'})}catch{}},50);
     }catch(err){
-      console.error('VCCF stable login:',err);
-      box.style.background='#fff1f1';
-      box.style.color='#b42318';
-      box.textContent=`Sign-in failed: ${err?.message||String(err)}`;
+      console.error('VCCF stable login:',err);box.style.background='#fff1f1';box.style.color='#b42318';box.textContent=`Sign-in failed: ${err?.message||String(err)}`;
       if(button){button.disabled=false;button.textContent='Sign in'}
     }
   };
 }
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install,0),{once:true});
-else setTimeout(install,0);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(install,0),{once:true});else setTimeout(install,0);
 window.addEventListener('load',install);
 })();
