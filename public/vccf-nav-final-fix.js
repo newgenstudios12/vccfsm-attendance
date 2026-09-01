@@ -1,50 +1,171 @@
-(()=>{'use strict';
-if(window.__VCCF_NAV_FINAL_FIX_V1__)return;window.__VCCF_NAV_FINAL_FIX_V1__=true;
-const q=(s,c=document)=>c.querySelector(s);
-const qa=(s,c=document)=>Array.from(c.querySelectorAll(s));
-const views=new Set(['dashboard','members','attendance','selfcheck','gallery','about','settings','analytics','events','notifications','profile','sermons']);
-const realSuite='/vccf-church-management-suite.js';
-const coreIds={dashboard:'dashboard',members:'members',attendance:'attendance',selfcheck:'selfcheck',gallery:'gallery',about:'about',settings:'settings',analytics:'suite2-analytics',events:'suite2-events',notifications:'suite2-notifications',profile:'suite2-profile',sermons:'sermons'};
-function markActive(btn){qa('.nav button').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active')}
-function closeMobile(){document.body.classList.remove('vccf-mobile-drawer-open');q('.vccf-mobile-backdrop')?.classList.remove('open');q('.sidebar')?.classList.remove('vccf-drawer-open')}
-function setTitle(v){const labels={dashboard:'Dashboard',members:'Members',attendance:'Attendance',selfcheck:'Self Check-In',gallery:'Gallery',about:'About VCCF',settings:'Settings',analytics:'Analytics',events:'Events',notifications:'Notifications',profile:'My Profile',sermons:'Sermons','church-management':'Church Management'};const el=q('#pageTitle');if(el&&labels[v])el.textContent=labels[v]}
-function activate(v,btn=null){
- if(v==='church-management')return showChurchManagement(btn);
- const id=coreIds[v]||v;const target=document.getElementById(id);if(!target)return false;
- qa('.main .view').forEach(x=>x.classList.remove('active'));target.classList.add('active');markActive(btn);setTitle(v);closeMobile();
- if(v==='members'&&typeof window.renderMembers==='function'){try{window.renderMembers()}catch(e){console.warn('renderMembers',e)}}
- if(v==='sermons'&&window.VCCFSermons?.open){try{window.VCCFSermons.open()}catch(e){console.warn('sermons',e)}}
- return true;
+(()=>{
+'use strict';
+if(window.__VCCF_NAV_FINAL_FIX_V2__)return;
+window.__VCCF_NAV_FINAL_FIX_V2__=true;
+
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const labels={dashboard:'Dashboard',members:'Members',attendance:'Attendance',selfcheck:'Self Check-In',gallery:'Gallery',about:'About VCCF',settings:'Settings',analytics:'Analytics',events:'Events',notifications:'Notifications',profile:'My Profile',sermons:'Sermons', 'church-management':'Church Management'};
+const ids={dashboard:'dashboard',members:'members',attendance:'attendance',selfcheck:'selfcheck',gallery:'gallery',about:'about',settings:'settings',analytics:'suite2-analytics',events:'suite2-events',notifications:'suite2-notifications',profile:'suite2-profile',sermons:'sermons'};
+
+function setTitle(v){const t=$('#pageTitle');if(t&&labels[v])t.textContent=labels[v]}
+function markActive(btn){$$('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active')}
+function closeDrawer(){document.body.classList.remove('vccf-mobile-drawer-open');$('.vccf-mobile-backdrop')?.classList.remove('open');$('.sidebar')?.classList.remove('vccf-drawer-open')}
+
+function showView(view,button){
+  if(view==='church-management') return showChurchManagement(button);
+  const target=$(('#'+(ids[view]||view)));
+  if(!target)return false;
+  $$('.main .view').forEach(v=>v.classList.remove('active'));
+  target.classList.add('active');
+  markActive(button);
+  setTitle(view);
+  closeDrawer();
+  try{
+    if(view==='members'&&typeof window.renderMembers==='function')window.renderMembers();
+    if(view==='sermons'&&window.VCCFSermons?.open)window.VCCFSermons.open();
+    if(view==='analytics'&&typeof window.renderAnalytics==='function')window.renderAnalytics();
+  }catch(e){console.warn('VCCF navigation render:',e)}
+  return true;
 }
-function showChurchManagement(btn=null){
- const direct=q('#churchSuiteView');
- if(direct){qa('.main .view').forEach(x=>x.classList.remove('active'));direct.classList.add('active');markActive(btn||q('[data-suite-nav]')||q('[data-vccf-final-church-nav]'));setTitle('church-management');closeMobile();return true}
- const suiteBtn=q('[data-suite-nav]');if(suiteBtn&&suiteBtn!==btn){try{suiteBtn.click();return true}catch{}}
- return false;
+
+function ensureChurchSuiteLoader(){
+  if($('script[data-vccf-church-suite-loader="1"]')||window.__VCCF_CHURCH_SUITE_LOADER__)return;
+  window.__VCCF_CHURCH_SUITE_LOADER__=true;
+  const s=document.createElement('script');
+  s.src='/vccf-church-management-suite.js?v=final3';
+  s.async=false;
+  s.dataset.vccfChurchSuiteLoader='1';
+  document.head.appendChild(s);
 }
-function ensureChurchLoader(){
- if(q('script[data-vccf-church-suite-loader="1"]')||window.__VCCF_CHURCH_SUITE__)return;
- const s=document.createElement('script');s.src=realSuite+'?v=final2';s.async=false;s.dataset.vccfChurchSuiteLoader='1';document.head.appendChild(s);
+
+function ensureChurchManagement(){
+  const main=$('.main');
+  if(!main)return null;
+  let hub=$('#churchSuiteView');
+  if(!hub)hub=$('#suite2-church-management');
+  if(hub)return hub;
+  hub=document.createElement('section');
+  hub.id='churchSuiteView';
+  hub.className='view';
+  hub.innerHTML='<div class="suite-shell"><div class="suite-toolbar"><div><div class="suite-muted">VCCF administration</div><h3 style="margin:4px 0">Church Management</h3></div></div><div class="suite-card"><div class="suite-muted" style="margin-bottom:12px">Manage church operations from one place.</div><div class="nav-hub-grid"><button type="button" class="btn" data-hub-view="analytics">◔ Analytics</button><button type="button" class="btn" data-hub-view="events">▣ Events</button><button type="button" class="btn" data-hub-view="notifications">● Notifications</button><button type="button" class="btn" data-hub-view="profile">◉ My Profile</button><button type="button" class="btn" data-hub-view="giving">₱ Tithes &amp; Offerings</button></div></div></section>';
+  main.appendChild(hub);
+  hub.querySelectorAll('[data-hub-view]').forEach(b=>b.addEventListener('click',()=>{
+    const v=b.dataset.hubView;
+    const target=$('#suite2-'+v)||$('#'+v);
+    if(target){$$('.main .view').forEach(x=>x.classList.remove('active'));target.classList.add('active');setTitle(v);return}
+    if(v==='giving'){
+      const giving=$('#suite2-giving')||$('#giving');
+      if(giving){$$('.main .view').forEach(x=>x.classList.remove('active'));giving.classList.add('active');setTitle('church-management')}
+    }
+  }));
+  return hub;
 }
-function ensureChurchFallback(){
- const nav=q('.nav');if(!nav)return;
- if(q('[data-suite-nav]',nav)||q('[data-vccf-final-church-nav]',nav))return;
- const b=document.createElement('button');b.type='button';b.dataset.vccfFinalChurchNav='1';b.dataset.view='church-management';b.innerHTML='<span aria-hidden="true">⛪</span> <span class="nav-label">Church Management</span>';b.title='Church Management';
- b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(!showChurchManagement(b))ensureChurchLoader()});nav.appendChild(b);
+
+function showChurchManagement(button){
+  let hub=ensureChurchManagement();
+  if(!hub){ensureChurchSuiteLoader();return false}
+  $$('.main .view').forEach(v=>v.classList.remove('active'));
+  hub.classList.add('active');
+  markActive(button||$('.nav [data-vccf-church-nav="1"]'));
+  setTitle('church-management');
+  closeDrawer();
+  ensureChurchSuiteLoader();
+  return true;
 }
-function waitForSuite(){const started=Date.now();const tick=()=>{if(q('#churchSuiteView')||q('[data-suite-nav]'))return;if(Date.now()-started<10000){ensureChurchLoader();setTimeout(tick,250)}};tick()}
+
+function ensureChurchNav(){
+  const nav=$('.nav');
+  if(!nav)return;
+  let b=nav.querySelector('[data-vccf-church-nav="1"]');
+  if(b)return b;
+  b=document.createElement('button');
+  b.type='button';
+  b.dataset.view='church-management';
+  b.dataset.vccfChurchNav='1';
+  b.title='Church Management';
+  b.innerHTML='<span aria-hidden="true">⛪</span><span class="nav-label">Church Management</span>';
+  b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();showChurchManagement(b)});
+  nav.appendChild(b);
+  return b;
+}
+
 function bindNav(){
- const nav=q('.nav');if(!nav||nav.dataset.vccfFinalBound==='1')return;nav.dataset.vccfFinalBound='1';
- nav.addEventListener('click',e=>{
-   const b=e.target.closest?.('button');if(!b||!nav.contains(b))return;
-   const v=b.dataset.view||b.dataset.suiteV2||b.dataset.vccfCoreNav;
-   if(v==='church-management'){e.preventDefault();e.stopPropagation();showChurchManagement(b)||ensureChurchLoader();return}
-   if(!v||!views.has(v))return;
-   const target=document.getElementById(coreIds[v]||v);
-   if(target){e.preventDefault();e.stopPropagation();activate(v,b)}
- },true);
+  const nav=$('.nav');
+  if(!nav||nav.dataset.vccfNavV2Bound==='1')return;
+  nav.dataset.vccfNavV2Bound='1';
+  nav.addEventListener('click',e=>{
+    const b=e.target.closest?.('button');
+    if(!b||!nav.contains(b))return;
+    const view=b.dataset.view||b.dataset.suiteV2||b.dataset.vccfCoreNav;
+    if(!view)return;
+    if(view==='church-management'){e.preventDefault();e.stopPropagation();showChurchManagement(b);return}
+    if(ids[view]||$('#'+view)||$('#suite2-'+view)){e.preventDefault();e.stopPropagation();showView(view,b)}
+  },true);
 }
-function addCss(){if(q('#vccf-nav-final-style'))return;const s=document.createElement('style');s.id='vccf-nav-final-style';s.textContent='.nav{overflow-y:auto!important;overflow-x:hidden!important;max-height:calc(100vh - 150px)!important;overscroll-behavior:contain!important;scrollbar-width:thin}.nav button{position:relative!important;z-index:25!important;pointer-events:auto!important;flex:none!important;touch-action:manipulation!important}.nav .nav-label{pointer-events:none!important}@media(max-width:700px){.nav{max-height:calc(100dvh - 165px)!important;padding-bottom:18px!important}}';document.head.appendChild(s)}
-function boot(){addCss();ensureChurchLoader();ensureChurchFallback();bindNav();waitForSuite();const app=q('#app');if(app&&!app.dataset.vccfFinalObserved){app.dataset.vccfFinalObserved='1';new MutationObserver(()=>{if(app.classList.contains('active')){ensureChurchFallback();bindNav()}}).observe(app,{attributes:true,attributeFilter:['class'],childList:true,subtree:true})}setTimeout(()=>{ensureChurchFallback();bindNav()},500);setTimeout(()=>{ensureChurchFallback();bindNav()},1500)}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();window.addEventListener('vccf-authenticated',boot);window.addEventListener('vccf-app-ready',boot);
+
+function removeDuplicateProfileButtons(){
+  const nav=$('.nav');
+  if(!nav)return;
+  const items=$$('button,a',nav).filter(el=>{
+    const text=String(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const view=String(el.dataset?.view||'').toLowerCase();
+    return text==='my profile'||view==='myprofile'||view==='my-profile'||view==='profile';
+  });
+  if(items.length>1)items.slice(1).forEach(x=>x.remove());
+}
+
+function repairShellVisibility(){
+  const login=$('#login'),app=$('#app');
+  if(!login||!app)return;
+  const appActive=app.classList.contains('active');
+  if(appActive){
+    login.style.setProperty('display','none','important');
+    app.style.setProperty('display','flex','important');
+    if(!$('.main .view.active')){
+      const dash=$('#dashboard');
+      if(dash)dash.classList.add('active');
+    }
+  }else{
+    app.style.setProperty('display','none','important');
+    login.style.setProperty('display','grid','important');
+  }
+}
+
+function installResponsiveSafetyStyle(){
+  if($('#vccf-nav-final-v2-style'))return;
+  const s=document.createElement('style');
+  s.id='vccf-nav-final-v2-style';
+  s.textContent='.nav{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important}.nav button{pointer-events:auto!important;touch-action:manipulation!important;flex:0 0 auto!important}.nav-label{pointer-events:none}@media(max-width:700px){html,body{max-width:100%;overflow-x:hidden}.main{width:100%!important;margin-left:0!important;padding-bottom:96px!important}.sidebar{max-width:100vw}.nav{max-width:100%;min-width:0}}';
+  document.head.appendChild(s);
+}
+
+function boot(){
+  installResponsiveSafetyStyle();
+  repairShellVisibility();
+  ensureChurchNav();
+  removeDuplicateProfileButtons();
+  bindNav();
+  const app=$('#app');
+  if(app&&!app.dataset.vccfNavObserved){
+    app.dataset.vccfNavObserved='1';
+    new MutationObserver(()=>{
+      if(app.classList.contains('active')){
+        ensureChurchNav();
+        removeDuplicateProfileButtons();
+        bindNav();
+        if(!$('.main .view.active'))showView('dashboard',$('.nav button[data-view="dashboard"]'));
+      }
+      repairShellVisibility();
+    }).observe(app,{attributes:true,attributeFilter:['class'],childList:true,subtree:true});
+  }
+}
+
+window.addEventListener('error',()=>setTimeout(repairShellVisibility,0));
+window.addEventListener('unhandledrejection',()=>setTimeout(repairShellVisibility,0));
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+window.addEventListener('load',boot);
+window.addEventListener('vccf-authenticated',()=>setTimeout(boot,0));
+window.addEventListener('vccf-app-ready',()=>setTimeout(boot,0));
 })();
