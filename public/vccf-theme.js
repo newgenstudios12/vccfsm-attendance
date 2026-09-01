@@ -1,6 +1,6 @@
 (() => {
-  if (window.__VCCF_THEME_PERSIST_V3__) return;
-  window.__VCCF_THEME_PERSIST_V3__ = true;
+  if (window.__VCCF_THEME_PERSIST_V4__) return;
+  window.__VCCF_THEME_PERSIST_V4__ = true;
 
   const valid = v => v === 'dark' || v === 'light';
   let client = null;
@@ -9,6 +9,10 @@
   let saving = false;
   let queued = null;
   let lastSaved = null;
+
+  function appActive() {
+    return !!document.getElementById('app')?.classList.contains('active');
+  }
 
   function getClient() {
     if (client) return client;
@@ -129,7 +133,7 @@
       }
     }
 
-    if (!document.getElementById('vccfTopThemeToggle')) {
+    if (appActive() && !document.getElementById('vccfTopThemeToggle')) {
       const topbar = document.querySelector('.topbar');
       if (topbar) {
         const b = makeThemeButton('vccfTopThemeToggle');
@@ -143,9 +147,11 @@
   }
 
   function watchThemeChanges() {
+    if (document.documentElement.dataset.vccfThemeWatcher === '1') return;
+    document.documentElement.dataset.vccfThemeWatcher = '1';
     const observer = new MutationObserver(() => {
       updateThemeButtons();
-      if (ready) saveTheme(currentTheme());
+      if (ready && appActive()) saveTheme(currentTheme());
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
@@ -186,6 +192,7 @@
   }
 
   function patchAddressField() {
+    if (!appActive()) return;
     const input = document.getElementById('mAddress');
     if (!input || input.dataset.barangayPatched) return;
     const old = input.value || '';
@@ -225,17 +232,14 @@
         normalizedOld.toLowerCase() === `${b}, santa maria`.toLowerCase() ||
         normalizedOld.toLowerCase() === `${b}, santa maria, laguna`.toLowerCase()
       );
-      if (match) {
-        select.value = `${match}, Santa Maria`;
-      } else {
-        select.value = 'Others';
-        other.value = normalizedOld;
-      }
+      if (match) select.value = `${match}, Santa Maria`;
+      else { select.value = 'Others'; other.value = normalizedOld; }
       syncOthers();
     }
   }
 
   function saveAddressAfterMemberSubmit() {
+    if (!appActive()) return;
     const form = document.getElementById('memberForm');
     const select = document.getElementById('mAddress');
     if (!form || !select || form.dataset.addressSavePatched) return;
@@ -250,10 +254,8 @@
       const areaText = document.getElementById('mArea')?.value || '';
       setTimeout(async () => {
         try {
-          const c = getClient(); if (!c) return;
-          const existing = typeof db !== 'undefined'
-            ? (db.members || []).find(m => m.name === name && m.birthday === birthday && m.area === areaText)
-            : null;
+          const c = getClient(); if (!c || !appActive()) return;
+          const existing = typeof db !== 'undefined' ? (db.members || []).find(m => m.name === name && m.birthday === birthday && m.area === areaText) : null;
           if (existing?.id) {
             const r = await c.from('members').update({address}).eq('id', existing.id);
             if (r.error) console.warn('Address save:', r.error);
@@ -269,20 +271,20 @@
   }
 
   function observeMemberModal() {
+    if (!appActive()) return;
     const modal = document.getElementById('modal');
-    if (!modal) return;
-    if (modal.dataset.vccfAddressObserver) return;
+    if (!modal || modal.dataset.vccfAddressObserver) return;
     modal.dataset.vccfAddressObserver = '1';
     const observer = new MutationObserver(() => {
+      if (!appActive()) return;
       patchAddressField();
       saveAddressAfterMemberSubmit();
     });
     observer.observe(modal, {subtree:true, childList:true});
-    setInterval(() => { patchAddressField(); saveAddressAfterMemberSubmit(); }, 500);
   }
 
   function loadChurchManagementSuite() {
-    if (window.__VCCF_CHURCH_SUITE_LOADER__) return;
+    if (!appActive() || window.__VCCF_CHURCH_SUITE_LOADER__) return;
     window.__VCCF_CHURCH_SUITE_LOADER__ = true;
     const files = ['/vccf-church-management-suite.js','/vccf-church-management-suite-patch.js'];
     files.forEach((src, i) => {
@@ -295,24 +297,43 @@
     });
   }
 
-  function startEnhancements() {
+  function startLoginEnhancements() {
     installThemeButtons();
     enableUsernameLogin();
-    observeMemberModal();
     watchThemeChanges();
     syncLogos(currentTheme());
+  }
+
+  function startAppEnhancements() {
+    if (!appActive()) return;
+    installThemeButtons();
+    observeMemberModal();
     loadChurchManagementSuite();
   }
 
   async function start() {
-    startEnhancements();
-    await loadTheme();
-    installThemeButtons();
-    updateThemeButtons();
+    applyTheme(valid(localStorage.getItem('vccf-theme')) ? localStorage.getItem('vccf-theme') : 'light');
+    startLoginEnhancements();
+    if (appActive()) {
+      await loadTheme();
+      startAppEnhancements();
+    }
     const c = getClient();
-    c?.auth?.onAuthStateChange(() => setTimeout(() => {
-      loadTheme().then(installThemeButtons);
+    c?.auth?.onAuthStateChange(() => setTimeout(async () => {
+      if (appActive()) {
+        await loadTheme();
+        startAppEnhancements();
+        installThemeButtons();
+      } else {
+        ready = false;
+        updateThemeButtons();
+      }
     }, 0));
+    window.addEventListener('vccf-authenticated', () => setTimeout(async () => {
+      if (!appActive()) return;
+      await loadTheme();
+      startAppEnhancements();
+    }, 50), {once:false});
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
