@@ -1,19 +1,20 @@
 (()=>{
 'use strict';
-if(window.__VCCF_NAV_FINAL_FIX_V2__)return;
-window.__VCCF_NAV_FINAL_FIX_V2__=true;
+if(window.__VCCF_NAV_FINAL_FIX_V3__)return;
+window.__VCCF_NAV_FINAL_FIX_V3__=true;
 
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
-const labels={dashboard:'Dashboard',members:'Members',attendance:'Attendance',selfcheck:'Self Check-In',gallery:'Gallery',about:'About VCCF',settings:'Settings',analytics:'Analytics',events:'Events',notifications:'Notifications',profile:'My Profile',sermons:'Sermons', 'church-management':'Church Management'};
+const labels={dashboard:'Dashboard',members:'Members',attendance:'Attendance',selfcheck:'Self Check-In',gallery:'Gallery',about:'About VCCF',settings:'Settings',analytics:'Analytics',events:'Events',notifications:'Notifications',profile:'My Profile',sermons:'Sermons','church-management':'Church Management'};
 const ids={dashboard:'dashboard',members:'members',attendance:'attendance',selfcheck:'selfcheck',gallery:'gallery',about:'about',settings:'settings',analytics:'suite2-analytics',events:'suite2-events',notifications:'suite2-notifications',profile:'suite2-profile',sermons:'sermons'};
+const textOf=(el)=>(String(el?.textContent||'').replace(/\s+/g,' ').trim().toLowerCase());
 
 function setTitle(v){const t=$('#pageTitle');if(t&&labels[v])t.textContent=labels[v]}
 function markActive(btn){$$('.nav button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active')}
-function closeDrawer(){document.body.classList.remove('vccf-mobile-drawer-open');$('.vccf-mobile-backdrop')?.classList.remove('open');$('.sidebar')?.classList.remove('vccf-drawer-open')}
+function closeDrawer(){$('body')?.classList.remove('vccf-mobile-drawer-open');$('.vccf-mobile-backdrop')?.classList.remove('open');$('.sidebar')?.classList.remove('vccf-drawer-open')}
 
 function showView(view,button){
-  if(view==='church-management') return showChurchManagement(button);
+  if(view==='church-management')return showChurchManagement(button);
   const target=$(('#'+(ids[view]||view)));
   if(!target)return false;
   $$('.main .view').forEach(v=>v.classList.remove('active'));
@@ -33,7 +34,7 @@ function ensureChurchSuiteLoader(){
   if($('script[data-vccf-church-suite-loader="1"]')||window.__VCCF_CHURCH_SUITE_LOADER__)return;
   window.__VCCF_CHURCH_SUITE_LOADER__=true;
   const s=document.createElement('script');
-  s.src='/vccf-church-management-suite.js?v=final3';
+  s.src='/vccf-church-management-suite.js?v=final4';
   s.async=false;
   s.dataset.vccfChurchSuiteLoader='1';
   document.head.appendChild(s);
@@ -63,11 +64,11 @@ function ensureChurchManagement(){
 }
 
 function showChurchManagement(button){
-  let hub=ensureChurchManagement();
+  const hub=ensureChurchManagement();
   if(!hub){ensureChurchSuiteLoader();return false}
   $$('.main .view').forEach(v=>v.classList.remove('active'));
   hub.classList.add('active');
-  markActive(button||$('.nav [data-vccf-church-nav="1"]'));
+  markActive(button||$('.nav [data-vccf-church-nav="1"]')||$('.nav [data-suite-nav]'));
   setTitle('church-management');
   closeDrawer();
   ensureChurchSuiteLoader();
@@ -90,30 +91,36 @@ function ensureChurchNav(){
   return b;
 }
 
-function bindNav(){
+function removeDuplicateChurchAttendance(){
   const nav=$('.nav');
-  if(!nav||nav.dataset.vccfNavV2Bound==='1')return;
-  nav.dataset.vccfNavV2Bound='1';
-  nav.addEventListener('click',e=>{
-    const b=e.target.closest?.('button');
-    if(!b||!nav.contains(b))return;
-    const view=b.dataset.view||b.dataset.suiteV2||b.dataset.vccfCoreNav;
-    if(!view)return;
-    if(view==='church-management'){e.preventDefault();e.stopPropagation();showChurchManagement(b);return}
-    if(ids[view]||$('#'+view)||$('#suite2-'+view)){e.preventDefault();e.stopPropagation();showView(view,b)}
-  },true);
+  if(!nav)return;
+  const items=$$('button,a',nav);
+  const churchAttendance=items.filter(el=>{
+    const text=textOf(el);
+    const view=String(el.dataset?.view||'').toLowerCase();
+    return text==='church attendance' || view==='church-attendance' || view==='churchattendance';
+  });
+  if(churchAttendance.length>1){
+    churchAttendance.slice(1).forEach(el=>el.remove());
+  }
+
+  // Also collapse duplicate generic attendance entries when both point to the same view.
+  const attendance=Array.from(nav.querySelectorAll('button[data-view="attendance"],a[data-view="attendance"]'));
+  if(attendance.length>1)attendance.slice(1).forEach(el=>el.remove());
 }
 
 function removeDuplicateProfileButtons(){
   const nav=$('.nav');
   if(!nav)return;
   const items=$$('button,a',nav).filter(el=>{
-    const text=String(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const text=textOf(el);
     const view=String(el.dataset?.view||'').toLowerCase();
     return text==='my profile'||view==='myprofile'||view==='my-profile'||view==='profile';
   });
   if(items.length>1)items.slice(1).forEach(x=>x.remove());
 }
+
+function dedupeNavigation(){removeDuplicateChurchAttendance();removeDuplicateProfileButtons();}
 
 function repairShellVisibility(){
   const login=$('#login'),app=$('#app');
@@ -133,9 +140,9 @@ function repairShellVisibility(){
 }
 
 function installResponsiveSafetyStyle(){
-  if($('#vccf-nav-final-v2-style'))return;
+  if($('#vccf-nav-final-v3-style'))return;
   const s=document.createElement('style');
-  s.id='vccf-nav-final-v2-style';
+  s.id='vccf-nav-final-v3-style';
   s.textContent='.nav{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important}.nav button{pointer-events:auto!important;touch-action:manipulation!important;flex:0 0 auto!important}.nav-label{pointer-events:none}@media(max-width:700px){html,body{max-width:100%;overflow-x:hidden}.main{width:100%!important;margin-left:0!important;padding-bottom:96px!important}.sidebar{max-width:100vw}.nav{max-width:100%;min-width:0}}';
   document.head.appendChild(s);
 }
@@ -144,7 +151,7 @@ function boot(){
   installResponsiveSafetyStyle();
   repairShellVisibility();
   ensureChurchNav();
-  removeDuplicateProfileButtons();
+  dedupeNavigation();
   bindNav();
   const app=$('#app');
   if(app&&!app.dataset.vccfNavObserved){
@@ -152,13 +159,27 @@ function boot(){
     new MutationObserver(()=>{
       if(app.classList.contains('active')){
         ensureChurchNav();
-        removeDuplicateProfileButtons();
+        dedupeNavigation();
         bindNav();
         if(!$('.main .view.active'))showView('dashboard',$('.nav button[data-view="dashboard"]'));
       }
       repairShellVisibility();
     }).observe(app,{attributes:true,attributeFilter:['class'],childList:true,subtree:true});
   }
+}
+
+function bindNav(){
+  const nav=$('.nav');
+  if(!nav||nav.dataset.vccfNavV3Bound==='1')return;
+  nav.dataset.vccfNavV3Bound='1';
+  nav.addEventListener('click',e=>{
+    const b=e.target.closest?.('button');
+    if(!b||!nav.contains(b))return;
+    const view=b.dataset.view||b.dataset.suiteV2||b.dataset.vccfCoreNav;
+    if(!view)return;
+    if(view==='church-management'){e.preventDefault();e.stopPropagation();showChurchManagement(b);return}
+    if(ids[view]||$('#'+view)||$('#suite2-'+view)){e.preventDefault();e.stopPropagation();showView(view,b)}
+  },true);
 }
 
 window.addEventListener('error',()=>setTimeout(repairShellVisibility,0));
