@@ -1,10 +1,10 @@
 (()=>{
 'use strict';
-if(window.__VCCF_PRO_SUITE_V5__)return;
-window.__VCCF_PRO_SUITE_V5__=true;
+if(window.__VCCF_PRO_SUITE_V6__)return;
+window.__VCCF_PRO_SUITE_V6__=true;
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
-const toast=m=>{const t=$('#toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(window.__vccfProToast);window.__vccfProToast=setTimeout(()=>t.classList.remove('show'),2600)};
+const toast=m=>{const t=$('#toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(window.__vccfProToast);window.__vccfProToastTimer=setTimeout(()=>t.classList.remove('show'),2600)};
 const css=`.vccf-online{position:fixed;right:14px;top:14px;z-index:150;padding:8px 11px;border-radius:999px;border:1px solid rgba(25,135,84,.18);background:#ecfdf3;color:#027a48;font-size:.72rem;font-weight:800;box-shadow:0 8px 22px rgba(16,24,40,.09)}.vccf-online.offline{border-color:#f3d2d2;background:#fff5f5;color:#b42318}.vccf-install{display:none}.vccf-install.show{display:flex!important}.vccf-pro-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}.vccf-pro-search{flex:1 1 260px;min-width:220px;max-width:520px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:13px;padding:12px 14px;outline:none}.vccf-command-hint{font-size:.7rem;color:var(--muted)}.vccf-pro-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.vccf-pro-action{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:15px;padding:13px;text-align:left;font-weight:800;display:flex;gap:10px;align-items:center}.vccf-pro-action small{display:block;color:var(--muted);font-weight:600;margin-top:2px}@media(max-width:900px){.vccf-pro-quick{grid-template-columns:1fr 1fr}}@media(max-width:600px){.vccf-pro-search{min-width:0;max-width:none;flex-basis:100%}.vccf-pro-quick{grid-template-columns:1fr}}`;
 function cssOnce(){if($('#vccf-pro-style'))return;const s=document.createElement('style');s.id='vccf-pro-style';s.textContent=css;document.head.appendChild(s)}
 function nav(view){const b=$(`[data-view="${view}"]`);if(b){b.click();return true}return false}
@@ -17,6 +17,8 @@ function searchBar(){const top=$('.topbar');if(!top||$('#vccfProSearch'))return;
 function quickActions(){const dash=document.getElementById('dashboard');if(!dash||!$('#app')?.classList.contains('active')||$('#vccfProQuick',dash))return;const wrap=document.createElement('div');wrap.id='vccfProQuick';wrap.className='vccf-pro-quick';wrap.innerHTML='<button class="vccf-pro-action" data-pro="attendance"><span>✓</span><span><b>Take attendance</b><small>Open QR/manual check-in</small></span></button><button class="vccf-pro-action" data-pro="members"><span>♙</span><span><b>Manage members</b><small>Search member profiles</small></span></button><button class="vccf-pro-action" data-pro="settings"><span>⚙</span><span><b>Open settings</b><small>Account and app controls</small></span></button>';dash.appendChild(wrap);wrap.onclick=e=>{const b=e.target.closest('[data-pro]');if(b)nav(b.dataset.pro)}}
 function boot(){if(!$('#app')?.classList.contains('active'))return;cssOnce();offlineIndicator();installButton();searchBar();quickActions()}
 function start(){if($('#app')?.classList.contains('active'))boot()}
+function ensureStableLogin(){if(document.getElementById('vccfLoginStabilizer'))return;const s=document.createElement('script');s.id='vccfLoginStabilizer';s.src='/vccf-login-stabilizer.js?v=1';s.async=false;document.head.appendChild(s)}
+ensureStableLogin();
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 window.addEventListener('vccf-authenticated',()=>setTimeout(boot,0),{once:true});
 window.__VCCF_PRO_SUITE_BOOT__=boot;
