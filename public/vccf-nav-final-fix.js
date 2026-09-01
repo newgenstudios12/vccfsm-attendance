@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
-if(window.__VCCF_NAV_FINAL_FIX_V4__)return;
-window.__VCCF_NAV_FINAL_FIX_V4__=true;
+if(window.__VCCF_NAV_FINAL_FIX_V5__)return;
+window.__VCCF_NAV_FINAL_FIX_V5__=true;
 
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
@@ -31,26 +31,11 @@ function showView(view,button){
 }
 
 function ensureChurchSuiteLoader(){
-  if($('script[data-vccf-church-suite-loader="1"]')||window.__VCCF_CHURCH_SUITE_LOADER__)return;
-  window.__VCCF_CHURCH_SUITE_LOADER__=true;
+  if($('script[data-vccf-church-suite-loader="1"]'))return;
   const s=document.createElement('script');
-  s.src='/vccf-church-management-suite.js?v=final5';
+  s.src='/vccf-church-management-suite.js?v=final6';
   s.async=false;
   s.dataset.vccfChurchSuiteLoader='1';
-  document.head.appendChild(s);
-}
-
-function ensureSuiteAfterAuth(){
-  if(!$('#app')?.classList.contains('active'))return;
-  if($('#vccfSuite'))return;
-  const prior=$('script[data-vccf-suite-auth-reload="1"]');
-  if(prior)return;
-  if(window.__VCCF_CHURCH_SUITE__)delete window.__VCCF_CHURCH_SUITE__;
-  const s=document.createElement('script');
-  s.src='/vccf-church-management-suite.js?authboot='+Date.now();
-  s.async=false;
-  s.dataset.vccfSuiteAuthReload='1';
-  s.onload=()=>setTimeout(()=>window.__VCCF_NAV_REPAIR__?.(),50);
   document.head.appendChild(s);
 }
 
@@ -58,22 +43,12 @@ function ensureChurchManagement(){
   const main=$('.main');
   if(!main)return null;
   let hub=$('#churchSuiteView');
-  if(!hub)hub=$('#suite2-church-management');
   if(hub)return hub;
   hub=document.createElement('section');
   hub.id='churchSuiteView';
   hub.className='view';
-  hub.innerHTML='<div class="suite-shell"><div class="suite-toolbar"><div><div class="suite-muted">VCCF administration</div><h3 style="margin:4px 0">Church Management</h3></div></div><div class="suite-card"><div class="suite-muted" style="margin-bottom:12px">Manage church operations from one place.</div><div class="nav-hub-grid"><button type="button" class="btn" data-hub-view="analytics">◔ Analytics</button><button type="button" class="btn" data-hub-view="events">▣ Events</button><button type="button" class="btn" data-hub-view="notifications">● Notifications</button><button type="button" class="btn" data-hub-view="profile">◉ My Profile</button><button type="button" class="btn" data-hub-view="giving">₱ Tithes &amp; Offerings</button></div></div></section>';
+  hub.innerHTML='<div id="vccfSuite"></div>';
   main.appendChild(hub);
-  hub.querySelectorAll('[data-hub-view]').forEach(b=>b.addEventListener('click',()=>{
-    const v=b.dataset.hubView;
-    const target=$('#suite2-'+v)||$('#'+v);
-    if(target){$$('.main .view').forEach(x=>x.classList.remove('active'));target.classList.add('active');setTitle(v);return}
-    if(v==='giving'){
-      const giving=$('#suite2-giving')||$('#giving');
-      if(giving){$$('.main .view').forEach(x=>x.classList.remove('active'));giving.classList.add('active');setTitle('church-management')}
-    }
-  }));
   return hub;
 }
 
@@ -85,7 +60,6 @@ function showChurchManagement(button){
   markActive(button||$('.nav [data-vccf-church-nav="1"]')||$('.nav [data-suite-nav]'));
   setTitle('church-management');
   closeDrawer();
-  ensureSuiteAfterAuth();
   ensureChurchSuiteLoader();
   return true;
 }
@@ -151,40 +125,17 @@ function repairShellVisibility(){
 }
 
 function installResponsiveSafetyStyle(){
-  if($('#vccf-nav-final-v4-style'))return;
+  if($('#vccf-nav-final-v5-style'))return;
   const s=document.createElement('style');
-  s.id='vccf-nav-final-v4-style';
+  s.id='vccf-nav-final-v5-style';
   s.textContent='.nav{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important}.nav button{pointer-events:auto!important;touch-action:manipulation!important;flex:0 0 auto!important}.nav-label{pointer-events:none}@media(max-width:700px){html,body{max-width:100%;overflow-x:hidden}.main{width:100%!important;margin-left:0!important;padding-bottom:96px!important}.sidebar{max-width:100vw}.nav{max-width:100%;min-width:0}}';
   document.head.appendChild(s);
 }
 
-function boot(){
-  installResponsiveSafetyStyle();
-  repairShellVisibility();
-  if($('#app')?.classList.contains('active'))ensureSuiteAfterAuth();
-  ensureChurchNav();
-  dedupeNavigation();
-  bindNav();
-  const app=$('#app');
-  if(app&&!app.dataset.vccfNavObserved){
-    app.dataset.vccfNavObserved='1';
-    new MutationObserver(()=>{
-      if(app.classList.contains('active')){
-        ensureSuiteAfterAuth();
-        ensureChurchNav();
-        dedupeNavigation();
-        bindNav();
-        if(!$('.main .view.active'))showView('dashboard',$('.nav button[data-view="dashboard"]'));
-      }
-      repairShellVisibility();
-    }).observe(app,{attributes:true,attributeFilter:['class'],childList:true,subtree:true});
-  }
-}
-
 function bindNav(){
   const nav=$('.nav');
-  if(!nav||nav.dataset.vccfNavV4Bound==='1')return;
-  nav.dataset.vccfNavV4Bound='1';
+  if(!nav||nav.dataset.vccfNavV5Bound==='1')return;
+  nav.dataset.vccfNavV5Bound='1';
   nav.addEventListener('click',e=>{
     const b=e.target.closest?.('button');
     if(!b||!nav.contains(b))return;
@@ -195,9 +146,26 @@ function bindNav(){
   },true);
 }
 
+function boot(){
+  installResponsiveSafetyStyle();
+  repairShellVisibility();
+  ensureChurchNav();
+  dedupeNavigation();
+  bindNav();
+  const app=$('#app');
+  if(app&&!app.dataset.vccfNavVisibilityObserved){
+    app.dataset.vccfNavVisibilityObserved='1';
+    new MutationObserver(()=>repairShellVisibility()).observe(app,{attributes:true,attributeFilter:['class']});
+  }
+  const nav=$('.nav');
+  if(nav&&!nav.dataset.vccfNavDedupeObserved){
+    nav.dataset.vccfNavDedupeObserved='1';
+    new MutationObserver(()=>{ensureChurchNav();dedupeNavigation();bindNav();}).observe(nav,{childList:true});
+  }
+}
+
 window.addEventListener('error',()=>setTimeout(repairShellVisibility,0));
 window.addEventListener('unhandledrejection',()=>setTimeout(repairShellVisibility,0));
-
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.addEventListener('load',boot);
 window.addEventListener('vccf-authenticated',()=>setTimeout(boot,80));
