@@ -5,6 +5,26 @@ window.__VCCF_DASHBOARD_LOADER_V25__=true;
 const stamp='202609011840';
 const usernameEmail=value=>{const raw=String(value||'').trim().toLowerCase();if(!raw)return '';if(raw.includes('@'))return raw;const u=raw.replace(/[^a-z0-9._-]/g,'').replace(/^[-_.]+|[-_.]+$/g,'');return u?`${u}@vccf.local`:'';};
 const timeout=(promise,ms)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Authentication service did not respond. Please check your connection and try again.')),ms))]);
+async function directPasswordLogin(email,password){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),12000);
+  try{
+    const response=await fetch(`${window.VCCF_SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{apikey:window.VCCF_SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({email,password}),
+      signal:controller.signal
+    });
+    let body={};
+    try{body=await response.json()}catch{}
+    if(!response.ok)throw new Error(body.error_description||body.msg||body.message||'Invalid username/email or password.');
+    if(!body.access_token||!body.refresh_token||!body.user)throw new Error('Authentication returned an incomplete session.');
+    return body;
+  }catch(err){
+    if(err?.name==='AbortError')throw new Error('Sign-in request timed out. Please check your connection and try again.');
+    throw err;
+  }finally{clearTimeout(timer)}
+}
 function showLoginMessage(text,ok=false){const form=document.getElementById('loginForm');if(!form)return;let box=document.getElementById('vccfLoginError');if(!box){box=document.createElement('div');box.id='vccfLoginError';box.setAttribute('role','status');box.setAttribute('aria-live','polite');box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;font-size:.85rem;line-height:1.45;white-space:pre-wrap';form.appendChild(box)}box.style.background=ok?'#ecfdf3':'#fff1f1';box.style.color=ok?'#027a48':'#b42318';box.textContent=text;box.style.display='block';}
 function enforceLoginHitArea(){
   const login=document.getElementById('login');
@@ -56,17 +76,19 @@ async function handleLogin(event){
     if(!raw||!password)throw new Error('Please enter your username/email and password.');
     if(!email)throw new Error('Please enter a valid username or email.');
     if(!window.supabase?.createClient)throw new Error('Authentication service is unavailable. Please refresh the page.');
+    if(!window.VCCF_SUPABASE_URL||!window.VCCF_SUPABASE_PUBLISHABLE_KEY)throw new Error('Supabase configuration is missing.');
     if(btn){btn.disabled=true;btn.textContent='Signing in…';}
-    const client=window.supabase.createClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
-    const {data,error}=await timeout(client.auth.signInWithPassword({email,password}),12000);
-    if(error)throw new Error(error.message||'Invalid username/email or password.');
-    const user=data?.user;
+    const authBody=await directPasswordLogin(email,password);
+    const user=authBody.user;
     if(!user)throw new Error('Authentication succeeded but no session was returned.');
+    const client=window.supabase.createClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
+    const sessionResult=await timeout(client.auth.setSession({access_token:authBody.access_token,refresh_token:authBody.refresh_token}),8000);
+    if(sessionResult?.error)throw new Error(`Session setup failed: ${sessionResult.error.message}`);
     const login=document.getElementById('login'),app=document.getElementById('app');
-    if(login){releaseLoginHitArea();login.classList.add('hidden');login.style.display='none';login.setAttribute('aria-hidden','true');}
-    if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden');}
     const temp={username:email,name:user.user_metadata?.display_name||user.email||raw,role:'Member',area:'',areaId:null,memberId:null,memberCode:null};
     window.session=temp;try{session=temp}catch{}
+    if(login){releaseLoginHitArea();login.classList.add('hidden');login.style.display='none';login.setAttribute('aria-hidden','true');}
+    if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden');}
     const nameEl=document.getElementById('currentName');if(nameEl)nameEl.textContent=temp.name;
     const roleEl=document.getElementById('currentRole');if(roleEl)roleEl.textContent='Member';
     const avatar=document.getElementById('avatar');if(avatar)avatar.textContent=(temp.name||'M').charAt(0).toUpperCase();
@@ -89,6 +111,12 @@ async function handleLogin(event){
           if(avatar)avatar.textContent=(next.name||'M').charAt(0).toUpperCase();
           if(accountInfo)accountInfo.textContent=next.name+' · '+next.role;
           window.dispatchEvent(new CustomEvent('vccf-profile-ready',{detail:{user,profile:p}}));
+        }
+        if(typeof window.loadDb==='function'){
+          try{
+            await timeout(Promise.resolve().then(()=>window.loadDb()),15000);
+            if(typeof window.refresh==='function')window.refresh();
+          }catch(err){console.warn('VCCF deferred dashboard load:',err)}
         }
       }catch(err){console.warn('VCCF deferred profile load:',err)}
     },0);
