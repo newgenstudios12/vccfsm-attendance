@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
-if(window.__VCCF_NAV_FINAL_FIX_V3__)return;
-window.__VCCF_NAV_FINAL_FIX_V3__=true;
+if(window.__VCCF_NAV_FINAL_FIX_V4__)return;
+window.__VCCF_NAV_FINAL_FIX_V4__=true;
 
 const $=(s,r=document)=>r.querySelector(s);
 const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
@@ -34,9 +34,23 @@ function ensureChurchSuiteLoader(){
   if($('script[data-vccf-church-suite-loader="1"]')||window.__VCCF_CHURCH_SUITE_LOADER__)return;
   window.__VCCF_CHURCH_SUITE_LOADER__=true;
   const s=document.createElement('script');
-  s.src='/vccf-church-management-suite.js?v=final4';
+  s.src='/vccf-church-management-suite.js?v=final5';
   s.async=false;
   s.dataset.vccfChurchSuiteLoader='1';
+  document.head.appendChild(s);
+}
+
+function ensureSuiteAfterAuth(){
+  if(!$('#app')?.classList.contains('active'))return;
+  if($('#vccfSuite'))return;
+  const prior=$('script[data-vccf-suite-auth-reload="1"]');
+  if(prior)return;
+  if(window.__VCCF_CHURCH_SUITE__)delete window.__VCCF_CHURCH_SUITE__;
+  const s=document.createElement('script');
+  s.src='/vccf-church-management-suite.js?authboot='+Date.now();
+  s.async=false;
+  s.dataset.vccfSuiteAuthReload='1';
+  s.onload=()=>setTimeout(()=>window.__VCCF_NAV_REPAIR__?.(),50);
   document.head.appendChild(s);
 }
 
@@ -71,6 +85,7 @@ function showChurchManagement(button){
   markActive(button||$('.nav [data-vccf-church-nav="1"]')||$('.nav [data-suite-nav]'));
   setTitle('church-management');
   closeDrawer();
+  ensureSuiteAfterAuth();
   ensureChurchSuiteLoader();
   return true;
 }
@@ -100,11 +115,7 @@ function removeDuplicateChurchAttendance(){
     const view=String(el.dataset?.view||'').toLowerCase();
     return text==='church attendance' || view==='church-attendance' || view==='churchattendance';
   });
-  if(churchAttendance.length>1){
-    churchAttendance.slice(1).forEach(el=>el.remove());
-  }
-
-  // Also collapse duplicate generic attendance entries when both point to the same view.
+  if(churchAttendance.length>1)churchAttendance.slice(1).forEach(el=>el.remove());
   const attendance=Array.from(nav.querySelectorAll('button[data-view="attendance"],a[data-view="attendance"]'));
   if(attendance.length>1)attendance.slice(1).forEach(el=>el.remove());
 }
@@ -140,9 +151,9 @@ function repairShellVisibility(){
 }
 
 function installResponsiveSafetyStyle(){
-  if($('#vccf-nav-final-v3-style'))return;
+  if($('#vccf-nav-final-v4-style'))return;
   const s=document.createElement('style');
-  s.id='vccf-nav-final-v3-style';
+  s.id='vccf-nav-final-v4-style';
   s.textContent='.nav{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important}.nav button{pointer-events:auto!important;touch-action:manipulation!important;flex:0 0 auto!important}.nav-label{pointer-events:none}@media(max-width:700px){html,body{max-width:100%;overflow-x:hidden}.main{width:100%!important;margin-left:0!important;padding-bottom:96px!important}.sidebar{max-width:100vw}.nav{max-width:100%;min-width:0}}';
   document.head.appendChild(s);
 }
@@ -150,6 +161,7 @@ function installResponsiveSafetyStyle(){
 function boot(){
   installResponsiveSafetyStyle();
   repairShellVisibility();
+  if($('#app')?.classList.contains('active'))ensureSuiteAfterAuth();
   ensureChurchNav();
   dedupeNavigation();
   bindNav();
@@ -158,6 +170,7 @@ function boot(){
     app.dataset.vccfNavObserved='1';
     new MutationObserver(()=>{
       if(app.classList.contains('active')){
+        ensureSuiteAfterAuth();
         ensureChurchNav();
         dedupeNavigation();
         bindNav();
@@ -170,8 +183,8 @@ function boot(){
 
 function bindNav(){
   const nav=$('.nav');
-  if(!nav||nav.dataset.vccfNavV3Bound==='1')return;
-  nav.dataset.vccfNavV3Bound='1';
+  if(!nav||nav.dataset.vccfNavV4Bound==='1')return;
+  nav.dataset.vccfNavV4Bound='1';
   nav.addEventListener('click',e=>{
     const b=e.target.closest?.('button');
     if(!b||!nav.contains(b))return;
@@ -187,6 +200,7 @@ window.addEventListener('unhandledrejection',()=>setTimeout(repairShellVisibilit
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.addEventListener('load',boot);
-window.addEventListener('vccf-authenticated',()=>setTimeout(boot,0));
-window.addEventListener('vccf-app-ready',()=>setTimeout(boot,0));
+window.addEventListener('vccf-authenticated',()=>setTimeout(boot,80));
+window.addEventListener('vccf-app-ready',()=>setTimeout(boot,80));
+window.__VCCF_NAV_REPAIR__=boot;
 })();
