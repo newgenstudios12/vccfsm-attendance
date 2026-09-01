@@ -13,22 +13,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Link account/profile/navigation script
+      - name: Link account/profile/navigation enhancements
         shell: python
         run: |
           from pathlib import Path
           path = Path('public/index.html')
           text = path.read_text(encoding='utf-8')
-          marker = 'VCCF_ACCOUNT_PROFILE_NAV_V1'
-          if marker in text:
-              print('Account/profile navigation script already linked.')
-              raise SystemExit(0)
-          needle = '<script src="/vccf-member-controls.js"></script>'
-          link = needle + '\n<!-- VCCF_ACCOUNT_PROFILE_NAV_V1 -->\n<script src="/vccf-account-profile-nav.js"></script>'
-          if needle not in text:
-              raise SystemExit('Could not find member controls script tag.')
-          text = text.replace(needle, link, 1)
-          path.write_text(text, encoding='utf-8')
+          changed = False
+
+          account_marker = 'VCCF_ACCOUNT_PROFILE_NAV_V1'
+          if account_marker not in text:
+              needle = '<script src="/vccf-member-controls.js"></script>'
+              link = needle + '\n<!-- VCCF_ACCOUNT_PROFILE_NAV_V1 -->\n<script src="/vccf-account-profile-nav.js"></script>'
+              if needle not in text:
+                  raise SystemExit('Could not find member controls script tag.')
+              text = text.replace(needle, link, 1)
+              changed = True
+
+          nav_marker = 'VCCF_NAV_FINAL_FIX_V1'
+          if nav_marker not in text:
+              tag = '  <!-- VCCF_NAV_FINAL_FIX_V1 -->\n  <script src="/vccf-nav-final-fix.js"></script>\n'
+              end = '</body>'
+              if end not in text:
+                  raise SystemExit('index.html has no </body> marker')
+              text = text.replace(end, tag + end, 1)
+              changed = True
+
+          if changed:
+              path.write_text(text, encoding='utf-8')
+          else:
+              print('Navigation enhancements already linked.')
 
       - name: Commit link
         shell: bash
@@ -37,5 +51,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add public/index.html
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'Link account profile and navigation enhancement'
+          git commit -m 'Link account profile and resilient navigation enhancements'
           git push
