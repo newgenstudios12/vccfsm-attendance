@@ -1,0 +1,69 @@
+name: Patch config Supabase client singleton
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.patch-config-singleton-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch config to reuse the existing browser singleton
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('public/vccf-config.js')
+          s=p.read_text(encoding='utf-8')
+          key=re.search(r"window\.VCCF_SUPABASE_PUBLISHABLE_KEY\s*=\s*'([^']+)'", s)
+          if not key:
+              raise SystemExit('Supabase API key not found')
+          original_key=key.group(1)
+          old="const client=originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);"
+          new="const client=window.__VCCF_SHARED_SUPABASE_CLIENT__ || originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);"
+          if old not in s:
+              if new in s:
+                  print('Singleton client patch already present.')
+              else:
+                  raise SystemExit('Expected config client initialization was not found; refusing unsafe edit.')
+          else:
+              s=s.replace(old,new,1)
+          key2=re.search(r"window\.VCCF_SUPABASE_PUBLISHABLE_KEY\s*=\s*'([^']+)'", s)
+          if not key2 or key2.group(1)!=original_key:
+              raise SystemExit('API key changed unexpectedly; refusing commit.')
+          p.write_text(s,encoding='utf-8')
+          print('Patched config client to shared browser singleton; API key unchanged.')
+          PY
+
+      - name: Commit patch and remove temporary automation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/vccf-config.js
+          if git diff --cached --quiet; then
+            echo 'No config patch needed.'
+          else
+            git commit -m 'fix(auth): reuse browser Supabase singleton in config'
+            git push origin HEAD:main
+          fi
+          git rm -f .github/workflows/patch-config-singleton.yml .patch-config-singleton-trigger || true
+          git add -u
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'chore: remove temporary singleton patch automation'
+          git push origin HEAD:main
