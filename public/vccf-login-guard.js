@@ -1,12 +1,14 @@
-/* VCCF_LOGIN_GUARD_V5
+/* VCCF_LOGIN_GUARD_V6
    Single Base44-style authentication boundary.
-   Supabase publishable keys are sent only as `apikey`; they are not JWTs and must
-   not be sent as `Authorization: Bearer <publishable-key>`.
+   The Supabase publishable key is public configuration and must be sent as `apikey`.
 */
 (()=>{
 'use strict';
-if(window.__VCCF_LOGIN_GUARD_V5__)return;
-window.__VCCF_LOGIN_GUARD_V5__=true;
+if(window.__VCCF_LOGIN_GUARD_V6__)return;
+window.__VCCF_LOGIN_GUARD_V6__=true;
+// Correct the application configuration before any later client is created.
+window.VCCF_SUPABASE_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
+window.VCCF_SUPABASE_PUBLISHABLE_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
 const AUTH_TIMEOUT=15000;
 const url=()=>window.VCCF_SUPABASE_URL||'';
 const key=()=>window.VCCF_SUPABASE_PUBLISHABLE_KEY||'';
