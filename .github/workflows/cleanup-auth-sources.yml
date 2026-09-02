@@ -13,53 +13,49 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Remove competing login code and duplicate guard references
+      - name: Normalize authentication bootstrap
         shell: python
         run: |
           from pathlib import Path
           import re
+          index=Path('public/index.html')
+          s=index.read_text(encoding='utf-8')
+          # Remove every duplicate guard reference, then add exactly one after Supabase CDN and singleton.
+          s=re.sub(r'(?m)^\s*<script src="/vccf-login-guard\.js"></script>\s*\n?', '', s)
+          marker='<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
+          singleton='<script src="/vccf-supabase-singleton.js"></script>'
+          guard='<script src="/vccf-login-guard.js"></script>'
+          if singleton not in s:
+              s=s.replace(marker, marker+'\n'+singleton, 1)
+          anchor=singleton+'\n'+guard
+          if anchor not in s:
+              s=s.replace(singleton, anchor, 1)
+          index.write_text(s,encoding='utf-8')
 
-          index = Path('public/index.html')
-          s = index.read_text(encoding='utf-8')
+          config=Path('public/vccf-config.js')
+          c=config.read_text(encoding='utf-8')
+          marker='  // Login accepts either a normal email address or the username format used by'
+          start=c.find(marker)
+          if start>=0:
+              end_marker="\n\n  const ABOUT_PHOTO_PREFIX='__ABOUT_PERSON__:'"
+              end=c.find(end_marker,start)
+              if end<0: raise SystemExit('Login compatibility block end marker not found')
+              c=c[:start]+"  // Authentication is owned exclusively by /vccf-login-guard.js.\n"+c[end+2:]
+              config.write_text(c,encoding='utf-8')
 
-          # Keep exactly one login guard and load it before the compatibility config.
-          s = s.replace('''<script src="/vccf-config.js"></script>\n<script src="/vccf-login-guard.js"></script>''', '''<script src="/vccf-login-guard.js"></script>\n<script src="/vccf-config.js"></script>''', 1)
-          s = re.sub(r'(?:\s*<script src="/vccf-login-guard\.js"></script>){2,}', '\n<script src="/vccf-login-guard.js"></script>', s)
-          index.write_text(s, encoding='utf-8')
-
-          config = Path('public/vccf-config.js')
-          c = config.read_text(encoding='utf-8')
-          marker = "  // Login accepts either a normal email address or the username format used by"
-          start = c.find(marker)
-          if start < 0:
-              raise SystemExit('Login compatibility block marker not found')
-          end_marker = "\n\n  const ABOUT_PHOTO_PREFIX='__ABOUT_PERSON__:'"
-          end = c.find(end_marker, start)
-          if end < 0:
-              raise SystemExit('Login compatibility block end marker not found')
-          c = c[:start] + "  // Authentication is owned exclusively by /vccf-login-guard.js.\n" + c[end+2:]
-          config.write_text(c, encoding='utf-8')
-
-          # Fail the job unless the resulting source has one guard reference and no config login owner.
-          final_index = index.read_text(encoding='utf-8')
-          final_config = config.read_text(encoding='utf-8')
-          count = final_index.count('<script src="/vccf-login-guard.js"></script>')
-          if count != 1:
-              raise SystemExit(f'Expected exactly one login guard reference, found {count}')
-          if 'form.onsubmit = async' in final_config:
-              raise SystemExit('Competing config login handler is still present')
-          print('Auth source cleanup verified.')
-
-      - name: Commit source correction and remove one-time workflow
+          final=index.read_text(encoding='utf-8')
+          count=final.count(guard)
+          if count!=1: raise SystemExit(f'Expected exactly one login guard reference, found {count}')
+          if final.count(singleton)!=1: raise SystemExit('Expected exactly one Supabase singleton reference')
+          if 'form.onsubmit = async' in config.read_text(encoding='utf-8'): raise SystemExit('Competing config login handler remains')
+          print('Authentication bootstrap normalized.')
+      - name: Commit correction and remove one-time workflows
         shell: bash
         run: |
-          rm -f .github/workflows/cleanup-auth-sources.yml
+          rm -f .github/workflows/cleanup-auth-sources.yml .github/workflows/apply-console-fix.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/index.html public/vccf-config.js .github/workflows/cleanup-auth-sources.yml
-          if git diff --cached --quiet; then
-            echo "No source changes needed."
-            exit 0
-          fi
-          git commit -m "fix(auth): remove duplicate login owners [auth-cleanup]"
+          git add public/index.html public/vccf-config.js .github/workflows/cleanup-auth-sources.yml .github/workflows/apply-console-fix.yml
+          if git diff --cached --quiet; then echo "No source changes needed."; exit 0; fi
+          git commit -m "fix(auth): normalize single authentication bootstrap [auth-cleanup]"
           git push origin HEAD:main
