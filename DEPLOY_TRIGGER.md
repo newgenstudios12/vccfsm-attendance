@@ -1,3 +1,3 @@
-# Deployment trigger
+# VCCF deployment trigger
 
-Login repair trigger: restore known-good application shell and prevent sign-in from blocking on post-authentication data hydration.
+Latest authentication fix: authoritative login guard is included in `public/index.html`.
