@@ -41,6 +41,8 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77Rj2O2w_X
   window.addEventListener('DOMContentLoaded', () => setTimeout(() => {
     const form = document.getElementById('loginForm');
     if (!form) return;
+    /* VCCF_LOGIN_HANDLER_OWNERSHIP_V1: never overwrite a handler already installed by index/guard. */
+    if (form.onsubmit) return;
     const client = originalCreateClient(window.VCCF_SUPABASE_URL, window.VCCF_SUPABASE_PUBLISHABLE_KEY);
     form.onsubmit = async (e) => {
       e.preventDefault();
