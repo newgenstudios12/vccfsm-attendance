@@ -46,7 +46,10 @@ function ensureSuite(){
       ensureScript('vccfAuthoritativeSuiteLoader','/vccf-church-management-suite.js?authoritative=1');
     }
   }
-  if($('#vccfSuite'))ensureScript('vccfMemberGivingScript','/vccf-member-giving.js?authoritative=1');
+  if($('#vccfSuite')){
+    ensureScript('vccfMemberGivingScript','/vccf-member-giving.js?authoritative=1');
+    ensureScript('vccfMemberInsightsScript','/vccf-member-insights.js?authoritative=1');
+  }
 }
 function bindNav(){
   const nav=$('.sidebar .nav');if(!nav||nav.dataset.authoritativeBound==='1')return;nav.dataset.authoritativeBound='1';
