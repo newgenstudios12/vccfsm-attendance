@@ -1,1 +1,1 @@
-Production rebuild trigger after V13 session-establishment fix (2026-09-02 11:36 UTC).
+Production rebuild trigger after restoring stable app config; preserve existing API key (2026-09-02 12:12 UTC).
