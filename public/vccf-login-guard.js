@@ -1,11 +1,11 @@
-/* VCCF_LOGIN_GUARD_V7
+/* VCCF_LOGIN_GUARD_V8
    One Supabase client + one authentication boundary.
    Auth itself is allowed to establish the session; application data loads afterward.
 */
 (()=>{
 'use strict';
-if(window.__VCCF_LOGIN_GUARD_V7__)return;
-window.__VCCF_LOGIN_GUARD_V7__=true;
+if(window.__VCCF_LOGIN_GUARD_V8__)return;
+window.__VCCF_LOGIN_GUARD_V8__=true;
 
 const VCCF_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
 const VCCF_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
@@ -14,8 +14,6 @@ const AUTH_TIMEOUT=15000;
 window.VCCF_SUPABASE_URL=VCCF_URL;
 window.VCCF_SUPABASE_PUBLISHABLE_KEY=VCCF_KEY;
 
-// Create one canonical client early. Later calls made by vccf-config.js and index.html
-// are redirected to this same instance, preventing competing GoTrue auth clients.
 const supabaseApi=window.supabase;
 const nativeCreateClient=supabaseApi?.createClient;
 let canonical=window.__VCCF_AUTH_CLIENT__||null;
@@ -23,8 +21,8 @@ if(!canonical&&nativeCreateClient){
   canonical=nativeCreateClient.call(supabaseApi,VCCF_URL,VCCF_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
   window.__VCCF_AUTH_CLIENT__=canonical;
 }
-if(nativeCreateClient&&!window.__VCCF_CREATE_CLIENT_SINGLETON_V7__){
-  window.__VCCF_CREATE_CLIENT_SINGLETON_V7__=true;
+if(nativeCreateClient&&!window.__VCCF_CREATE_CLIENT_SINGLETON_V8__){
+  window.__VCCF_CREATE_CLIENT_SINGLETON_V8__=true;
   const singleton=canonical;
   supabaseApi.createClient=function(url,key,options){
     if(singleton&&url===VCCF_URL&&key===VCCF_KEY)return singleton;
@@ -121,13 +119,22 @@ const intercept=e=>{
 };
 document.addEventListener('submit',intercept,true);
 
-// Remove the inline form handler installed by index/config so only this boundary handles login.
-function clean(){
+function lockForm(){
   const form=document.getElementById('loginForm');
-  if(form){form.onsubmit=null;form.removeAttribute('onsubmit');}
+  if(!form||form.__VCCF_LOGIN_LOCK_V8__)return;
+  form.__VCCF_LOGIN_LOCK_V8__=true;
+  form.onsubmit=null;
+  form.removeAttribute('onsubmit');
+  try{
+    Object.defineProperty(form,'onsubmit',{configurable:false,enumerable:false,get(){return null},set(){return true}});
+  }catch(e){console.warn('VCCF login form lock:',e)}
+}
+function clean(){
+  lockForm();
+  setTimeout(lockForm,0);
+  setTimeout(lockForm,50);
+  setTimeout(lockForm,250);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',clean,{once:true});else clean();
 
-// Do not call getSession() during startup: another auth operation may be establishing the session.
-// Existing application bootstrap is responsible for session restoration and data hydration.
 })();
