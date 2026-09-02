@@ -1,16 +1,33 @@
-/* VCCF_LOGIN_GUARD_V11
+/* VCCF_LOGIN_GUARD_V12
    One lightweight login boundary. Authentication is isolated from app bootstrap.
+   Also consolidates every later Supabase createClient() call onto one browser client.
 */
 (()=>{
 'use strict';
-if(window.__VCCF_LOGIN_GUARD_V11__) return;
-window.__VCCF_LOGIN_GUARD_V11__=true;
+if(window.__VCCF_LOGIN_GUARD_V12__) return;
+window.__VCCF_LOGIN_GUARD_V12__=true;
 const SUPABASE_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
 const SUPABASE_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
 const TIMEOUT=15000;
 const STORAGE_KEY='sb-hvnlstaecjqhjtiojutd-auth-token';
 window.VCCF_SUPABASE_URL=SUPABASE_URL;
 window.VCCF_SUPABASE_PUBLISHABLE_KEY=SUPABASE_KEY;
+
+/* The page historically loaded many feature modules, each calling createClient().
+   Keep one GoTrue client in this browser context so auth state/storage is shared. */
+function consolidateSupabaseClient(){
+  try{
+    const g=window.supabase;
+    if(!g?.createClient||window.__VCCF_SHARED_SUPABASE_CLIENT__) return;
+    const factory=g.createClient;
+    const shared=factory(SUPABASE_URL,SUPABASE_KEY);
+    window.__VCCF_SHARED_SUPABASE_CLIENT__=shared;
+    window.__VCCF_SUPABASE_CLIENT_FACTORY__=factory;
+    g.createClient=function(){return window.__VCCF_SHARED_SUPABASE_CLIENT__};
+  }catch(e){console.warn('VCCF Supabase client consolidation:',e)}
+}
+consolidateSupabaseClient();
+
 function box(form){let b=document.getElementById('vccfLoginError');if(!b){b=document.createElement('div');b.id='vccfLoginError';b.setAttribute('role','status');b.setAttribute('aria-live','polite');b.style.cssText='margin-top:14px;padding:12px;border-radius:10px;font-size:.85rem;white-space:pre-wrap';form.appendChild(b)}return b}
 function busy(form,on){const b=form?.querySelector('button[type="submit"],button');if(b){b.disabled=on;b.textContent=on?'Signing in…':'Sign in'}}
 function toEmail(value){const raw=String(value||'').trim().toLowerCase();if(raw.includes('@'))return raw;const clean=raw.replace(/[^a-z0-9._-]/g,'').replace(/^[-_.]+|[-_.]+$/g,'');return clean?clean+'@vccf.local':''}
