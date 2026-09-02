@@ -8,6 +8,7 @@
 <link rel="icon" href="vccf-logo-black.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/vccf-config.js"></script>
+<script src="/vccf-login-guard.js"></script>
 <script src="/vccf-status-video.js"></script>
 <script src="/vccf-member-route-isolation.js"></script>
 <script src="/vccf-member-ui.js"></script>
@@ -84,6 +85,12 @@ body{background:radial-gradient(circle at 92% 0%,rgba(255,138,24,.10),transparen
 <script src="/vccf-mobile-nav.js" defer></script>
 <!-- VCCF_RESPONSIVE_OVERRIDES_V1 -->
 <link rel="stylesheet" href="/vccf-responsive-overrides.css">
+<style id="VCCF_LOGIN_BACKGROUND_V1">
+.login{background:linear-gradient(rgba(0,0,0,.16),rgba(0,0,0,.16)),url('/Churchfront_login.png') center center/cover no-repeat;}
+[data-theme="dark"] .login{background:linear-gradient(rgba(0,0,0,.28),rgba(0,0,0,.28)),url('/Churchfront_login.png') center center/cover no-repeat;}
+.login-card{backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}
+@media(max-width:600px){.login{background-position:center center;background-attachment:scroll;padding:16px;}.login-card{width:100%;padding:24px;border-radius:22px;}}
+</style>
 </head>
 <body>
 <div id="login" class="login"><div class="login-card"><img class="login-logo logo" src="vccf-logo-black.png" data-light="vccf-logo-black.png" data-dark="vccf-logo-white.png"><h1>VCCF Connect</h1><p class="sub">Attendance & Member Management</p><form id="loginForm"><div class="field"><label>Email / Username</label><input id="loginUser" required placeholder="Enter your account"></div><div class="field"><label>Password</label><input id="loginPass" type="password" required placeholder="Enter your password"></div><button class="btn" style="width:100%">Sign in</button></form><div class="demo hidden"><b>Demo accounts</b><br>Admin: <b>admin</b> / <b>admin123</b><br>Area Leader: <b>leader1</b> / <b>leader123</b><br>Member: <b>member1</b> / <b>member123</b></div></div></div>
