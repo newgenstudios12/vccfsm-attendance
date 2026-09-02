@@ -1,58 +1,11 @@
 (()=>{
 'use strict';
-if(window.__VCCF_MEMBER_ROUTE_ISOLATION__)return;
-window.__VCCF_MEMBER_ROUTE_ISOLATION__=true;
-
-function currentView(){
-  const activeNav=document.querySelector('.nav button.active[data-view]');
-  if(activeNav?.dataset.view)return activeNav.dataset.view;
-
-  const activeView=document.querySelector('.main .view.active');
-  if(activeView){
-    const id=String(activeView.id||'').replace(/^suite2-/,'');
-    if(id)return id;
-  }
-
-  const memberRoot=document.getElementById('members');
-  if(memberRoot?.classList.contains('active'))return 'members';
-
-  return 'dashboard';
-}
-
-function sync(){
-  const root=document.getElementById('members');
-  if(!root)return;
-
-  const view=currentView();
-  const show=view==='members';
-  root.classList.toggle('hidden',!show);
-  root.setAttribute('aria-hidden',show?'false':'true');
-  root.dataset.routeVisibility=show?'visible':'hidden';
-}
-
-function schedule(){
-  sync();
-  requestAnimationFrame(sync);
-  setTimeout(sync,0);
-}
-
-function init(){
-  schedule();
-
-  document.addEventListener('click',event=>{
-    const button=event.target.closest?.('.nav button[data-view]');
-    if(button) schedule();
-  },true);
-
-  const observer=new MutationObserver(()=>schedule());
-  observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','data-view']});
-
-  window.addEventListener('hashchange',schedule);
-  window.addEventListener('popstate',schedule);
-
-  setInterval(sync,1500);
-}
-
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
-else init();
+if(window.__VCCF_MEMBER_ROUTE_ISOLATION_V2__)return;
+window.__VCCF_MEMBER_ROUTE_ISOLATION_V2__=true;
+function currentView(){const n=document.querySelector('.nav button.active[data-view]');if(n?.dataset.view)return n.dataset.view;const v=document.querySelector('.main .view.active');if(v){const id=String(v.id||'').replace(/^suite2-/,'');if(id)return id}const m=document.getElementById('members');if(m?.classList.contains('active'))return 'members';return 'dashboard'}
+function sync(){const root=document.getElementById('members');if(!root)return;const show=currentView()==='members';const hidden=!show,aria=show?'false':'true',route=show?'visible':'hidden';if(root.classList.contains('hidden')!==hidden)root.classList.toggle('hidden',hidden);if(root.getAttribute('aria-hidden')!==aria)root.setAttribute('aria-hidden',aria);if(root.dataset.routeVisibility!==route)root.dataset.routeVisibility=route}
+function init(){sync();document.addEventListener('click',e=>{if(e.target.closest?.('.nav button[data-view]'))setTimeout(sync,0)},true);window.addEventListener('hashchange',sync);window.addEventListener('popstate',sync);}
+function start(){if(!document.getElementById('app')?.classList.contains('active'))return;if(window.__VCCF_MEMBER_ROUTE_STARTED__)return;window.__VCCF_MEMBER_ROUTE_STARTED__=true;init()}
+window.addEventListener('vccf-authenticated',()=>setTimeout(start,0),{once:true});
+if(document.getElementById('app')?.classList.contains('active'))start();
 })();
