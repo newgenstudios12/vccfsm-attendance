@@ -36,64 +36,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77Rj2O2w_X
     return client;
   };
 
-  // Login accepts either a normal email address or the username format used by
-  // the create-user Edge Function (username@vccf.local).
-  window.addEventListener('DOMContentLoaded', () => setTimeout(() => {
-    const form = document.getElementById('loginForm');
-    if (!form) return;
-    /* VCCF_LOGIN_HANDLER_OWNERSHIP_V1: never overwrite a handler already installed by index/guard. */
-    if (form.onsubmit) return;
-    const client = originalCreateClient(window.VCCF_SUPABASE_URL, window.VCCF_SUPABASE_PUBLISHABLE_KEY);
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const rawIdentifier = document.getElementById('loginUser')?.value.trim() || '';
-      const password = document.getElementById('loginPass')?.value || '';
-      const sanitizedUsername = rawIdentifier.toLowerCase().replace(/[^a-z0-9._-]/g,'');
-      const email = rawIdentifier.includes('@') ? rawIdentifier.toLowerCase() : `${sanitizedUsername}@vccf.local`;
-      const button = form.querySelector('button[type="submit"],button');
-      if (button) { button.disabled = true; button.textContent = 'Signing in…'; }
-      let box = document.getElementById('vccfLoginError');
-      if (!box) {
-        box = document.createElement('div');
-        box.id='vccfLoginError';
-        box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap';
-        form.appendChild(box);
-      }
-      box.textContent = '';
-      try {
-        if (!rawIdentifier) throw new Error('Please enter your email or username.');
-        if (!password) throw new Error('Please enter your password.');
-        if (!sanitizedUsername && !rawIdentifier.includes('@')) throw new Error('Please enter a valid email or username.');
-
-        const { data, error } = await client.auth.signInWithPassword({ email, password });
-        if (error) throw new Error(`Sign-in failed: ${error.message}`);
-        if (!data?.user) throw new Error('Sign-in returned no user.');
-
-        const { data: p, error: pe } = await client
-          .from('profiles')
-          .select('user_id,role,member_id,area_id,display_name')
-          .eq('user_id', data.user.id)
-          .maybeSingle();
-        if (pe) throw new Error(`Profile lookup failed: ${pe.message}`);
-        if (!p) throw new Error('Authentication succeeded, but this account has no VCCF profile. Please contact an administrator.');
-
-        box.style.background='#ecfdf3';
-        box.style.color='#027a48';
-        box.textContent='Sign-in successful. Loading VCCF…';
-        window.dispatchEvent(new CustomEvent('vccf-authenticated'));
-        await new Promise(r => setTimeout(r, 150));
-        window.location.reload();
-      } catch (err) {
-        console.error('VCCF login:', err);
-        box.style.background='#fff1f1';
-        box.style.color='#b42318';
-        box.textContent = err?.message || String(err);
-      } finally {
-        if (button) { button.disabled = false; button.textContent = 'Sign in'; }
-      }
-    };
-  }, 0));
-
+  // Authentication is owned exclusively by /vccf-login-guard.js.
   const ABOUT_PHOTO_PREFIX='__ABOUT_PERSON__:';
   const client=originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
   const manilaDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
