@@ -38,7 +38,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ
 
   // Authentication is owned exclusively by /vccf-login-guard.js.
   const ABOUT_PHOTO_PREFIX='__ABOUT_PERSON__:';
-  const client=originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
+  const client=window.__VCCF_SHARED_SUPABASE_CLIENT__ || originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
   const manilaDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const latestSunday=()=>{
     const d=new Date(manilaDate()+'T12:00:00+08:00');
