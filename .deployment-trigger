@@ -1,1 +1,1 @@
-Production rebuild trigger after restoring stable app config; preserve existing API key (2026-09-02 12:12 UTC).
+Production rebuild after login freeze fix: config now reuses browser Supabase singleton; API key unchanged (2026-09-02 12:14 UTC).
