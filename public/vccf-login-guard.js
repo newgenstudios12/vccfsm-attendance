@@ -1,40 +1,97 @@
-/* VCCF_LOGIN_GUARD_V12
-   One lightweight login boundary. Authentication is isolated from app bootstrap.
-   Also consolidates every later Supabase createClient() call onto one browser client.
+/* VCCF_LOGIN_GUARD_V13
+   Single authentication owner. Uses the browser-wide Supabase singleton and
+   commits the authenticated session to the Supabase client before revealing
+   the application. This prevents post-login 401s and dashboard hangs.
 */
 (()=>{
 'use strict';
-if(window.__VCCF_LOGIN_GUARD_V12__) return;
-window.__VCCF_LOGIN_GUARD_V12__=true;
+if(window.__VCCF_LOGIN_GUARD_V13__) return;
+window.__VCCF_LOGIN_GUARD_V13__=true;
 const SUPABASE_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
 const SUPABASE_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
 const TIMEOUT=15000;
-const STORAGE_KEY='sb-hvnlstaecjqhjtiojutd-auth-token';
 window.VCCF_SUPABASE_URL=SUPABASE_URL;
 window.VCCF_SUPABASE_PUBLISHABLE_KEY=SUPABASE_KEY;
 
-/* The page historically loaded many feature modules, each calling createClient().
-   Keep one GoTrue client in this browser context so auth state/storage is shared. */
-function consolidateSupabaseClient(){
-  try{
-    const g=window.supabase;
-    if(!g?.createClient||window.__VCCF_SHARED_SUPABASE_CLIENT__) return;
-    const factory=g.createClient;
-    const shared=factory(SUPABASE_URL,SUPABASE_KEY);
-    window.__VCCF_SHARED_SUPABASE_CLIENT__=shared;
-    window.__VCCF_SUPABASE_CLIENT_FACTORY__=factory;
-    g.createClient=function(){return window.__VCCF_SHARED_SUPABASE_CLIENT__};
-  }catch(e){console.warn('VCCF Supabase client consolidation:',e)}
+function getClient(){
+  const client=window.__VCCF_SHARED_SUPABASE_CLIENT__;
+  if(client?.auth) return client;
+  const g=window.supabase;
+  if(g?.createClient) return g.createClient(SUPABASE_URL,SUPABASE_KEY);
+  throw new Error('Supabase client is not available.');
 }
-consolidateSupabaseClient();
 
-function box(form){let b=document.getElementById('vccfLoginError');if(!b){b=document.createElement('div');b.id='vccfLoginError';b.setAttribute('role','status');b.setAttribute('aria-live','polite');b.style.cssText='margin-top:14px;padding:12px;border-radius:10px;font-size:.85rem;white-space:pre-wrap';form.appendChild(b)}return b}
-function busy(form,on){const b=form?.querySelector('button[type="submit"],button');if(b){b.disabled=on;b.textContent=on?'Signing in…':'Sign in'}}
-function toEmail(value){const raw=String(value||'').trim().toLowerCase();if(raw.includes('@'))return raw;const clean=raw.replace(/[^a-z0-9._-]/g,'').replace(/^[-_.]+|[-_.]+$/g,'');return clean?clean+'@vccf.local':''}
-function save(data){const s={...data,expires_at:data.expires_at||Math.floor(Date.now()/1000)+(data.expires_in||3600)};try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s))}catch(e){}window.__VCCF_AUTH_SESSION__=s;return s}
-function showApp(user,identifier,session){const meta=user?.user_metadata||{};const name=meta.display_name||meta.full_name||user?.email||identifier||'Member';const role=meta.role||'Member';window.session={username:user?.email||identifier,name,role,area:'',areaId:null,memberId:null,memberCode:null};const login=document.getElementById('login'),app=document.getElementById('app');if(login){login.classList.add('hidden');login.style.display='none';login.setAttribute('aria-hidden','true')}if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden')}const n=document.getElementById('currentName');if(n)n.textContent=name;const r=document.getElementById('currentRole');if(r)r.textContent=role;const a=document.getElementById('avatar');if(a)a.textContent=name.charAt(0).toUpperCase();const ai=document.getElementById('accountInfo');if(ai)ai.textContent=name+' · '+role;setTimeout(()=>{try{window.dispatchEvent(new CustomEvent('vccf-authenticated',{detail:{user,session}}))}catch(e){console.warn('VCCF post-login event:',e)}},0)}
-async function authenticate(form){if(!form||form.dataset.vccfBusy==='1')return;form.dataset.vccfBusy='1';busy(form,true);const b=box(form);b.textContent='';b.style.background='#fff1f1';b.style.color='#b42318';try{const id=document.getElementById('loginUser')?.value||'';const password=document.getElementById('loginPass')?.value||'';if(!String(id).trim())throw new Error('Please enter your email or username.');if(!password)throw new Error('Please enter your password.');const email=toEmail(id);if(!email)throw new Error('Please enter a valid email or username.');const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),TIMEOUT);let response;try{response=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},body:JSON.stringify({email,password}),signal:controller.signal})}catch(e){if(e?.name==='AbortError')throw new Error('Sign-in timed out. Please try again.');throw new Error('Unable to contact VCCF authentication service. Please try again.')}finally{clearTimeout(timer)}let data={};try{data=await response.json()}catch(e){}if(!response.ok)throw new Error(data?.msg||data?.message||data?.error_description||data?.error||('Authentication failed ('+response.status+').'));if(!data?.access_token||!data?.refresh_token||!data?.user)throw new Error('Authentication returned an incomplete session.');const session=save(data);b.style.background='#ecfdf3';b.style.color='#027a48';b.textContent='Sign-in successful.';showApp(data.user,id,session)}catch(e){console.error('VCCF authentication:',e);b.textContent=String(e?.message||e||'Unable to sign in.')}finally{form.dataset.vccfBusy='0';busy(form,false)}}
-document.addEventListener('submit',(event)=>{const form=event.target?.closest?.('#loginForm');if(!form)return;event.preventDefault();event.stopPropagation();if(event.stopImmediatePropagation)event.stopImmediatePropagation();authenticate(form)},true);
-function restore(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;const s=JSON.parse(raw);if(!s?.access_token||!s?.user)return;if(s.expires_at&&s.expires_at<=Math.floor(Date.now()/1000))return;window.__VCCF_AUTH_SESSION__=s;showApp(s.user,s.user.email||'',s)}catch(e){console.warn('VCCF session restore:',e)}}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(restore,0),{once:true});else setTimeout(restore,0);
+function box(form){
+  let b=document.getElementById('vccfLoginError');
+  if(!b){b=document.createElement('div');b.id='vccfLoginError';b.setAttribute('role','status');b.setAttribute('aria-live','polite');b.style.cssText='margin-top:14px;padding:12px;border-radius:10px;font-size:.85rem;white-space:pre-wrap';form.appendChild(b)}
+  return b;
+}
+function busy(form,on){
+  const b=form?.querySelector('button[type="submit"],button');
+  if(b){b.disabled=on;b.textContent=on?'Signing in…':'Sign in'}
+}
+function showApp(user,session){
+  const meta=user?.user_metadata||{};
+  const name=meta.display_name||meta.full_name||user?.email||'Member';
+  const role=meta.role||'Member';
+  window.session={username:user?.email||'',name,role,area:'',areaId:null,memberId:null,memberCode:null};
+  const login=document.getElementById('login'),app=document.getElementById('app');
+  if(login){login.classList.add('hidden');login.style.display='none';login.setAttribute('aria-hidden','true')}
+  if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden')}
+  const n=document.getElementById('currentName');if(n)n.textContent=name;
+  const r=document.getElementById('currentRole');if(r)r.textContent=role;
+  const a=document.getElementById('avatar');if(a)a.textContent=name.charAt(0).toUpperCase();
+  const ai=document.getElementById('accountInfo');if(ai)ai.textContent=name+' · '+role;
+  setTimeout(()=>{try{window.dispatchEvent(new CustomEvent('vccf-authenticated',{detail:{user,session}}))}catch(e){console.warn('VCCF post-login event:',e)}},0);
+}
+
+async function authenticate(form){
+  if(!form||form.dataset.vccfBusy==='1')return;
+  form.dataset.vccfBusy='1';busy(form,true);
+  const b=box(form);b.textContent='';b.style.background='#fff1f1';b.style.color='#b42318';
+  try{
+    const id=document.getElementById('loginUser')?.value?.trim()||'';
+    const password=document.getElementById('loginPass')?.value||'';
+    if(!id)throw new Error('Please enter your email or username.');
+    if(!password)throw new Error('Please enter your password.');
+    if(!id.includes('@'))throw new Error('Please sign in using the email address assigned to your VCCF account.');
+    const client=getClient();
+    const result=await Promise.race([
+      client.auth.signInWithPassword({email:id.toLowerCase(),password}),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sign-in timed out. Please try again.')),TIMEOUT))
+    ]);
+    const {data,error}=result||{};
+    if(error)throw error;
+    if(!data?.session||!data?.user)throw new Error('Sign-in did not create a valid session.');
+    // Explicitly verify that the same singleton now sees the session. This is
+    // the critical boundary that prevents the post-login 401 cascade.
+    const current=await client.auth.getSession();
+    if(!current?.data?.session)throw new Error('Authentication succeeded but the session could not be established.');
+    b.style.background='#ecfdf3';b.style.color='#027a48';b.textContent='Sign-in successful.';
+    showApp(data.user,current.data.session);
+  }catch(e){
+    console.error('VCCF authentication:',e);
+    b.textContent=String(e?.message||e||'Unable to sign in.');
+    try{await getClient().auth.signOut()}catch(_e){}
+  }finally{form.dataset.vccfBusy='0';busy(form,false)}
+}
+
+document.addEventListener('submit',(event)=>{
+  const form=event.target?.closest?.('#loginForm');
+  if(!form)return;
+  event.preventDefault();event.stopPropagation();
+  if(event.stopImmediatePropagation)event.stopImmediatePropagation();
+  authenticate(form);
+},true);
+
+async function restore(){
+  try{
+    const client=getClient();
+    const {data,error}=await client.auth.getSession();
+    if(error||!data?.session?.user)return;
+    showApp(data.session.user,data.session);
+  }catch(e){console.warn('VCCF session restore:',e)}
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(restore,0),{once:true});
+else setTimeout(restore,0);
 })();
