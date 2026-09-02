@@ -1,11 +1,11 @@
-/* VCCF_LOGIN_GUARD_V8
+/* VCCF_LOGIN_GUARD_V9
    One Supabase client + one authentication boundary.
-   Auth itself is allowed to establish the session; application data loads afterward.
+   The login form is locked before legacy compatibility handlers can attach.
 */
 (()=>{
 'use strict';
-if(window.__VCCF_LOGIN_GUARD_V8__)return;
-window.__VCCF_LOGIN_GUARD_V8__=true;
+if(window.__VCCF_LOGIN_GUARD_V9__)return;
+window.__VCCF_LOGIN_GUARD_V9__=true;
 
 const VCCF_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
 const VCCF_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
@@ -21,8 +21,8 @@ if(!canonical&&nativeCreateClient){
   canonical=nativeCreateClient.call(supabaseApi,VCCF_URL,VCCF_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
   window.__VCCF_AUTH_CLIENT__=canonical;
 }
-if(nativeCreateClient&&!window.__VCCF_CREATE_CLIENT_SINGLETON_V8__){
-  window.__VCCF_CREATE_CLIENT_SINGLETON_V8__=true;
+if(nativeCreateClient&&!window.__VCCF_CREATE_CLIENT_SINGLETON_V9__){
+  window.__VCCF_CREATE_CLIENT_SINGLETON_V9__=true;
   const singleton=canonical;
   supabaseApi.createClient=function(url,key,options){
     if(singleton&&url===VCCF_URL&&key===VCCF_KEY)return singleton;
@@ -52,7 +52,7 @@ function activate(user,identifier){
   window.session={username:user?.email||identifier,name,role:meta.role||'Member',area:'',areaId:null,memberId:null,memberCode:null};
   const login=document.getElementById('login'),app=document.getElementById('app');
   if(login){login.classList.add('hidden');login.style.display='none';login.setAttribute('aria-hidden','true');}
-  if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden');}
+  if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden','true');}
   const n=document.getElementById('currentName');if(n)n.textContent=name;
   const r=document.getElementById('currentRole');if(r)r.textContent=meta.role||'Member';
   const a=document.getElementById('avatar');if(a)a.textContent=name.charAt(0).toUpperCase();
@@ -119,22 +119,23 @@ const intercept=e=>{
 };
 document.addEventListener('submit',intercept,true);
 
-function lockForm(){
-  const form=document.getElementById('loginForm');
-  if(!form||form.__VCCF_LOGIN_LOCK_V8__)return;
-  form.__VCCF_LOGIN_LOCK_V8__=true;
-  form.onsubmit=null;
-  form.removeAttribute('onsubmit');
+function lockLoginForm(form){
+  if(!form||form.__VCCF_LOGIN_LOCK_V9__)return;
+  form.__VCCF_LOGIN_LOCK_V9__=true;
+  try{form.onsubmit=null;form.removeAttribute('onsubmit');}catch{}
   try{
-    Object.defineProperty(form,'onsubmit',{configurable:false,enumerable:false,get(){return null},set(){return true}});
+    Object.defineProperty(form,'onsubmit',{configurable:false,enumerable:false,get(){return null},set(){return null}});
   }catch(e){console.warn('VCCF login form lock:',e)}
 }
-function clean(){
-  lockForm();
-  setTimeout(lockForm,0);
-  setTimeout(lockForm,50);
-  setTimeout(lockForm,250);
-}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',clean,{once:true});else clean();
 
+// Lock immediately when the form appears, before DOMContentLoaded timers from legacy config can attach.
+function scanLoginForm(){lockLoginForm(document.getElementById('loginForm'));}
+scanLoginForm();
+if(document.documentElement){
+  const observer=new MutationObserver(scanLoginForm);
+  observer.observe(document.documentElement,{childList:true,subtree:true});
+  window.__VCCF_LOGIN_FORM_OBSERVER_V9__=observer;
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',scanLoginForm,{once:true});
+else scanLoginForm();
 })();
