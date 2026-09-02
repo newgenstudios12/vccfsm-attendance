@@ -1,3 +1,3 @@
 # Deployment trigger
 
-Deploy: Analytics V5 — replace the old Analytics DOM immediately before data loading.
+Login repair trigger: restore known-good application shell and prevent sign-in from blocking on post-authentication data hydration.
