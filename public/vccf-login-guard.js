@@ -1,141 +1,97 @@
-/* VCCF_LOGIN_GUARD_V9
-   One Supabase client + one authentication boundary.
-   The login form is locked before legacy compatibility handlers can attach.
+/* VCCF_LOGIN_GUARD_V10
+   Single login boundary. Uses the Supabase Auth token endpoint directly so legacy
+   compatibility wrappers and competing GoTrue clients cannot block sign-in.
 */
 (()=>{
 'use strict';
-if(window.__VCCF_LOGIN_GUARD_V9__)return;
-window.__VCCF_LOGIN_GUARD_V9__=true;
+if(window.__VCCF_LOGIN_GUARD_V10__) return;
+window.__VCCF_LOGIN_GUARD_V10__ = true;
 
-const VCCF_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
-const VCCF_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
-const AUTH_TIMEOUT=15000;
+const SUPABASE_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
+const SUPABASE_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
+const TIMEOUT=15000;
+const STORAGE_KEY='sb-hvnlstaecjqhjtiojutd-auth-token';
+window.VCCF_SUPABASE_URL=SUPABASE_URL;
+window.VCCF_SUPABASE_PUBLISHABLE_KEY=SUPABASE_KEY;
 
-window.VCCF_SUPABASE_URL=VCCF_URL;
-window.VCCF_SUPABASE_PUBLISHABLE_KEY=VCCF_KEY;
-
-const supabaseApi=window.supabase;
-const nativeCreateClient=supabaseApi?.createClient;
-let canonical=window.__VCCF_AUTH_CLIENT__||null;
-if(!canonical&&nativeCreateClient){
-  canonical=nativeCreateClient.call(supabaseApi,VCCF_URL,VCCF_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  window.__VCCF_AUTH_CLIENT__=canonical;
-}
-if(nativeCreateClient&&!window.__VCCF_CREATE_CLIENT_SINGLETON_V9__){
-  window.__VCCF_CREATE_CLIENT_SINGLETON_V9__=true;
-  const singleton=canonical;
-  supabaseApi.createClient=function(url,key,options){
-    if(singleton&&url===VCCF_URL&&key===VCCF_KEY)return singleton;
-    return nativeCreateClient.call(this,url,key,options);
-  };
-}
-
-function errorBox(form){
+const errBox=form=>{
   let b=document.getElementById('vccfLoginError');
-  if(!b){
-    b=document.createElement('div');
-    b.id='vccfLoginError';
-    b.setAttribute('role','status');
-    b.setAttribute('aria-live','polite');
-    b.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap';
-    form.appendChild(b);
-  }
+  if(!b){b=document.createElement('div');b.id='vccfLoginError';b.setAttribute('role','status');b.setAttribute('aria-live','polite');b.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap';form.appendChild(b)}
   return b;
-}
-function busy(form,on){
-  const b=form.querySelector('button[type="submit"],button');
-  if(b){b.disabled=on;b.textContent=on?'Signing in…':'Sign in';}
-}
-function activate(user,identifier){
+};
+const busy=(form,on)=>{const b=form?.querySelector('button[type="submit"],button');if(b){b.disabled=on;b.textContent=on?'Signing in…':'Sign in'}};
+const emailFor=id=>{
+  const raw=String(id||'').trim().toLowerCase();
+  if(raw.includes('@')) return raw;
+  const clean=raw.replace(/[^a-z0-9._-]/g,'').replace(/^[-_.]+|[-_.]+$/g,'');
+  return clean?`${clean}@vccf.local`:'';
+};
+const persistSession=s=>{
+  const payload={...s,expires_at:s.expires_at||Math.floor(Date.now()/1000)+(s.expires_in||3600)};
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
+  window.__VCCF_AUTH_SESSION__=payload;
+};
+const activate=(user,identifier)=>{
   const meta=user?.user_metadata||{};
   const name=meta.display_name||meta.full_name||user?.email||identifier||'Member';
-  window.session={username:user?.email||identifier,name,role:meta.role||'Member',area:'',areaId:null,memberId:null,memberCode:null};
+  const role=meta.role||'Member';
+  window.session={username:user?.email||identifier,name,role,area:'',areaId:null,memberId:null,memberCode:null};
+  try{session=window.session}catch{}
   const login=document.getElementById('login'),app=document.getElementById('app');
-  if(login){login.classList.add('hidden');login.style.display='none';login.setAttribute('aria-hidden','true');}
-  if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden','true');}
+  if(login){login.classList.add('hidden');login.style.display='none';login.setAttribute('aria-hidden','true')}
+  if(app){app.classList.add('active');app.style.display='flex';app.removeAttribute('aria-hidden')}
   const n=document.getElementById('currentName');if(n)n.textContent=name;
-  const r=document.getElementById('currentRole');if(r)r.textContent=meta.role||'Member';
+  const r=document.getElementById('currentRole');if(r)r.textContent=role;
   const a=document.getElementById('avatar');if(a)a.textContent=name.charAt(0).toUpperCase();
-  window.dispatchEvent(new CustomEvent('vccf-authenticated',{detail:{user}}));
+  const ai=document.getElementById('accountInfo');if(ai)ai.textContent=`${name} · ${role}`;
+  window.dispatchEvent(new CustomEvent('vccf-authenticated',{detail:{user,session:window.__VCCF_AUTH_SESSION__}}));
   setTimeout(async()=>{
     try{
-      if(typeof window.loadDb==='function'){
-        await Promise.race([window.loadDb(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('VCCF data hydration timed out.')),10000))]);
-      }
-      if(typeof window.refresh==='function')await window.refresh();
-    }catch(e){
-      console.warn('VCCF post-login hydration:',e);
-      if(typeof window.toast==='function')window.toast('Signed in. Some VCCF data is still loading.');
-    }
+      if(typeof window.loadDb==='function') await Promise.race([window.loadDb(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('VCCF data loading timed out.')),10000))]);
+      if(typeof window.refresh==='function') await window.refresh();
+    }catch(e){console.warn('VCCF post-login hydration:',e);if(typeof window.toast==='function')window.toast('Signed in. Some VCCF data is still loading.')}
   },0);
-}
-
-async function signIn(form){
-  if(form.dataset.vccfBusy==='1')return;
-  form.dataset.vccfBusy='1';
-  busy(form,true);
-  const box=errorBox(form);
-  box.textContent='';
-  try{
-    const rawId=document.getElementById('loginUser')?.value.trim()||'';
-    const password=document.getElementById('loginPass')?.value||'';
-    if(!rawId)throw new Error('Please enter your email or username.');
-    if(!password)throw new Error('Please enter your password.');
-    const raw=rawId.toLowerCase();
-    const sanitized=raw.replace(/[^a-z0-9._-]/g,'').replace(/^[-_.]+|[-_.]+$/g,'');
-    const email=raw.includes('@')?raw:(sanitized?sanitized+'@vccf.local':'');
-    if(!email)throw new Error('Please enter a valid email or username.');
-    if(!canonical)throw new Error('Authentication client could not be initialized.');
-
-    const result=await Promise.race([
-      canonical.auth.signInWithPassword({email,password}),
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sign-in timed out. Please try again.')),AUTH_TIMEOUT))
-    ]);
-    if(result.error)throw new Error(result.error.message);
-    if(!result.data?.user||!result.data?.session)throw new Error('Authentication succeeded but no session was established.');
-
-    box.style.background='#ecfdf3';
-    box.style.color='#027a48';
-    box.textContent='Sign-in successful. Loading VCCF…';
-    activate(result.data.user,rawId);
-  }catch(e){
-    console.error('VCCF authentication:',e);
-    box.style.background='#fff1f1';
-    box.style.color='#b42318';
-    box.textContent=String(e?.message||e||'Unable to sign in.');
-  }finally{
-    form.dataset.vccfBusy='0';
-    busy(form,false);
-  }
-}
-
-const intercept=e=>{
-  const form=e.target?.closest?.('#loginForm');
-  if(!form)return;
-  e.preventDefault();
-  e.stopPropagation();
-  if(e.stopImmediatePropagation)e.stopImmediatePropagation();
-  signIn(form);
 };
+
+async function authenticate(form){
+  if(form.dataset.vccfBusy==='1') return;
+  form.dataset.vccfBusy='1';busy(form,true);
+  const box=errBox(form);box.textContent='';box.style.background='#fff1f1';box.style.color='#b42318';
+  try{
+    const id=document.getElementById('loginUser')?.value||'';
+    const password=document.getElementById('loginPass')?.value||'';
+    if(!String(id).trim()) throw new Error('Please enter your email or username.');
+    if(!password) throw new Error('Please enter your password.');
+    const email=emailFor(id);if(!email) throw new Error('Please enter a valid email or username.');
+    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),TIMEOUT);
+    let response;
+    try{response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},body:JSON.stringify({email,password}),signal:controller.signal});}
+    catch(e){if(e?.name==='AbortError')throw new Error('Sign-in timed out. Please try again.');throw new Error('Unable to contact VCCF authentication service. Please try again.');}
+    finally{clearTimeout(timer)}
+    let data={};try{data=await response.json()}catch{}
+    if(!response.ok) throw new Error(data?.msg||data?.message||data?.error_description||data?.error||`Authentication failed (${response.status}).`);
+    if(!data?.access_token||!data?.user||!data?.refresh_token) throw new Error('Authentication returned an incomplete session.');
+    persistSession(data);
+    box.style.background='#ecfdf3';box.style.color='#027a48';box.textContent='Sign-in successful. Loading VCCF…';
+    activate(data.user,id);
+  }catch(e){console.error('VCCF authentication:',e);box.style.background='#fff1f1';box.style.color='#b42318';box.textContent=String(e?.message||e||'Unable to sign in.')}finally{form.dataset.vccfBusy='0';busy(form,false)}
+}
+
+const intercept=e=>{const form=e.target?.closest?.('#loginForm');if(!form)return;e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();authenticate(form)};
+// Capture phase ensures legacy bubble-phase submit handlers never execute.
 document.addEventListener('submit',intercept,true);
 
-function lockLoginForm(form){
-  if(!form||form.__VCCF_LOGIN_LOCK_V9__)return;
-  form.__VCCF_LOGIN_LOCK_V9__=true;
-  try{form.onsubmit=null;form.removeAttribute('onsubmit');}catch{}
-  try{
-    Object.defineProperty(form,'onsubmit',{configurable:false,enumerable:false,get(){return null},set(){return null}});
-  }catch(e){console.warn('VCCF login form lock:',e)}
+function lock(form){
+  if(!form||form.__VCCF_LOGIN_LOCK_V10__)return;
+  form.__VCCF_LOGIN_LOCK_V10__=true;
+  try{form.onsubmit=null;form.removeAttribute('onsubmit');Object.defineProperty(form,'onsubmit',{configurable:false,enumerable:false,get(){return null},set(){return null}})}catch{}
 }
+function scan(){lock(document.getElementById('loginForm'))}
+scan();
+if(document.documentElement){const mo=new MutationObserver(scan);mo.observe(document.documentElement,{childList:true,subtree:true});window.__VCCF_LOGIN_FORM_OBSERVER_V10__=mo}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',scan,{once:true});
 
-// Lock immediately when the form appears, before DOMContentLoaded timers from legacy config can attach.
-function scanLoginForm(){lockLoginForm(document.getElementById('loginForm'));}
-scanLoginForm();
-if(document.documentElement){
-  const observer=new MutationObserver(scanLoginForm);
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-  window.__VCCF_LOGIN_FORM_OBSERVER_V9__=observer;
-}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',scanLoginForm,{once:true});
-else scanLoginForm();
+// Restore an existing Supabase session without querying it during initial script execution.
+function restore(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;const s=JSON.parse(raw);if(!s?.access_token||!s?.user)return;const exp=s.expires_at||0;if(exp&&exp<Math.floor(Date.now()/1000))return;window.__VCCF_AUTH_SESSION__=s;activate(s.user,s.user.email||'')}catch(e){console.warn('VCCF session restore:',e)}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restore,{once:true});else restore();
 })();
