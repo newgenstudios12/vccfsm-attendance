@@ -86,8 +86,7 @@ async function loadDashboardData(){
   ];
   if(financeAllowed())requests.push(client.from('giving_records').select('given_on,giving_type,amount').gte('given_on',dayToIso(rangeStart)).order('given_on',{ascending:false}));
   else requests.push(Promise.resolve({data:[],error:null}));
-  if(['admin','pastor','area_leader'].includes(role()))requests.push(client.from('cms_sunday_event_summaries').select('*').order('summary_date',{ascending:false}).limit(30));
-  else requests.push(Promise.resolve({data:[],error:null}));
+  requests.push(client.from('cms_sunday_event_summaries').select('*').eq('workflow_status','posted').order('summary_date',{ascending:false}).limit(30));
   const [attRes,eventRes,photoRes,giveRes,sumRes]=await Promise.all(requests);
   const fatal=attRes.error||eventRes.error||photoRes.error;if(fatal)throw fatal;
   const events=eventRes.data||[],latestEvent=events[0]||null;
@@ -178,6 +177,7 @@ function boot(){
   window.addEventListener('vccf-app-ready',refresh);
   document.addEventListener('click',e=>{if(e.target?.closest?.('[data-route="dashboard"]'))setTimeout(refresh,30)});
   window.addEventListener('vccf-profile-photo-updated',()=>setTimeout(refresh,30));
+  window.addEventListener('vccf-sunday-summary-posted',()=>setTimeout(refresh,30));
   if(document.getElementById('app')?.classList.contains('show'))refresh();
   window.VCCFSundayDashboard={refresh};
 }
