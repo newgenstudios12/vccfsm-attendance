@@ -8,7 +8,7 @@
 <link rel="icon" href="vccf-logo-black.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/vccf-supabase-singleton.js"></script>
-<script src="/vccf-login-guard.js?v=20260903-3"></script>
+<script src="/vccf-login-guard.js?v=20260903-4"></script>
 <script src="/vccf-config.js?v=20260903-3"></script>
 <script src="/vccf-status-video.js"></script>
 <script src="/vccf-member-route-isolation.js"></script>
@@ -108,7 +108,89 @@ body{background:radial-gradient(circle at 92% 0%,rgba(255,138,24,.10),transparen
 <div id="modal" class="modal"><div class="modal-card"><div class="modal-head"><h3 id="modalTitle"></h3><button class="close" id="closeModal">×</button></div><div id="modalBody"></div></div></div><div id="toast" class="toast"></div>
 <script>
 const { createClient } = window.supabase; const SUPABASE_URL = window.VCCF_SUPABASE_URL || ''; const SUPABASE_KEY = window.VCCF_SUPABASE_PUBLISHABLE_KEY || ''; const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY); let db={members:[],attendance:[],photos:[],pastors:[],leaders:[],accounts:[],areas:[]}; let session=null, scanner=null; let profile=null;
-async function loadDb(){const [areasR,membersR,attendanceR,photosR,peopleR,profileR]=await Promise.all([supabaseClient.from('areas').select('*').order('name'),supabaseClient.from('members').select('*').order('display_name'),supabaseClient.from('attendance').select('*').order('checked_in_at',{ascending:false}),supabaseClient.from('photos').select('*').order('created_at',{ascending:false}),supabaseClient.from('site_people').select('*').order('sort_order'),supabaseClient.auth.getUser()]);for(const r of [areasR,membersR,attendanceR,photosR])if(r.error)throw r.error;db.areas=areasR.data||[];db.members=(membersR.data||[]).map(m=>({id:m.id,memberCode:m.member_code,name:m.display_name,birthday:m.birth_date||'',address:m.address||'',area:(db.areas.find(a=>a.id===m.area_id)||{}).name||'',areaId:m.area_id,access:'Member',photo:m.photo_url||''}));db.attendance=(attendanceR.data||[]).map(a=>({id:(db.members.find(m=>m.id===a.member_id)||{}).memberCode||a.member_id,name:(db.members.find(m=>m.id===a.member_id)||{}).name||'',area:(db.areas.find(x=>x.id===a.area_id)||{}).name||'',date:new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}),time:new Date(a.checked_in_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'}),memberId:a.member_id}));db.pastors=(peopleR.data||[]).filter(x=>x.kind==='pastor').map(x=>({name:x.name,desc:x.description||'',id:x.id}));db.leaders=(peopleR.data||[]).filter(x=>x.kind==='leader').map(x=>({name:x.name,desc:x.description||'',id:x.id}));db.photos=(photosR.data||[]).map(p=>({...p,public_url:supabaseClient.storage.from('vccf-gallery').getPublicUrl(p.storage_path).data.publicUrl}));if(profileR.data.user){const pr=await supabaseClient.from('profiles').select('*, members(*)').eq('user_id',profileR.data.user.id).single();if(!pr.error)profile=pr.data}if(profile){session={username:profile.user_id,name:profile.display_name||profile.members?.display_name||profile.user_id,role:profile.role==='admin'?'Admin':profile.role==='area_leader'?'Area Leader':'Member',area:(db.areas.find(a=>a.id===profile.area_id)||{}).name||'',areaId:profile.area_id,memberId:profile.member_id,memberCode:profile.members?.member_code||null}}}
+async function loadDb(){
+  const wait=(promise,label,ms=7000)=>Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(label+' timed out.')),ms))
+  ]);
+  const fetchSet=async(label,promise,{optional=false}={})=>{
+    try{
+      const result=await wait(promise,label);
+      if(result?.error) throw result.error;
+      return result||{data:[]};
+    }catch(err){
+      if(optional){
+        console.warn('VCCF '+label+' load skipped:',err);
+        return {data:[]};
+      }
+      throw err;
+    }
+  };
+
+  const [areasR,membersR,attendanceR,photosR,peopleR]=await Promise.all([
+    fetchSet('areas',supabaseClient.from('areas').select('*').order('name')),
+    fetchSet('members',supabaseClient.from('members').select('*').order('display_name')),
+    fetchSet('attendance',supabaseClient.from('attendance').select('*').order('checked_in_at',{ascending:false}),{optional:true}),
+    fetchSet('photos',supabaseClient.from('photos').select('*').order('created_at',{ascending:false}),{optional:true}),
+    fetchSet('site people',supabaseClient.from('site_people').select('*').order('sort_order'),{optional:true})
+  ]);
+
+  db.areas=areasR.data||[];
+  db.members=(membersR.data||[]).map(m=>({
+    id:m.id,
+    memberCode:m.member_code,
+    name:m.display_name,
+    birthday:m.birth_date||'',
+    address:m.address||'',
+    area:(db.areas.find(a=>a.id===m.area_id)||{}).name||'',
+    areaId:m.area_id,
+    access:'Member',
+    photo:m.photo_url||''
+  }));
+  db.attendance=(attendanceR.data||[]).map(a=>({
+    id:(db.members.find(m=>m.id===a.member_id)||{}).memberCode||a.member_id,
+    name:(db.members.find(m=>m.id===a.member_id)||{}).name||'',
+    area:(db.areas.find(x=>x.id===a.area_id)||{}).name||'',
+    date:new Date(a.checked_in_at).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}),
+    time:new Date(a.checked_in_at).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Manila'}),
+    memberId:a.member_id
+  }));
+  db.pastors=(peopleR.data||[]).filter(x=>x.kind==='pastor').map(x=>({name:x.name,desc:x.description||'',id:x.id}));
+  db.leaders=(peopleR.data||[]).filter(x=>x.kind==='leader').map(x=>({name:x.name,desc:x.description||'',id:x.id}));
+  db.photos=(photosR.data||[]).map(p=>({
+    ...p,
+    public_url:p.storage_path?supabaseClient.storage.from('vccf-gallery').getPublicUrl(p.storage_path).data.publicUrl:''
+  }));
+
+  let user=window.__VCCF_AUTH_USER__||null;
+  if(!user){
+    const sessionResult=await wait(supabaseClient.auth.getSession(),'session',4000);
+    user=sessionResult?.data?.session?.user||null;
+  }
+  if(!user) throw new Error('Your authenticated session could not be read.');
+
+  const profileR=await fetchSet(
+    'profile',
+    supabaseClient.from('profiles')
+      .select('user_id,role,member_id,area_id,display_name')
+      .eq('user_id',user.id)
+      .maybeSingle()
+  );
+  profile=profileR.data||null;
+  if(!profile) throw new Error('Your account has no VCCF profile yet. An administrator must assign your role.');
+
+  const linkedMember=profile.member_id?db.members.find(m=>m.id===profile.member_id):null;
+  session={
+    username:user.email||profile.user_id,
+    name:profile.display_name||linkedMember?.name||user.email||profile.user_id,
+    role:profile.role==='admin'?'Admin':profile.role==='area_leader'?'Area Leader':'Member',
+    area:(db.areas.find(a=>a.id===profile.area_id)||{}).name||'',
+    areaId:profile.area_id,
+    memberId:profile.member_id,
+    memberCode:linkedMember?.memberCode||null
+  };
+  return true;
+}
 async function save(){await loadDb()} function currentMemberById(id){return db.members.find(x=>x.id===id||x.memberCode===id)} function areaIdByName(name){return (db.areas.find(a=>a.name===name)||{}).id||null} function allAccounts(){return []} function findAccount(){return null}
 const $=id=>document.getElementById(id); function toast(t){$("toast").textContent=t;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2500)} function theme(){const dark=document.documentElement.dataset.theme==="dark";document.querySelectorAll(".logo").forEach(x=>x.src=x.dataset[dark?"dark":"light"]);$("themeToggle").checked=dark} function openModal(title,body){$("modalTitle").textContent=title;$("modalBody").innerHTML=body;$("modal").classList.add("open")} $("closeModal").onclick=()=>$("modal").classList.remove("open"); function today(){return new Date().toISOString().slice(0,10)} function isSunday(d=today()){return new Date(d+"T12:00:00").getDay()===0} function allowedWrite(){return session&&["Admin","Area Leader"].includes(session.role)} function admin(){return session?.role==="Admin"} function areaMembers(){if(session?.role==="Area Leader")return db.members.filter(m=>m.area===session.area);if(session?.role==="Member")return db.members.filter(m=>m.id===session.memberId);return db.members} function birthdaysToday(){const now=new Date(),mm=String(now.getMonth()+1).padStart(2,"0"),dd=String(now.getDate()).padStart(2,"0");return db.members.filter(m=>m.birthday&&m.birthday.slice(5)===mm+"-"+dd&&(session?.role!=="Area Leader"||m.area===session.area))} function renderBirthdayFeature(){const people=birthdaysToday(),box=$("birthdayFeature"),list=$("birthdayList");if(!people.length){box.classList.add("hidden");list.innerHTML="";return}box.classList.remove("hidden");list.innerHTML=people.map(m=>`<div class="birthday-person">${memberAvatar(m)}<div><b>${m.name}</b><div style="font-size:.82rem;color:var(--muted)">${m.area} · Birthday today 🎉</div></div></div>`).join("")}
 function refresh(){$("dateText").textContent=new Date().toLocaleDateString("en-PH",{weekday:"long",year:"numeric",month:"long",day:"numeric"});renderBirthdayFeature();$("totalMembers").textContent=db.members.length;const sunday=db.attendance.filter(a=>a.date===today());$("sundayAttendance").textContent=sunday.length;$("attendanceRate").textContent=db.members.length?Math.round(sunday.length/db.members.length*100)+"%":"0%";$("newMembers").textContent=db.members.filter(m=>m.id.endsWith("NEW")).length;const areas=["Area 1","Area 2","Area 3"],max=Math.max(1,...areas.map(a=>sunday.filter(x=>x.area===a).length));$("areaBars").innerHTML=areas.map(a=>{let n=sunday.filter(x=>x.area===a).length;return `<div class="bar"><b>${a.replace("Area ","")}</b><div class="track"><div class="fill" style="width:${n/max*100}%"></div></div><span>${n}</span></div>`}).join("");$("recentAttendance").innerHTML=db.attendance.slice(-8).reverse().map(a=>{const m=db.members.find(x=>x.id===a.id)||{name:a.name,area:a.area,photo:""};return `<tr><td><div class="member-cell">${memberAvatar(m,true)}<b>${m.name}</b></div></td><td><span class="tag">${m.area}</span></td><td>${a.time}</td><td>✓ Present</td></tr>`}).join("")||`<tr><td colspan="4" style="color:var(--muted)">No attendance recorded yet.</td></tr>`;renderMembers();renderGallery();renderAbout();renderManual();renderSelfCheck();renderAttendance();applyPermissions()}
