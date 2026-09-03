@@ -82,9 +82,25 @@ function summarySnapshot(rows,type,date,title){
     ||(rows||[]).find(x=>String(x.summary_type||'').toLowerCase()===type&&x.summary_date===date)
     ||null;
 }
-function buildTrend(attendance){
-  const keys=sundayKeysBack(5),values=keys.map(k=>uniqueAttendance(attendance,k)),max=Math.max(1,...values);
-  return keys.map((k,i)=>({date:k,value:values[i],height:Math.max(8,Math.round(values[i]/max*100))}));
+function buildAreaStats(attendance,dateKey,members){
+  const accessible=(members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive');
+  const presentIds=new Set((attendance||[]).filter(a=>a.checked_in_at&&phDay(a.checked_in_at)===dateKey).map(a=>a.member_id));
+  const areas=(state().areas||[]).filter(a=>a.is_active!==false&&(role()!=='area_leader'||a.id===state().profile?.area_id));
+  const stats=areas.map(area=>{
+    const scoped=accessible.filter(m=>m.area_id===area.id),base=scoped.length,present=scoped.filter(m=>presentIds.has(m.id)).length;
+    return {id:area.id,name:area.name||'Area',present,base,rate:base?Math.round(present/base*100):0};
+  }).filter(item=>item.base>0||item.present>0);
+  const unassigned=accessible.filter(m=>!m.area_id);
+  if(unassigned.length&&role()!=='area_leader'){
+    const present=unassigned.filter(m=>presentIds.has(m.id)).length;
+    stats.push({id:'unassigned',name:'Unassigned',present,base:unassigned.length,rate:Math.round(present/unassigned.length*100)});
+  }
+  return stats;
+}
+function areaAttendanceSection(items,dateKey){
+  if(role()==='member')return '';
+  const cards=(items||[]).map(item=>'<article class="area-attendance-card"><div class="area-attendance-card-head"><div><span>AREA</span><h3>'+esc(item.name)+'</h3></div><b>'+item.rate+'%</b></div><div class="area-attendance-count"><strong>'+item.present+' / '+item.base+'</strong><span>present members</span></div><div class="area-attendance-track" aria-label="'+esc(item.name)+' attendance '+item.rate+' percent"><i style="width:'+Math.max(0,Math.min(100,item.rate))+'%"></i></div></article>').join('');
+  return '<section class="area-attendance-section card"><div class="area-attendance-head"><div><span class="dashboard-kicker">PREVIOUS SUNDAY · '+esc(shortDay(dateKey))+'</span><h2>Attendance by Area</h2><p>Attendance performance for each accessible area from the previous Sunday.</p></div><span class="scope-chip">'+(items?.length||0)+' area'+((items?.length||0)===1?'':'s')+'</span></div><div class="area-attendance-grid">'+(cards||'<div class="area-attendance-empty">No area attendance data is available for the previous Sunday.</div>')+'</div></section>';
 }
 function currentMonthSundays(){
   const today=phDay(new Date()),ym=today.slice(0,7),keys=sundayKeysBack(8).filter(k=>k.startsWith(ym)&&k<=previousSundayKey());
@@ -153,6 +169,7 @@ async function loadDashboardData(){
   const attendance=attRes.data||[],giving=giveRes.data||[],members=activeMembers();
   const prevPresent=uniqueAttendance(attendance,prev),base=Math.max(0,members.length),prevRate=base?Math.round(prevPresent/base*100):0;
   const monthKeys=currentMonthSundays(),monthValues=monthKeys.map(k=>uniqueAttendance(attendance,k)),monthAvg=monthValues.length?Math.round(monthValues.reduce((a,b)=>a+b,0)/monthValues.length):0;
+  const areaStats=buildAreaStats(attendance,prev,members);
   const checkedRegs=regs.filter(r=>r.checked_in_at||String(r.status||'').toLowerCase()==='attended'),eventAttendance=new Set(checkedRegs.map(r=>r.member_id)).size;
   const roster=regs.filter(r=>String(r.status||'').toLowerCase()!=='cancelled').length;
   const liveSundayTithe=sumGiving(giving,prev,'Tithe'),liveSundayOffering=sumGiving(giving,prev,'Offering');
@@ -168,7 +185,7 @@ async function loadDashboardData(){
     tithe:eventSummary?.tithe_total??null,offering:eventSummary?.offering_total??null,notes:eventSummary?.notes||'',summary:eventSummary,
     location:latestEvent?.location||'',eventType:latestEvent?.event_type||'Event'
   };
-  return {attendance,giving,galleryPhotos:photoRes.data||[],summaries,summaryPhotos,eventPhotos,announcements,photoById,sunday,event,trend:buildTrend(attendance),monthAvg,activeCount:base};
+  return {attendance,giving,galleryPhotos:photoRes.data||[],summaries,summaryPhotos,eventPhotos,announcements,photoById,sunday,event,areaStats,monthAvg,activeCount:base};
 }
 
 function renderCarousel(data,kind){
@@ -227,9 +244,8 @@ function renderAnnouncementCarousel(data){
 function renderDashboard(){
   const el=document.getElementById('dashboard');if(!el||!dashboardData)return;
   const s=state(),p=s.profile||{},email=s.session?.user?.email||'',name=p.display_name||memberName((s.members||[]).find(m=>m.id===p.member_id))||email||'Kapatid';
-  const trend=dashboardData.trend,max=Math.max(1,...trend.map(x=>x.value));
   const topRate=Math.round(Number(dashboardData.sunday.rate)||0),birthdays=upcomingBirthdays(activeMembers());
-  el.innerHTML='<section class="welcome-banner card"><div><span class="welcome-kicker">VCCF SANTA MARIA</span><h2>Welcome, Kapatid!</h2><p>'+esc(name)+' · '+esc(scopeCopy())+'</p></div><div class="welcome-date">'+esc(new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(new Date()))+'</div></section>'+(dashboardData.announcements?.length?'<section class="dashboard-announcements card"><div class="dashboard-announcement-head"><div><span class="dashboard-kicker">ANNOUNCEMENTS</span><h2>Church Updates</h2></div><span>'+dashboardData.announcements.length+' active</span></div><div id="dashboardAnnouncementCarousel"></div></section>':'')+'<div class="dashboard-section-head"><div><span class="dashboard-kicker">SUNDAY ANALYTICS</span><h2>Sunday Analytics & Stats</h2><p>Performance is based on completed Sundays only. Event attendance stays separate.</p></div><span class="scope-chip">'+esc(role().replace(/_/g,' '))+'</span></div><div class="sunday-stat-grid">'+summaryMetric('Previous Sunday',String(dashboardData.sunday.attendance),dateLabel(dashboardData.sunday.date))+summaryMetric('Attendance rate',topRate+'%','Previous Sunday')+summaryMetric('Monthly average',String(dashboardData.monthAvg),'Completed Sundays this month')+summaryMetric(role()==='member'?'Accessible members':'Active members',String(dashboardData.activeCount),'Current analytics scope')+'</div>'+birthdayCard(birthdays)+'<section class="sunday-trend card"><div class="trend-copy"><span class="dashboard-kicker">5-SUNDAY TREND</span><h3>Attendance movement</h3><p>Each bar represents the accessible attendance count for that Sunday.</p></div><div class="trend-bars">'+trend.map(x=>'<div class="trend-item"><strong>'+x.value+'</strong><div class="trend-track"><i style="height:'+Math.max(8,Math.round(x.value/max*100))+'%"></i></div><span>'+esc(shortDay(x.date))+'</span></div>').join('')+'</div></section><section class="summary-layout"><div class="summary-analytics card"><div class="summary-tabs"><button class="active" type="button" data-summary-kind="sunday">Previous Sunday</button><button type="button" data-summary-kind="event" '+(dashboardData.event.exists?'':'disabled')+'>Latest Event</button></div><div id="summaryAnalyticsBody"></div></div><div class="summary-carousel-card card"><div class="carousel-heading"><div><span class="dashboard-kicker">FEATURED PHOTOS</span><h3>Summary Highlights</h3></div><span>Carousel</span></div><div id="summaryCarousel" class="summary-carousel"></div></div></section>';
+  el.innerHTML='<section class="welcome-banner card"><div><span class="welcome-kicker">VCCF SANTA MARIA</span><h2>Welcome, Kapatid!</h2><p>'+esc(name)+' · '+esc(scopeCopy())+'</p></div><div class="welcome-date">'+esc(new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(new Date()))+'</div></section>'+(dashboardData.announcements?.length?'<section class="dashboard-announcements card"><div class="dashboard-announcement-head"><div><span class="dashboard-kicker">ANNOUNCEMENTS</span><h2>Church Updates</h2></div><span>'+dashboardData.announcements.length+' active</span></div><div id="dashboardAnnouncementCarousel"></div></section>':'')+'<div class="dashboard-section-head"><div><span class="dashboard-kicker">SUNDAY ANALYTICS</span><h2>Sunday Analytics & Stats</h2><p>Performance is based on completed Sundays only. Event attendance stays separate.</p></div><span class="scope-chip">'+esc(role().replace(/_/g,' '))+'</span></div><div class="sunday-stat-grid">'+summaryMetric('Previous Sunday',String(dashboardData.sunday.attendance),dateLabel(dashboardData.sunday.date))+summaryMetric('Attendance rate',topRate+'%','Previous Sunday')+summaryMetric('Monthly average',String(dashboardData.monthAvg),'Completed Sundays this month')+summaryMetric(role()==='member'?'Accessible members':'Active members',String(dashboardData.activeCount),'Current analytics scope')+'</div>'+birthdayCard(birthdays)+areaAttendanceSection(dashboardData.areaStats,dashboardData.sunday.date)+'<section class="summary-layout"><div class="summary-analytics card"><div class="summary-tabs"><button class="active" type="button" data-summary-kind="sunday">Previous Sunday</button><button type="button" data-summary-kind="event" '+(dashboardData.event.exists?'':'disabled')+'>Latest Event</button></div><div id="summaryAnalyticsBody"></div></div><div class="summary-carousel-card card"><div class="carousel-heading"><div><span class="dashboard-kicker">FEATURED PHOTOS</span><h3>Summary Highlights</h3></div><span>Carousel</span></div><div id="summaryCarousel" class="summary-carousel"></div></div></section>';
   renderAnnouncementCarousel(dashboardData);
   el.querySelectorAll('[data-summary-kind]').forEach(b=>b.onclick=()=>renderSummary(b.dataset.summaryKind));
   renderSummary(selectedSummary==='event'&&dashboardData.event.exists?'event':'sunday');
