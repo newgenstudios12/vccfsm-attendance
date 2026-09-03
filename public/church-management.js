@@ -68,6 +68,16 @@ const profileOptions = (selected='') =>
   data.profiles.map(p => '<option value="'+attr(p.user_id)+'" '+(p.user_id===selected?'selected':'')+'>'+esc(p.display_name || p.user_id)+'</option>').join('');
 const fmtDate = v => v ? new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric'}).format(new Date(v)) : '—';
 const fmtDateTime = v => v ? new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(v)) : '—';
+const phDay = v => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(v));
+const latestSunday = () => { const d=new Date(phDay(new Date())+'T12:00:00+08:00'); d.setDate(d.getDate()-d.getDay()); return phDay(d); };
+const nextBirthday = birth => {
+  if(!birth) return null;
+  const parts=String(birth).split('-'); if(parts.length<3) return null;
+  const now=new Date(phDay(new Date())+'T12:00:00+08:00');
+  let d=new Date(now.getFullYear()+'-'+parts[1]+'-'+parts[2]+'T12:00:00+08:00');
+  if(d<now) d=new Date((now.getFullYear()+1)+'-'+parts[1]+'-'+parts[2]+'T12:00:00+08:00');
+  return d;
+};
 const toLocalInput = v => {
   if (!v) return '';
   const d = new Date(v);
@@ -213,40 +223,54 @@ function badge(text,kind=''){return '<span class="cms-badge '+kind+'">'+esc(text
 function tabActive(){document.querySelectorAll('[data-cms-tab]').forEach(b=>b.classList.toggle('active',b.dataset.cmsTab===activeTab));}
 
 function renderOverview(){
+  const members=appState().members||[];
+  const activeMembers=members.filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive');
+  const inactiveMembers=members.filter(m=>m.is_active===false||String(m.status||'').toLowerCase()==='inactive');
+  const sunday=latestSunday();
+  const sundayPresent=new Set(data.attendance.filter(a=>phDay(a.checked_in_at)===sunday).map(a=>a.member_id));
+  const sundayRate=activeMembers.length?Math.round(sundayPresent.size/activeMembers.length*100):0;
+  const new30=members.filter(m=>m.created_at&&new Date(m.created_at).getTime()>=Date.now()-30*86400000).length;
+  const birthdays=members.map(m=>({m,date:nextBirthday(m.birth_date)})).filter(x=>x.date&&x.date.getTime()-Date.now()<=30*86400000).sort((a,b)=>a.date-b.date).slice(0,8);
   const now=Date.now();
   const upcoming=data.events.filter(e=>new Date(e.start_at).getTime()>=now && e.status!=='Cancelled').slice(0,5);
   const published=data.announcements.filter(a=>a.is_published).slice(0,5);
   const activeLeaders=data.leadership.filter(l=>l.is_active).length;
   const pendingPastoral=data.pastoral.filter(x=>String(x.status).toLowerCase()!=='completed').length;
   const openPrayers=data.prayers.filter(x=>!['answered','closed'].includes(String(x.status).toLowerCase())).length;
-  const attendance30=data.attendance.filter(a=>new Date(a.checked_in_at).getTime()>=Date.now()-30*86400000).length;
   content().innerHTML=
     '<div class="cms-stats">'+
-      statCard('Members',(appState().members||[]).length,'Member details remain in the Members module')+
+      statCard('Total Members',members.length,'Member details remain in the Members module')+
+      statCard('Active Members',activeMembers.length)+
+      statCard('Inactive Members',inactiveMembers.length)+
+      statCard('Sunday Attendance',sundayPresent.size,sunday+' · '+sundayRate+'% of active members')+
+      statCard('New Members · 30d',new30)+
       statCard('Areas',data.areas.filter(x=>x.is_active!==false).length)+
       statCard('Ministries',data.ministries.filter(x=>x.is_active!==false).length)+
       statCard('Active Leaders',activeLeaders)+
       statCard('Upcoming Events',upcoming.length)+
       statCard('Open Prayer Requests',openPrayers)+
       statCard('Pastoral Follow-ups',pendingPastoral)+
-      statCard('Attendance Records · 30d',attendance30)+
+      statCard('Birthdays · 30d',birthdays.length)+
     '</div>'+
     '<div class="cms-grid two">'+
       '<section class="cms-panel card"><div class="cms-panel-head"><h3>Upcoming Events</h3><button class="cms-link" data-jump="events">Manage</button></div>'+
         (upcoming.length?upcoming.map(e=>'<div class="cms-list-row"><div><b>'+esc(e.title)+'</b><span>'+fmtDateTime(e.start_at)+(e.location?' · '+esc(e.location):'')+'</span></div>'+badge(e.status)+'</div>').join(''):empty('No upcoming events.'))+
       '</section>'+
-      '<section class="cms-panel card"><div class="cms-panel-head"><h3>Announcements</h3><button class="cms-link" data-jump="announcements">Manage</button></div>'+
-        (published.length?published.map(a=>'<div class="cms-list-row"><div><b>'+esc(a.title)+'</b><span>'+esc(a.audience)+' · '+fmtDate(a.publish_at)+'</span></div>'+badge(a.is_published?'Published':'Draft',a.is_published?'ok':'')+'</div>').join(''):empty('No announcements yet.'))+
+      '<section class="cms-panel card"><div class="cms-panel-head"><h3>Upcoming Birthdays</h3></div>'+
+        (birthdays.length?birthdays.map(x=>'<div class="cms-list-row"><div><b>'+esc(memberName(x.m.id))+'</b><span>'+fmtDate(x.date)+' · '+esc(areaName(x.m.area_id))+'</span></div>'+badge('Birthday')+'</div>').join(''):empty('No birthdays in the next 30 days.'))+
       '</section>'+
     '</div>'+
     '<div class="cms-grid two">'+
+      '<section class="cms-panel card"><div class="cms-panel-head"><h3>Announcements</h3><button class="cms-link" data-jump="announcements">Manage</button></div>'+
+        (published.length?published.map(a=>'<div class="cms-list-row"><div><b>'+esc(a.title)+'</b><span>'+esc(a.audience)+' · '+fmtDate(a.publish_at)+'</span></div>'+badge(a.is_published?'Published':'Draft',a.is_published?'ok':'')+'</div>').join(''):empty('No announcements yet.'))+
+      '</section>'+
       '<section class="cms-panel card"><h3>Ministry Snapshot</h3>'+
       (data.ministries.length?data.ministries.slice(0,8).map(m=>{const n=data.ministryMembers.filter(x=>x.ministry_id===m.id).length;return '<div class="cms-meter-row"><span>'+esc(m.name)+'</span><div class="cms-meter"><i style="width:'+Math.min(100,n*10)+'%"></i></div><b>'+n+'</b></div>'}).join(''):empty('No ministries.'))+
       '</section>'+
-      '<section class="cms-panel card"><h3>Next Church Services</h3>'+
+    '</div>'+
+    '<section class="cms-panel card"><h3>Next Church Services</h3>'+
       (data.serviceSessions.filter(s=>new Date(s.service_date+'T12:00:00+08:00').getTime()>=Date.now()-86400000).slice(0,6).map(s=>'<div class="cms-list-row"><div><b>'+esc(s.title||data.serviceTypes.find(t=>t.id===s.service_type_id)?.name||'Church Service')+'</b><span>'+fmtDate(s.service_date)+' · '+esc(s.theme||'No theme set')+'</span></div>'+badge(s.status)+'</div>').join('')||empty('No service sessions scheduled.'))+
-      '</section>'+
-    '</div>';
+    '</section>';
   content().querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.jump;renderActive()});
 }
 
@@ -309,11 +333,11 @@ function membershipForm(ministryId){
 function renderServices(){
   const can=canManageChurch();
   const typeRows=data.serviceTypes.map(t=>'<tr><td><b>'+esc(t.name)+'</b><div class="cms-sub">'+esc(t.description||'')+'</div></td><td>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.day_of_week]+'</td><td>'+esc(t.start_time?.slice(0,5)||'—')+'</td><td>'+esc(t.location||'—')+'</td><td>'+badge(t.is_active?'Active':'Inactive',t.is_active?'ok':'muted')+'</td><td>'+(can?'<button class="cms-small" data-service-type="'+t.id+'">Edit</button>':'')+'</td></tr>').join('');
-  const sessions=data.serviceSessions.slice(0,100).map(s=>'<tr><td><b>'+esc(s.title||data.serviceTypes.find(t=>t.id===s.service_type_id)?.name||'Church Service')+'</b><div class="cms-sub">'+esc(s.theme||s.scripture||'')+'</div></td><td>'+esc(s.service_date)+'</td><td>'+esc(s.preacher_member_id?memberName(s.preacher_member_id):(s.guest_preacher||'—'))+'</td><td>'+badge(s.status,s.status==='Completed'?'ok':'')+'</td><td>'+(can?'<button class="cms-small" data-service-session="'+s.id+'">Edit</button>':'')+'</td></tr>').join('');
+  const sessions=data.serviceSessions.slice(0,100).map(s=>{const att=new Set(data.attendance.filter(a=>phDay(a.checked_in_at)===s.service_date).map(a=>a.member_id)).size;return '<tr><td><b>'+esc(s.title||data.serviceTypes.find(t=>t.id===s.service_type_id)?.name||'Church Service')+'</b><div class="cms-sub">'+esc(s.theme||s.scripture||'')+'</div></td><td>'+esc(s.service_date)+'</td><td>'+esc(s.preacher_member_id?memberName(s.preacher_member_id):(s.guest_preacher||'—'))+'</td><td>'+att+'</td><td>'+badge(s.status,s.status==='Completed'?'ok':'')+'</td><td>'+(can?'<button class="cms-small" data-service-session="'+s.id+'">Edit</button>':'')+'</td></tr>';}).join('');
   content().innerHTML='<div class="cms-grid one"><section class="cms-panel card"><div class="cms-panel-head"><div><h3>Service Schedules</h3><p>Recurring church service templates.</p></div>'+(can?'<button id="addServiceType" class="btn">Add Schedule</button>':'')+'</div>'+
     '<div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Day</th><th>Time</th><th>Location</th><th>Status</th><th></th></tr></thead><tbody>'+typeRows+'</tbody></table></div></section>'+
     '<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Service Sessions</h3><p>Actual scheduled/completed church services.</p></div>'+(can?'<button id="addServiceSession" class="btn">Add Session</button>':'')+'</div>'+
-    '<div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Date</th><th>Preacher</th><th>Status</th><th></th></tr></thead><tbody>'+(sessions||'<tr><td colspan="5">'+empty('No service sessions yet.')+'</td></tr>')+'</tbody></table></div></section></div>';
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Date</th><th>Preacher</th><th>Attendance</th><th>Status</th><th></th></tr></thead><tbody>'+(sessions||'<tr><td colspan="6">'+empty('No service sessions yet.')+'</td></tr>')+'</tbody></table></div></section></div>';
   document.getElementById('addServiceType')?.addEventListener('click',()=>serviceTypeForm());
   document.getElementById('addServiceSession')?.addEventListener('click',()=>serviceSessionForm());
   content().querySelectorAll('[data-service-type]').forEach(b=>b.onclick=()=>serviceTypeForm(data.serviceTypes.find(x=>x.id===b.dataset.serviceType)));
@@ -540,20 +564,28 @@ async function saveDocument(f,d=null){
 
 function renderReports(){
   const members=appState().members||[];
+  const active=members.filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive');
+  const inactive=members.filter(m=>m.is_active===false||String(m.status||'').toLowerCase()==='inactive');
+  const new30=members.filter(m=>m.created_at&&new Date(m.created_at).getTime()>=Date.now()-30*86400000).length;
   const last30=data.attendance.filter(a=>new Date(a.checked_in_at).getTime()>=Date.now()-30*86400000);
   const attendanceMembers=new Set(last30.map(a=>a.member_id));
-  const attendanceRate=members.length?Math.round(attendanceMembers.size/members.length*100):0;
+  const attendanceRate=active.length?Math.round(attendanceMembers.size/active.length*100):0;
   const areaRows=data.areas.map(a=>{
     const total=members.filter(m=>m.area_id===a.id).length;
+    const activeArea=active.filter(m=>m.area_id===a.id).length;
     const present=new Set(last30.filter(x=>x.area_id===a.id).map(x=>x.member_id)).size;
-    const rate=total?Math.round(present/total*100):0;
-    return '<tr><td>'+esc(a.name)+'</td><td>'+total+'</td><td>'+present+'</td><td>'+rate+'%</td></tr>';
+    const rate=activeArea?Math.round(present/activeArea*100):0;
+    return '<tr><td>'+esc(a.name)+'</td><td>'+total+'</td><td>'+activeArea+'</td><td>'+present+'</td><td>'+rate+'%</td></tr>';
   }).join('');
   const ministryRows=data.ministries.map(m=>'<tr><td>'+esc(m.name)+'</td><td>'+data.ministryMembers.filter(x=>x.ministry_id===m.id).length+'</td><td>'+esc(m.leader_member_id?memberName(m.leader_member_id):'—')+'</td></tr>').join('');
-  content().innerHTML='<div class="cms-stats">'+statCard('30-day unique attendance',attendanceMembers.size)+statCard('30-day member reach',attendanceRate+'%')+statCard('Upcoming events',data.events.filter(e=>new Date(e.start_at)>new Date()).length)+statCard('Completed services',data.serviceSessions.filter(s=>s.status==='Completed').length)+'</div>'+
-    '<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Area Attendance · Last 30 Days</h3><p>Unique members with at least one attendance record.</p></div><button id="exportCmsReport" class="btn secondary">Export CSV</button></div>'+
-    '<div class="table-wrap"><table class="table"><thead><tr><th>Area</th><th>Members</th><th>Reached</th><th>Reach Rate</th></tr></thead><tbody>'+areaRows+'</tbody></table></div></section>'+
-    '<section class="cms-panel card"><h3>Ministry Participation</h3><div class="table-wrap"><table class="table"><thead><tr><th>Ministry</th><th>Members</th><th>Leader</th></tr></thead><tbody>'+ministryRows+'</tbody></table></div></section>';
+  const inactiveRows=inactive.slice(0,150).map(m=>'<tr><td>'+esc(memberName(m.id))+'</td><td>'+esc(areaName(m.area_id))+'</td><td>'+esc(m.status||'Inactive')+'</td></tr>').join('');
+  content().innerHTML='<div class="cms-stats">'+
+    statCard('Active Members',active.length)+statCard('Inactive Members',inactive.length)+statCard('New Members · 30d',new30)+statCard('30-day unique attendance',attendanceMembers.size)+statCard('30-day member reach',attendanceRate+'%')+statCard('Upcoming events',data.events.filter(e=>new Date(e.start_at)>new Date()).length)+statCard('Completed services',data.serviceSessions.filter(s=>s.status==='Completed').length)+
+    '</div>'+
+    '<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Area Comparison · Last 30 Days</h3><p>Unique attendance reach compared with active members.</p></div><button id="exportCmsReport" class="btn secondary">Export CSV</button></div>'+
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Area</th><th>Total</th><th>Active</th><th>Reached</th><th>Reach Rate</th></tr></thead><tbody>'+areaRows+'</tbody></table></div></section>'+
+    '<div class="cms-grid two"><section class="cms-panel card"><h3>Ministry Participation</h3><div class="table-wrap"><table class="table"><thead><tr><th>Ministry</th><th>Members</th><th>Leader</th></tr></thead><tbody>'+ministryRows+'</tbody></table></div></section>'+
+    '<section class="cms-panel card"><h3>Inactive Members</h3><div class="table-wrap"><table class="table"><thead><tr><th>Member</th><th>Area</th><th>Status</th></tr></thead><tbody>'+(inactiveRows||'<tr><td colspan="3">'+empty('No inactive members.')+'</td></tr>')+'</tbody></table></div></section></div>';
   document.getElementById('exportCmsReport').onclick=exportReport;
 }
 function exportReport(){
