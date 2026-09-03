@@ -4,23 +4,6 @@ if (window.__VCCF_CHURCH_MANAGEMENT_V1__) return;
 window.__VCCF_CHURCH_MANAGEMENT_V1__ = true;
 
 const ROOT_ID = 'church';
-const TABS = [
-  ['overview','Overview'],
-  ['areas','Areas'],
-  ['ministries','Ministries'],
-  ['services','Church Services'],
-  ['events','Events'],
-  ['leadership','Leadership'],
-  ['pastoral','Pastoral Care'],
-  ['prayer','Prayer Requests'],
-  ['announcements','Announcements'],
-  ['documents','Documents'],
-  ['reports','Reports'],
-  ['access','Access'],
-  ['audit','Audit Log'],
-  ['settings','Settings']
-];
-
 let activeTab = 'overview';
 let loading = false;
 let loaded = false;
@@ -29,7 +12,7 @@ let data = {
   serviceTypes:[], serviceSessions:[],
   events:[], registrations:[], leadership:[],
   pastoral:[], prayers:[], announcements:[], documents:[],
-  profiles:[], audit:[], settings:[], attendance:[]
+  profiles:[], audit:[], attendance:[]
 };
 
 const V = () => window.VCCF;
@@ -41,9 +24,8 @@ const role = () => String(appState().profile?.role || '').toLowerCase();
 const isAdmin = () => role() === 'admin';
 const isPastor = () => role() === 'pastor';
 const isAreaLeader = () => role() === 'area_leader';
-const isMinistryLeader = () => role() === 'ministry_leader';
 const canManageChurch = () => isAdmin() || isPastor();
-const canManageEvents = () => canManageChurch() || isAreaLeader() || isMinistryLeader();
+const canManageEvents = () => canManageChurch() || isAreaLeader();
 const canManageAnnouncements = canManageEvents;
 const canSeePastoral = () => canManageChurch() || isAreaLeader();
 const currentUserId = () => appState().session?.user?.id || null;
@@ -127,7 +109,7 @@ async function loadAll(force=false) {
 
     const [
       areas,ministries,ministryMembers,serviceTypes,serviceSessions,events,registrations,
-      leadership,pastoral,prayers,announcements,documents,profiles,audit,settings,attendance
+      leadership,pastoral,prayers,announcements,documents,profiles,audit,attendance
     ] = await Promise.all([
       read(client.from('areas').select('id,name,is_active,description,updated_at').order('name')),
       read(client.from('ministries').select('id,name,description,is_active,leader_member_id,created_at,updated_at').order('name')),
@@ -143,10 +125,9 @@ async function loadAll(force=false) {
       read(client.from('church_documents').select('*').order('created_at',{ascending:false}).limit(200)),
       read(profileQuery),
       read(auditQuery),
-      read(client.from('site_settings').select('key,value,updated_at,updated_by').order('key')),
       read(client.from('attendance').select('id,member_id,area_id,checked_in_at').gte('checked_in_at',since).order('checked_in_at',{ascending:false}).limit(3000))
     ]);
-    Object.assign(data,{areas,ministries,ministryMembers,serviceTypes,serviceSessions,events,registrations,leadership,pastoral,prayers,announcements,documents,profiles,audit,settings,attendance});
+    Object.assign(data,{areas,ministries,ministryMembers,serviceTypes,serviceSessions,events,registrations,leadership,pastoral,prayers,announcements,documents,profiles,audit,attendance});
     loaded=true;
   } finally {
     setBusy(false);
@@ -201,17 +182,7 @@ function modal(title, body, onSubmit, saveLabel='Save') {
 function shell() {
   const r=root(); if(!r || r.dataset.cmsReady) return;
   r.dataset.cmsReady='1';
-  r.innerHTML='<div class="cms-shell">'+
-    '<div class="cms-hero card"><div><div class="cms-kicker">VCCF SANTA MARIA</div><h2>Church Management System</h2><p>Administration, ministries, services, events, leadership and pastoral workflows.</p></div>'+
-    '<div class="cms-hero-actions"><span id="cmsRole" class="cms-role"></span><button id="cmsRefresh" class="btn secondary" type="button">Refresh</button></div></div>'+
-    '<div class="cms-tabs card" id="cmsTabs"></div><div id="cmsContent" class="cms-content"></div></div>';
-  const tabs=document.getElementById('cmsTabs');
-  TABS.forEach(([key,label])=>{
-    if((key==='access'||key==='audit'||key==='settings') && !isAdmin()) return;
-    if(key==='pastoral' && !canSeePastoral()) return;
-    const b=document.createElement('button'); b.type='button'; b.dataset.cmsTab=key; b.textContent=label;
-    b.onclick=()=>{activeTab=key; renderActive();}; tabs.appendChild(b);
-  });
+  r.innerHTML='<div class="cms-shell"><div class="cms-module-tools"><span id="cmsRole" class="cms-role"></span><button id="cmsRefresh" class="btn secondary" type="button">Refresh</button></div><div id="cmsContent" class="cms-content"></div></div>';
   document.getElementById('cmsRefresh').onclick=async()=>{loaded=false;await loadAll(true);renderActive();toast('Church Management refreshed.',true)};
 }
 
@@ -220,7 +191,6 @@ function statCard(label,value,hint='') {
 }
 function empty(msg){return '<div class="cms-empty">'+esc(msg)+'</div>';}
 function badge(text,kind=''){return '<span class="cms-badge '+kind+'">'+esc(text)+'</span>';}
-function tabActive(){document.querySelectorAll('[data-cms-tab]').forEach(b=>b.classList.toggle('active',b.dataset.cmsTab===activeTab));}
 
 function renderOverview(){
   const members=appState().members||[];
@@ -271,7 +241,7 @@ function renderOverview(){
     '<section class="cms-panel card"><h3>Next Church Services</h3>'+
       (data.serviceSessions.filter(s=>new Date(s.service_date+'T12:00:00+08:00').getTime()>=Date.now()-86400000).slice(0,6).map(s=>'<div class="cms-list-row"><div><b>'+esc(s.title||data.serviceTypes.find(t=>t.id===s.service_type_id)?.name||'Church Service')+'</b><span>'+fmtDate(s.service_date)+' · '+esc(s.theme||'No theme set')+'</span></div>'+badge(s.status)+'</div>').join('')||empty('No service sessions scheduled.'))+
     '</section>';
-  content().querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{activeTab=b.dataset.jump;renderActive()});
+  content().querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>navigate(b.dataset.jump));
 }
 
 function renderAreas(){
@@ -297,7 +267,7 @@ function areaForm(a=null){
 }
 
 function renderMinistries(){
-  const can=canManageChurch()||isMinistryLeader();
+  const can=canManageChurch();
   const rows=data.ministries.map(m=>{
     const count=data.ministryMembers.filter(x=>x.ministry_id===m.id).length;
     const leader=m.leader_member_id?memberName(m.leader_member_id):'Not assigned';
@@ -609,11 +579,12 @@ function renderAccess(){
 }
 function accessForm(p){
   modal('Edit Access — '+(p.display_name||'Account'),
-    '<label>Role<select name="role">'+[['admin','Admin'],['pastor','Pastor'],['area_leader','Area Leader'],['ministry_leader','Ministry Leader'],['member','Member'],['guest','Guest']].map(([v,l])=>'<option value="'+v+'" '+(p.role===v?'selected':'')+'>'+l+'</option>').join('')+'</select></label>'+
+    '<label>Role<select name="role">'+[['admin','Admin'],['pastor','Pastor'],['area_leader','Area Leader'],['member','Member']].map(([v,l])=>'<option value="'+v+'" '+(p.role===v?'selected':'')+'>'+l+'</option>').join('')+'</select></label>'+
     '<label>Area<select name="area_id">'+areaOptions(p.area_id||'')+'</select></label>'+
-    '<div class="cms-info">Admin accounts must remain church-wide. Area Leader accounts should have an Area. Ministry Leader scope is assigned in the Leadership module.</div>',
+    '<div class="cms-info">Admin and Pastor accounts are church-wide. Area Leader accounts must be assigned to an Area. Members can access their own member record.</div>',
     async f=>{
-      let ar=f.get('area_id')||null, rr=f.get('role'); if(rr==='admin') ar=null;
+      let ar=f.get('area_id')||null, rr=f.get('role'); if(rr==='admin'||rr==='pastor') ar=null;
+      if(rr==='area_leader'&&!ar) throw new Error('Select an Area for the Area Leader.');
       const r=await sb().from('profiles').update({role:rr,area_id:ar,updated_at:new Date().toISOString()}).eq('user_id',p.user_id);
       if(r.error) throw r.error;
       await writeAudit('update','profiles',null,{user_id:p.user_id,role:rr,area_id:ar});
@@ -629,35 +600,12 @@ function renderAudit(){
     '<div class="table-wrap"><table class="table"><thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>Actor</th><th>Metadata</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5">'+empty('No audit entries.')+'</td></tr>')+'</tbody></table></div></section>';
 }
 
-function settingValue(key, fallback=''){return data.settings.find(s=>s.key===key)?.value ?? fallback}
-function renderSettings(){
-  if(!isAdmin()){content().innerHTML=empty('Administrator access required.');return;}
-  content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Church Settings</h3><p>Basic identity and scheduling defaults.</p></div></div>'+
-    '<form id="cmsSettingsForm" class="cms-settings">'+
-    '<label>Church name<input name="church_name" value="'+attr(settingValue('church_name','VCCF Santa Maria'))+'"></label>'+
-    '<label>Church location<input name="church_location" value="'+attr(settingValue('church_location','Santa Maria, Laguna'))+'"></label>'+
-    '<label>Timezone<input name="church_timezone" value="'+attr(settingValue('church_timezone','Asia/Manila'))+'"></label>'+
-    '<label>Default service day<select name="default_service_day">'+['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(x=>'<option '+(settingValue('default_service_day','Sunday')===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label>'+
-    '<button type="submit" class="btn">Save Settings</button><div id="cmsSettingsMsg" class="msg"></div></form></section>';
-  document.getElementById('cmsSettingsForm').onsubmit=async e=>{
-    e.preventDefault(); const f=new FormData(e.target);
-    const keys=['church_name','church_location','church_timezone','default_service_day'];
-    for(const key of keys){
-      const r=await sb().from('site_settings').upsert({key,value:String(f.get(key)||''),updated_at:new Date().toISOString(),updated_by:currentUserId()},{onConflict:'key'});
-      if(r.error){toast(r.error.message);return;}
-    }
-    await writeAudit('update','site_settings',null,{keys}); loaded=false; await loadAll(true); renderActive(); toast('Church settings saved.',true);
-  };
-}
-
 function renderActive(){
   if(!root()) return;
-  tabActive();
-  document.getElementById('cmsRole').textContent=(role()||'member').replace(/_/g,' ');
+  const roleEl=document.getElementById('cmsRole');if(roleEl)roleEl.textContent=(role()||'member').replace(/_/g,' ');
   if(!loaded){ content().innerHTML='<div class="cms-panel card">'+empty('Loading Church Management…')+'</div>'; loadAll().then(renderActive); return; }
-  const map={overview:renderOverview,areas:renderAreas,ministries:renderMinistries,services:renderServices,events:renderEvents,leadership:renderLeadership,pastoral:renderPastoral,prayer:renderPrayer,announcements:renderAnnouncements,documents:renderDocuments,reports:renderReports,access:renderAccess,audit:renderAudit,settings:renderSettings};
+  const map={overview:renderOverview,areas:renderAreas,ministries:renderMinistries,services:renderServices,events:renderEvents,leadership:renderLeadership,pastoral:renderPastoral,prayer:renderPrayer,announcements:renderAnnouncements,documents:renderDocuments,reports:renderReports,access:renderAccess,audit:renderAudit};
   (map[activeTab]||renderOverview)();
-  tabActive();
 }
 
 async function init(){
@@ -665,15 +613,18 @@ async function init(){
   shell();
   await loadAll();
   renderActive();
-  const nav=document.querySelector('.nav button[data-view="church"]');
-  if(nav && !nav.dataset.cmsBound){
-    nav.dataset.cmsBound='1';
-    nav.addEventListener('click',()=>setTimeout(()=>{document.getElementById('title').textContent='Church Management';renderActive();},0));
-  }
 }
 
+function navigate(tab){
+  activeTab=tab||'overview';
+  shell();
+  renderActive();
+  window.dispatchEvent(new CustomEvent('vccf-cms-route',{detail:{route:activeTab}}));
+}
+window.VCCFChurchManagement={navigate,refresh:async()=>{loaded=false;await loadAll(true);renderActive();}};
+
 window.addEventListener('vccf-app-ready',()=>setTimeout(init,0));
-window.addEventListener('vccf-signed-out',()=>{loaded=false;data={areas:[],ministries:[],ministryMembers:[],serviceTypes:[],serviceSessions:[],events:[],registrations:[],leadership:[],pastoral:[],prayers:[],announcements:[],documents:[],profiles:[],audit:[],settings:[],attendance:[]};});
+window.addEventListener('vccf-signed-out',()=>{loaded=false;data={areas:[],ministries:[],ministryMembers:[],serviceTypes:[],serviceSessions:[],events:[],registrations:[],leadership:[],pastoral:[],prayers:[],announcements:[],documents:[],profiles:[],audit:[],attendance:[]};});
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(init,0),{once:true});
 else setTimeout(init,0);
 })();
