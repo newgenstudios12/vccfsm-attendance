@@ -751,11 +751,11 @@ function renderAccess(){
 }
 function accessForm(p){
   modal('Edit Access — '+(p.display_name||'Account'),
-    '<label>Role<select name="role">'+[['admin','Admin'],['pastor','Pastor'],['area_leader','Area Leader'],['member','Member']].map(([v,l])=>'<option value="'+v+'" '+(p.role===v?'selected':'')+'>'+l+'</option>').join('')+'</select></label>'+
+    '<label>Role<select name="role">'+[['admin','Admin'],['pastor','Pastor'],['treasurer','Treasurer'],['area_leader','Area Leader'],['member','Member']].map(([v,l])=>'<option value="'+v+'" '+(p.role===v?'selected':'')+'>'+l+'</option>').join('')+'</select></label>'+
     '<label>Area<select name="area_id">'+areaOptions(p.area_id||'')+'</select></label>'+
-    '<div class="cms-info">Admin and Pastor accounts are church-wide. Area Leader accounts must be assigned to an Area. Members can access their own member record.</div>',
+    '<div class="cms-info">Treasurer accounts have Member-level access everywhere except Tithes & Offerings, where they can encode/edit and submit Sunday giving for Admin/Pastor approval. Area Leader accounts must be assigned to an Area.</div>',
     async f=>{
-      let ar=f.get('area_id')||null, rr=f.get('role'); if(rr==='admin'||rr==='pastor') ar=null;
+      let ar=f.get('area_id')||null, rr=f.get('role'); if(rr==='admin'||rr==='pastor'||rr==='treasurer') ar=null;
       if(rr==='area_leader'&&!ar) throw new Error('Select an Area for the Area Leader.');
       const r=await sb().from('profiles').update({role:rr,area_id:ar,updated_at:new Date().toISOString()}).eq('user_id',p.user_id);
       if(r.error) throw r.error;

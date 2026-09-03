@@ -7,18 +7,20 @@ let root=null;
 let records=[];
 let batches=[];
 let sundayRecords=[];
+let givingMembers=[];
 let loadedMonth='';
 let selectedSunday='';
 
 const state=()=>window.VCCF?.getState?.()||{};
 const sb=()=>window.VCCF?.sb;
 const role=()=>String(state().profile?.role||'member').toLowerCase();
-const canManage=()=>['admin','pastor'].includes(role());
+const canManage=()=>['admin','pastor','treasurer'].includes(role());
+const canApprove=()=>['admin','pastor'].includes(role());
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const attr=esc;
 const php=v=>new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',maximumFractionDigits:2}).format(Number(v)||0);
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_code||'Member';
-const memberById=id=>(state().members||[]).find(m=>m.id===id);
+const memberById=id=>givingMembers.find(m=>m.id===id)||(state().members||[]).find(m=>m.id===id);
 const areaName=id=>(state().areas||[]).find(a=>a.id===id)?.name||'Unassigned';
 const currentUserId=()=>state().session?.user?.id||null;
 const profileName=()=>String(state().profile?.display_name||memberName(memberById(state().profile?.member_id))||'').trim();
@@ -29,8 +31,8 @@ const dateLabel=value=>value?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Man
 const dateTimeLabel=value=>value?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(value)):'—';
 const isSunday=day=>day&&new Date(day+'T12:00:00+08:00').getDay()===0;
 const latestSunday=()=>{const now=new Date(),ph=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Manila'})),d=new Date(ph);d.setHours(12,0,0,0);d.setDate(d.getDate()-d.getDay());return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(d)};
-const scopeCopy=()=>role()==='admin'||role()==='pastor'?'Church-wide financial records.':role()==='area_leader'?'Giving records for members in your assigned area.':'Your personal tithes and offerings history.';
-const activeMembers=()=>(state().members||[]).slice().sort((a,b)=>memberName(a).localeCompare(memberName(b)));
+const scopeCopy=()=>role()==='admin'||role()==='pastor'?'Church-wide financial records.':role()==='treasurer'?'Church-wide giving encoding and Sunday finance preparation. Admin/Pastor approval is required.':role()==='area_leader'?'Giving records for members in your assigned area.':'Your personal tithes and offerings history.';
+const activeMembers=()=>((givingMembers.length?givingMembers:(state().members||[]))).slice().sort((a,b)=>memberName(a).localeCompare(memberName(b)));
 const batchStatusLabel=status=>({draft:'Draft',submitted:'Awaiting approval',approved:'Approved'})[status]||'Not started';
 const batchStatusClass=status=>status==='approved'?'approved':status==='submitted'?'submitted':'draft';
 const currentBatch=()=>batches.find(b=>b.sunday_date===selectedSunday)||null;
@@ -40,6 +42,13 @@ async function load(month){
   const client=sb();if(!client)throw new Error('Giving service is unavailable.');
   if(!selectedSunday)selectedSunday=latestSunday();
   const bounds=monthBounds(month);
+  if(role()==='treasurer'){
+    const directory=await client.rpc('get_giving_member_directory');
+    if(directory.error)throw directory.error;
+    givingMembers=directory.data||[];
+  }else{
+    givingMembers=[];
+  }
   const tasks=[
     client.from('giving_records').select('id,member_id,given_on,giving_type,amount,payment_method,reference_no,notes,recorded_by,created_at,sunday_batch_id').gte('given_on',bounds.start).lt('given_on',bounds.end).order('given_on',{ascending:false}).order('created_at',{ascending:false})
   ];
@@ -92,7 +101,7 @@ function sundayWorkflowHtml(){
   let actions='';
   if(!batch)actions='<button id="startSundayGiving" class="btn" type="button">Start Sunday Giving</button>';
   else if(status==='draft')actions='<button id="recordSundayGiving" class="btn secondary" type="button">+ Record Tithe / Offering</button><button id="submitSundayGiving" class="btn" type="button">Sign & Submit</button>';
-  else if(status==='submitted')actions='<button id="approveSundayGiving" class="btn" type="button">Approve Sunday Giving</button>';
+  else if(status==='submitted')actions=canApprove()?'<button id="approveSundayGiving" class="btn" type="button">Approve Sunday Giving</button>':'<span class="sunday-giving-approved-note">Submitted · waiting for Admin/Pastor approval.</span>';
   else actions='<span class="sunday-giving-approved-note">✓ Approved totals are synced to the Sunday Summary.</span>';
 
   return '<section class="sunday-giving card"><div class="sunday-giving-head"><div><span class="giving-kicker">SUNDAY GIVING APPROVAL</span><h3>Tithes & Offerings for Sunday</h3><p>Record member giving, sign the Sunday batch, then obtain Admin/Pastor approval before totals appear in the Sunday Summary.</p></div><div class="sunday-giving-date"><label>Sunday<input id="sundayGivingDate" type="date" value="'+attr(selectedSunday)+'" max="'+attr(todayKey())+'"></label><button id="openSundayGiving" class="btn secondary" type="button">Open Sunday</button></div></div>'+
@@ -130,7 +139,7 @@ function render(){
     (role()==='member'?'':'<label>Member<select id="givingMemberFilter"><option value="">All accessible members</option>'+memberOptions+'</select></label>')+
     '<label>Type<select id="givingTypeFilter"><option value="">All types</option><option value="tithe">Tithe</option><option value="offering">Offering</option></select></label>'+
     '<label class="giving-search">Search<input id="givingSearch" type="search" placeholder="Name, code, reference…"></label></div><div id="givingTable"></div></section>'+
-    (role()==='area_leader'?'<div class="giving-privacy-note">Area Leaders can view giving records for their assigned members. Sunday finance recording and approval are restricted to Admins and Pastors.</div>':role()==='member'?'<div class="giving-privacy-note">Your giving history is private and visible only to authorized church leadership and your assigned Area Leader.</div>':'');
+    (role()==='treasurer'?'<div class="giving-privacy-note">Treasurers can encode and edit giving records and prepare/sign Sunday giving batches. Final approval remains restricted to Admins and Pastors.</div>':role()==='area_leader'?'<div class="giving-privacy-note">Area Leaders can view giving records for their assigned members. Sunday finance recording and approval are restricted to Admins and Pastors.</div>':role()==='member'?'<div class="giving-privacy-note">Your giving history is private and visible only to authorized church leadership and your assigned Area Leader.</div>':'');
 
   document.getElementById('addGivingRecord')?.addEventListener('click',()=>openForm());
   document.getElementById('givingMonth').onchange=async e=>{await refresh(e.currentTarget.value||monthKey())};
@@ -190,6 +199,7 @@ function submitSundayBatch(){
 }
 
 function approveSundayBatch(){
+  if(!canApprove())return;
   const batch=currentBatch();if(!batch||batch.workflow_status!=='submitted')return;
   signatureModal({
     title:'Admin / Pastor approval',
