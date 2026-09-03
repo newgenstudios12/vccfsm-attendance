@@ -745,10 +745,59 @@ function exportReport(){
 function renderAccess(){
   if(!isAdmin()){content().innerHTML=empty('Administrator access required.');return;}
   const rows=data.profiles.map(p=>'<tr><td><b>'+esc(p.display_name||'Unnamed account')+'</b><div class="cms-sub">'+esc(p.member_id?memberName(p.member_id):'No linked member')+'</div></td><td>'+badge(String(p.role).replace(/_/g,' '))+'</td><td>'+esc(p.area_id?areaName(p.area_id):'—')+'</td><td><button class="cms-small" data-access-edit="'+p.user_id+'">Edit Access</button></td></tr>').join('');
-  content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>User & Access Management</h3><p>Authentication remains separate from member records. This controls app authorization only.</p></div></div>'+
+  content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>User & Access Management</h3><p>Create login accounts, then manage roles and area permissions here.</p></div><button id="createAccountInvite" class="btn" type="button">+ Create Account</button></div>'+
+    '<div class="cms-info">Choose an e-mail invitation or a username with a temporary password. Username users will be required to create a new password on first sign-in.</div>'+
     '<div class="table-wrap"><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Area</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+  document.getElementById('createAccountInvite')?.addEventListener('click',createAccountForm);
   content().querySelectorAll('[data-access-edit]').forEach(b=>b.onclick=()=>accessForm(data.profiles.find(x=>x.user_id===b.dataset.accessEdit)));
 }
+
+function createAccountForm(){
+  if(!isAdmin())return;
+  const members=(appState().members||[]).slice().sort((a,b)=>memberName(a.id).localeCompare(memberName(b.id)));
+  modal('Create Account',
+    '<div class="cms-info cms-account-invite-info"><b>Account sign-in method</b><br>Use e-mail invitation when an e-mail is available. Otherwise create a username and provide a temporary password.</div>'+
+    '<label>Sign-in method<select name="account_mode" id="accountMode"><option value="email_invite">E-mail invitation</option><option value="username_temp">Username + temporary password</option></select></label>'+
+    '<div id="accountEmailFields"><label>E-mail address<input name="email" id="accountEmail" type="email" autocomplete="off" placeholder="name@example.com"></label><div class="cms-sub">The user receives an invitation and chooses their own password.</div></div>'+
+    '<div id="accountUsernameFields" hidden><label>Username<input name="username" id="accountUsername" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="juan.delacruz"></label><label>Temporary password<input name="temporary_password" id="accountTempPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters"></label><div class="cms-sub">Give these credentials to the user privately. They must replace the temporary password after first sign-in.</div></div>'+
+    '<label>Display name<input name="display_name" autocomplete="off" placeholder="Leave blank to use the linked member name"></label>'+
+    '<label>Role<select name="role">'+[['member','Member'],['treasurer','Treasurer'],['area_leader','Area Leader'],['pastor','Pastor'],['admin','Admin']].map(([v,l])=>'<option value="'+v+'">'+l+'</option>').join('')+'</select></label>'+
+    '<label>Linked member<select name="member_id"><option value="">No linked member</option>'+members.map(m=>'<option value="'+attr(m.id)+'">'+esc(memberName(m.id))+(m.member_code?' · '+esc(m.member_code):'')+'</option>').join('')+'</select><span class="cms-sub">Required for Member and Treasurer accounts.</span></label>'+
+    '<label>Assigned Area<select name="area_id">'+areaOptions('')+'</select><span class="cms-sub">Required only for Area Leaders.</span></label>',
+    async f=>{
+      const mode=String(f.get('account_mode')||'email_invite'),rr=String(f.get('role')||'member'),memberId=f.get('member_id')||null,member=members.find(m=>m.id===memberId);
+      let displayName=String(f.get('display_name')||'').trim(),areaId=f.get('area_id')||null;
+      if(!displayName&&member)displayName=memberName(member.id);
+      if(!displayName)throw new Error('Enter a display name or link an existing member.');
+      if((rr==='member'||rr==='treasurer')&&!memberId)throw new Error('Member and Treasurer accounts must be linked to a member record.');
+      if(rr==='area_leader'&&!areaId)throw new Error('Select an Area for the Area Leader.');
+      if(rr==='member'&&!areaId&&member?.area_id)areaId=member.area_id;
+      if(rr==='admin'||rr==='pastor'||rr==='treasurer')areaId=null;
+      const payload={account_mode:mode,display_name:displayName,role:rr,member_id:memberId,area_id:areaId};
+      if(mode==='email_invite'){
+        payload.email=String(f.get('email')||'').trim().toLowerCase();
+        if(!payload.email)throw new Error("Enter the user's e-mail address.");
+      }else{
+        payload.username=String(f.get('username')||'').trim().toLowerCase();
+        payload.temporary_password=String(f.get('temporary_password')||'');
+        if(!payload.username)throw new Error('Enter a username.');
+        if(payload.temporary_password.length<8)throw new Error('Temporary password must be at least 8 characters.');
+      }
+      const session=(await sb().auth.getSession())?.data?.session;
+      if(!session?.access_token)throw new Error('Your session has expired. Please sign in again.');
+      const response=await fetch(window.VCCF_SUPABASE_URL+'/functions/v1/create-user',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':window.VCCF_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||!result?.ok)throw new Error(result?.error||'Unable to create the account.');
+      loaded=false;await loadAll(true);renderActive();
+      toast(mode==='email_invite'?'Invitation sent to '+result.identifier+'.':'Username account '+result.identifier+' created. Give the temporary password to the user privately.',true);
+    },
+    'Create Account'
+  );
+  const modalEl=document.getElementById('cmsModal'),modeSelect=modalEl?.querySelector('#accountMode'),emailFields=modalEl?.querySelector('#accountEmailFields'),usernameFields=modalEl?.querySelector('#accountUsernameFields'),emailInput=modalEl?.querySelector('#accountEmail'),usernameInput=modalEl?.querySelector('#accountUsername'),tempInput=modalEl?.querySelector('#accountTempPassword');
+  const syncMode=()=>{const usernameMode=modeSelect?.value==='username_temp';if(emailFields)emailFields.hidden=usernameMode;if(usernameFields)usernameFields.hidden=!usernameMode;if(emailInput)emailInput.required=!usernameMode;if(usernameInput)usernameInput.required=usernameMode;if(tempInput)tempInput.required=usernameMode;};
+  modeSelect?.addEventListener('change',syncMode);syncMode();
+}
+
 function accessForm(p){
   modal('Edit Access — '+(p.display_name||'Account'),
     '<label>Role<select name="role">'+[['admin','Admin'],['pastor','Pastor'],['treasurer','Treasurer'],['area_leader','Area Leader'],['member','Member']].map(([v,l])=>'<option value="'+v+'" '+(p.role===v?'selected':'')+'>'+l+'</option>').join('')+'</select></label>'+
