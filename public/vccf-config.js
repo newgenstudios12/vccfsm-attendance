@@ -36,9 +36,80 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     return client;
   };
 
-  // Authentication is owned exclusively by /vccf-login-guard.js.
+  // Aug 27 stable authentication flow: authenticate, verify profile, then reload.
+  // The reload lets the normal app bootstrap read the persisted Supabase session
+  // instead of initializing the entire feature suite inside the submit event.
+  try{ localStorage.removeItem('vccf-auth-v15'); }catch(_e){}
+
+  window.addEventListener('DOMContentLoaded', () => setTimeout(() => {
+    const form=document.getElementById('loginForm');
+    if(!form) return;
+
+    const loginClient=originalCreateClient(
+      window.VCCF_SUPABASE_URL,
+      window.VCCF_SUPABASE_PUBLISHABLE_KEY,
+      {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}
+    );
+
+    form.onsubmit=async (e)=>{
+      e.preventDefault();
+      const email=document.getElementById('loginUser')?.value.trim();
+      const password=document.getElementById('loginPass')?.value;
+      const button=form.querySelector('button[type="submit"],button');
+
+      if(button){button.disabled=true;button.textContent='Signing in…';}
+
+      let box=document.getElementById('vccfLoginError');
+      if(!box){
+        box=document.createElement('div');
+        box.id='vccfLoginError';
+        box.setAttribute('role','status');
+        box.setAttribute('aria-live','polite');
+        box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap';
+        form.appendChild(box);
+      }
+      box.textContent='';
+
+      try{
+        if(!email||!password) throw new Error('Please enter your email and password.');
+
+        const {data,error}=await Promise.race([
+          loginClient.auth.signInWithPassword({email:email.toLowerCase(),password}),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sign-in timed out. Please try again.')),15000))
+        ]);
+
+        if(error) throw error;
+        if(!data?.session||!data?.user) throw new Error('Supabase login returned no session.');
+
+        const {data:p,error:pe}=await Promise.race([
+          loginClient.from('profiles')
+            .select('user_id,role,member_id,area_id,display_name')
+            .eq('user_id',data.user.id)
+            .maybeSingle(),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error('Profile lookup timed out.')),10000))
+        ]);
+
+        if(pe) throw pe;
+        if(!p) throw new Error('Login succeeded, but no VCCF profile exists for this account.');
+
+        box.style.background='#ecfdf3';
+        box.style.color='#027a48';
+        box.textContent='Authentication succeeded. Opening VCCF…';
+        if(button) button.textContent='Opening app…';
+
+        window.location.reload();
+      }catch(err){
+        console.error('VCCF Aug 27 login flow:',err);
+        box.style.background='#fff1f1';
+        box.style.color='#b42318';
+        box.textContent=err?.message||String(err);
+        if(button){button.disabled=false;button.textContent='Sign in';}
+      }
+    };
+  },0));
+
   const ABOUT_PHOTO_PREFIX='__ABOUT_PERSON__:';
-  const client=window.__VCCF_SHARED_SUPABASE_CLIENT__ || originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
+  const client=originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
   const manilaDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const latestSunday=()=>{
     const d=new Date(manilaDate()+'T12:00:00+08:00');
