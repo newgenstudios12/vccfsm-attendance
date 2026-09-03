@@ -455,23 +455,87 @@ function announcementForm(a=null){
 
 function renderDocuments(){
   const can=canManageChurch();
-  const rows=data.documents.map(d=>'<tr><td><b>'+esc(d.title)+'</b><div class="cms-sub">'+esc(d.description||'')+'</div></td><td>'+esc(d.category)+'</td><td>'+badge(d.visibility)+'</td><td>'+(d.external_url?'<a class="cms-link" href="'+attr(d.external_url)+'" target="_blank" rel="noopener">Open</a>':'—')+'</td><td>'+badge(d.is_active?'Active':'Inactive',d.is_active?'ok':'muted')+'</td><td>'+(can?'<button class="cms-small" data-doc-edit="'+d.id+'">Edit</button>':'')+'</td></tr>').join('');
+  const rows=data.documents.map(d=>{
+    let link='—';
+    if(d.storage_path) link='<button class="cms-small" data-doc-file="'+d.id+'">Open File</button>';
+    else if(d.external_url) link='<a class="cms-link" href="'+attr(d.external_url)+'" target="_blank" rel="noopener">Open Link</a>';
+    return '<tr><td><b>'+esc(d.title)+'</b><div class="cms-sub">'+esc(d.file_name||d.description||'')+'</div></td><td>'+esc(d.category)+'</td><td>'+badge(d.visibility)+'</td><td>'+link+'</td><td>'+badge(d.is_active?'Active':'Inactive',d.is_active?'ok':'muted')+'</td><td>'+(can?'<button class="cms-small" data-doc-edit="'+d.id+'">Edit</button>':'')+'</td></tr>';
+  }).join('');
   content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Documents</h3><p>Church forms, policies, reference links and administrative documents.</p></div>'+(can?'<button id="addDocument" class="btn">Add Document</button>':'')+'</div>'+
-    '<div class="cms-info">This clean version stores document metadata and secure/external links. File uploads can be added later without changing this module.</div>'+
-    '<div class="table-wrap"><table class="table"><thead><tr><th>Document</th><th>Category</th><th>Visibility</th><th>Link</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="6">'+empty('No documents yet.')+'</td></tr>')+'</tbody></table></div></section>';
+    '<div class="cms-info">Uploaded files are stored in a private bucket. Access is checked by role/scope and files are opened through short-lived signed links.</div>'+
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Document</th><th>Category</th><th>Visibility</th><th>Access</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="6">'+empty('No documents yet.')+'</td></tr>')+'</tbody></table></div></section>';
   document.getElementById('addDocument')?.addEventListener('click',()=>documentForm());
   content().querySelectorAll('[data-doc-edit]').forEach(b=>b.onclick=()=>documentForm(data.documents.find(x=>x.id===b.dataset.docEdit)));
+  content().querySelectorAll('[data-doc-file]').forEach(b=>b.onclick=()=>openDocument(data.documents.find(x=>x.id===b.dataset.docFile)));
+}
+async function openDocument(d){
+  if(!d) return;
+  if(d.storage_path){
+    const r=await sb().storage.from('vccf-church-documents').createSignedUrl(d.storage_path,120);
+    if(r.error){toast(r.error.message);return;}
+    window.open(r.data.signedUrl,'_blank','noopener');
+    return;
+  }
+  if(d.external_url) window.open(d.external_url,'_blank','noopener');
 }
 function documentForm(d=null){
   modal(d?'Edit Document':'Add Document',
     '<label>Title<input name="title" required value="'+attr(d?.title||'')+'"></label>'+
     '<div class="cms-form-grid"><label>Category<input name="category" value="'+attr(d?.category||'General')+'"></label><label>Visibility<select name="visibility">'+['All','Leaders','Admin'].map(x=>'<option '+(d?.visibility===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label></div>'+
+    '<label>Upload file<input name="file" type="file"><span class="cms-sub">'+(d?.file_name?'Current file: '+esc(d.file_name):'Maximum 50 MB. Leave blank to keep the current file.')+'</span></label>'+
     '<label>External / secure link<input name="external_url" type="url" value="'+attr(d?.external_url||'')+'" placeholder="https://"></label>'+
     '<div class="cms-form-grid"><label>Area<select name="area_id">'+areaOptions(d?.area_id||'')+'</select></label><label>Ministry<select name="ministry_id">'+ministryOptions(d?.ministry_id||'')+'</select></label></div>'+
     '<label>Status<select name="is_active"><option value="true" '+(d?.is_active!==false?'selected':'')+'>Active</option><option value="false" '+(d?.is_active===false?'selected':'')+'>Inactive</option></select></label>'+
     '<label>Description<textarea name="description" rows="4">'+esc(d?.description||'')+'</textarea></label>',
-    async f=>saveRow('church_documents',{title:f.get('title').trim(),category:f.get('category').trim()||'General',visibility:f.get('visibility'),external_url:f.get('external_url').trim()||null,area_id:f.get('area_id')||null,ministry_id:f.get('ministry_id')||null,is_active:f.get('is_active')==='true',description:f.get('description').trim()||null,created_by:d?.created_by||currentUserId(),updated_at:new Date().toISOString()},d?.id,'Document')
+    async f=>saveDocument(f,d)
   );
+}
+async function saveDocument(f,d=null){
+  const client=sb(); if(!client) throw new Error('Database client unavailable.');
+  const file=f.get('file');
+  let newPath=null;
+  let payload={
+    title:f.get('title').trim(),
+    category:f.get('category').trim()||'General',
+    visibility:f.get('visibility'),
+    external_url:f.get('external_url').trim()||null,
+    area_id:f.get('area_id')||null,
+    ministry_id:f.get('ministry_id')||null,
+    is_active:f.get('is_active')==='true',
+    description:f.get('description').trim()||null,
+    created_by:d?.created_by||currentUserId(),
+    updated_at:new Date().toISOString(),
+    storage_path:d?.storage_path||null,
+    file_name:d?.file_name||null,
+    mime_type:d?.mime_type||null,
+    file_size:d?.file_size||null
+  };
+  if(file && file.name){
+    if(file.size>50*1024*1024) throw new Error('The selected file is larger than 50 MB.');
+    const safe=file.name.replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-120)||'document';
+    newPath='documents/'+crypto.randomUUID()+'/'+safe;
+    const up=await client.storage.from('vccf-church-documents').upload(newPath,file,{upsert:false,contentType:file.type||undefined});
+    if(up.error) throw up.error;
+    payload.storage_path=newPath;
+    payload.file_name=file.name;
+    payload.mime_type=file.type||null;
+    payload.file_size=file.size;
+  }
+  try{
+    const q=d
+      ? client.from('church_documents').update(payload).eq('id',d.id).select().maybeSingle()
+      : client.from('church_documents').insert(payload).select().maybeSingle();
+    const r=await q;
+    if(r.error) throw r.error;
+    if(newPath && d?.storage_path && d.storage_path!==newPath){
+      await client.storage.from('vccf-church-documents').remove([d.storage_path]);
+    }
+    await writeAudit(d?'update':'create','church_documents',r.data?.id||d?.id,{title:payload.title,file:payload.file_name});
+    loaded=false;await loadAll(true);renderActive();toast('Document '+(d?'updated.':'created.'),true);
+  }catch(err){
+    if(newPath) await client.storage.from('vccf-church-documents').remove([newPath]);
+    throw err;
+  }
 }
 
 function renderReports(){
