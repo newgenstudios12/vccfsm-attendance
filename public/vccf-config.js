@@ -29,11 +29,20 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
       }
     });
   }
-  g.createClient = function(...args) {
-    const client = originalCreateClient.apply(this,args);
-    const originalFrom = client.from.bind(client);
-    client.from = table => wrap(originalFrom(table), table);
-    return client;
+  const sharedClient = originalCreateClient(
+    window.VCCF_SUPABASE_URL,
+    window.VCCF_SUPABASE_PUBLISHABLE_KEY,
+    {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}
+  );
+  const originalFrom = sharedClient.from.bind(sharedClient);
+  sharedClient.from = table => wrap(originalFrom(table), table);
+  window.__VCCF_APP_SUPABASE__ = sharedClient;
+
+  g.createClient = function(url,key,...rest) {
+    if (url === window.VCCF_SUPABASE_URL && key === window.VCCF_SUPABASE_PUBLISHABLE_KEY) {
+      return sharedClient;
+    }
+    return originalCreateClient.call(this,url,key,...rest);
   };
 
   // Aug 27 stable authentication flow: authenticate, verify profile, then reload.
@@ -45,11 +54,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
     const form=document.getElementById('loginForm');
     if(!form) return;
 
-    const loginClient=originalCreateClient(
-      window.VCCF_SUPABASE_URL,
-      window.VCCF_SUPABASE_PUBLISHABLE_KEY,
-      {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}
-    );
+    const loginClient=window.__VCCF_APP_SUPABASE__;
 
     form.onsubmit=async (e)=>{
       e.preventDefault();
@@ -109,7 +114,7 @@ window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XB
   },0));
 
   const ABOUT_PHOTO_PREFIX='__ABOUT_PERSON__:';
-  const client=originalCreateClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
+  const client=window.__VCCF_APP_SUPABASE__;
   const manilaDate=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const latestSunday=()=>{
     const d=new Date(manilaDate()+'T12:00:00+08:00');
