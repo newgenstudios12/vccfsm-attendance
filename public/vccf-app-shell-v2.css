@@ -65,3 +65,7 @@ input,select,textarea,.toolbar input,.toolbar select,.field input,.field select{
 html,body,button,input,select,textarea{font-family:var(--font-ui)!important}
 h1,h2,h3,h4,h5,h6,.brand,.stat strong,.metric strong,.summary-metric strong,.welcome-banner h2,.dashboard-section-head h2,.birthday-head h3,.gallery-hero h2,.gallery-album-copy h3,.member-profile-card h2,.attendance-card-title h2,.cms-panel h3,.cms-stat strong{font-family:var(--font-display)!important;letter-spacing:-.018em}
 body{font-feature-settings:"kern" 1,"liga" 1;text-rendering:optimizeLegibility}
+
+
+.sidebar-brand-logo{width:46px;height:46px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;overflow:hidden}.sidebar-brand-logo img{display:block;width:100%;height:100%;object-fit:contain}.sidebar-logo-dark{display:none!important}:root[data-theme="dark"] .sidebar-logo-light{display:none!important}:root[data-theme="dark"] .sidebar-logo-dark{display:block!important}.sidebar-head{min-height:58px}.sidebar-title{min-width:0}
+@media(max-width:900px){.sidebar-brand-logo{width:44px;height:44px}}
