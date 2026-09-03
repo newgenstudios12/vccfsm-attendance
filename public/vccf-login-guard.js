@@ -39,6 +39,12 @@ function ensureClient(){
   return client;
 }
 
+try{
+  ensureClient();
+}catch(e){
+  console.error('VCCF Supabase initialization:',e);
+}
+
 function box(form){
   let b=document.getElementById('vccfLoginError');
   if(!b){
