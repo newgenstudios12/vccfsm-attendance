@@ -6,6 +6,7 @@ window.__VCCF_EVENT_ATTENDANCE__ = true;
 let root = null;
 let events = [];
 let registrations = [];
+let eventPhotos = [];
 let scanner = null;
 let scanBusy = false;
 let selectedEventId = null;
@@ -22,6 +23,9 @@ const modeLabel = event => ({registration_required:'Registration required',regis
 const fmtDateTime = value => value ? new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(value)) : '—';
 const fmtShortDate = value => value ? new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric'}).format(new Date(value)) : '—';
 const currentUserId = () => state().session?.user?.id || null;
+const currentRole = () => String(state().profile?.role || 'member').toLowerCase();
+const canManageEventPhotos = event => currentRole()==='admin' || currentRole()==='pastor' || (currentRole()==='area_leader' && Boolean(event?.area_id) && state().profile?.area_id===event.area_id);
+const photosForEvent = eventId => eventPhotos.filter(photo => photo.event_id===eventId).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)||String(a.created_at||'').localeCompare(String(b.created_at||'')));
 const isCheckedIn = registration => registration?.status === 'Attended' || Boolean(registration?.checked_in_at);
 const statusBadge = (text, kind='') => '<span class="cms-badge '+kind+'">'+esc(text)+'</span>';
 const empty = text => '<div class="cms-empty">'+esc(text)+'</div>';
@@ -42,18 +46,20 @@ async function mount(container) {
     root.innerHTML = '<section class="cms-panel card"><div class="notice">The attendance service is not available.</div></section>';
     return;
   }
-  const [eventResult,registrationResult] = await Promise.all([
+  const [eventResult,registrationResult,photoResult] = await Promise.all([
     client.from('church_events').select('*').order('start_at',{ascending:false}).limit(300),
-    client.from('church_event_registrations').select('*').order('registered_at',{ascending:false}).limit(2000)
+    client.from('church_event_registrations').select('*').order('registered_at',{ascending:false}).limit(2000),
+    client.from('church_event_photos').select('id,event_id,image_url,storage_path,caption,sort_order,uploaded_by,created_at').order('sort_order').order('created_at')
   ]);
   if (!root || !document.body.contains(root)) return;
-  if (eventResult.error || registrationResult.error) {
-    const message = eventResult.error?.message || registrationResult.error?.message || 'Unable to load event attendance.';
+  if (eventResult.error || registrationResult.error || photoResult.error) {
+    const message = eventResult.error?.message || registrationResult.error?.message || photoResult.error?.message || 'Unable to load event attendance.';
     root.innerHTML = '<section class="cms-panel card"><div class="notice">'+esc(message)+'</div></section>';
     return;
   }
   events = eventResult.data || [];
   registrations = registrationResult.data || [];
+  eventPhotos = photoResult.data || [];
   renderEventList();
 }
 
@@ -84,6 +90,43 @@ function memberOptions(eventId, query='') {
   return (state().members || []).filter(member => member.is_active !== false && String(member.status || '').toLowerCase() !== 'inactive' && (!normalized || (memberName(member)+' '+(member.member_code || '')).toLowerCase().includes(normalized))).slice().sort((a,b) => memberName(a).localeCompare(memberName(b))).slice(0,150).map(member => '<option value="'+esc(member.id)+'">'+esc(memberName(member))+' — '+esc(member.member_code || areaName(member.area_id))+(registered.has(member.id)?' · On roster':'')+'</option>').join('');
 }
 
+
+function eventPhotoPanel(event){
+  const photos=photosForEvent(event.id),canManage=canManageEventPhotos(event);
+  const body=photos.length?'<div class="event-photo-grid">'+photos.map(photo=>'<figure class="event-photo-item"><img src="'+esc(photo.image_url)+'" alt="'+esc(photo.caption||event.title)+'" loading="lazy"><figcaption><span>'+esc(photo.caption||'Event photo')+'</span>'+(canManage?'<button type="button" data-remove-event-photo="'+esc(photo.id)+'">Remove</button>':'')+'</figcaption></figure>').join('')+'</div>':'<div class="event-photo-empty"><strong>No event photos yet</strong><span>Add photos here so this event can also appear with photos in the Dashboard event summary.</span></div>';
+  return '<section class="cms-panel card event-photo-panel"><div class="cms-panel-head"><div><h3>Event Photos</h3><p>These photos are used by the Dashboard event summary when no separate Event Summary photos are attached.</p></div>'+(canManage?'<label class="event-photo-upload">'+(photos.length?'Add more photos':'+ Add photos')+'<input id="eventPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>':'')+'</div>'+body+'<div id="eventPhotoStatus" class="event-checkin-status" role="status"></div></section>';
+}
+function prepareEventPhoto(file){
+  return new Promise((resolve,reject)=>{
+    if(!file?.type?.startsWith('image/'))return reject(new Error('Only image files can be uploaded.'));
+    if(file.size>12*1024*1024)return reject(new Error(file.name+' is larger than 12 MB.'));
+    const reader=new FileReader();reader.onload=()=>{const image=new Image();image.onload=()=>{const max=1800,scale=Math.min(1,max/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));const ctx=canvas.getContext('2d');if(!ctx)return reject(new Error('Could not prepare '+file.name));ctx.drawImage(image,0,0,canvas.width,canvas.height);canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not prepare '+file.name)),'image/jpeg',.86)};image.onerror=()=>reject(new Error('Could not read '+file.name));image.src=reader.result};reader.onerror=()=>reject(new Error('Could not read '+file.name));reader.readAsDataURL(file);
+  });
+}
+async function uploadEventPhotos(event,files){
+  if(!canManageEventPhotos(event))return;const selected=Array.from(files||[]).filter(file=>file.type.startsWith('image/')).slice(0,20),status=document.getElementById('eventPhotoStatus');if(!selected.length){if(status)status.textContent='Choose one or more photos first.';return}if(status)status.textContent='Uploading photos…';
+  try{
+    let order=photosForEvent(event.id).length;
+    for(let i=0;i<selected.length;i++){
+      const file=selected[i],blob=await prepareEventPhoto(file),token=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2),path='event/'+event.id+'/'+Date.now()+'-'+i+'-'+token+'.jpg';
+      const up=await sb().storage.from('vccf-gallery').upload(path,blob,{contentType:'image/jpeg',cacheControl:'3600',upsert:false});if(up.error)throw up.error;
+      const imageUrl=sb().storage.from('vccf-gallery').getPublicUrl(path).data.publicUrl;
+      const row=await sb().from('church_event_photos').insert({event_id:event.id,image_url:imageUrl,storage_path:path,caption:file.name.replace(/\.[^.]+$/,''),sort_order:order++,uploaded_by:currentUserId()}).select('id,event_id,image_url,storage_path,caption,sort_order,uploaded_by,created_at').single();
+      if(row.error){await sb().storage.from('vccf-gallery').remove([path]);throw row.error}eventPhotos.push(row.data);
+    }
+    window.dispatchEvent(new CustomEvent('vccf-event-photos-updated',{detail:{eventId:event.id}}));renderEventDetail(event.id);const next=document.getElementById('eventPhotoStatus');if(next)next.textContent='Event photos added.';
+  }catch(error){if(status)status.textContent=error.message||'Unable to upload event photos.'}
+}
+async function removeEventPhoto(event,photoId){
+  if(!canManageEventPhotos(event))return;const photo=eventPhotos.find(item=>item.id===photoId);if(!photo||!confirm('Remove this event photo?'))return;
+  const deleted=await sb().from('church_event_photos').delete().eq('id',photoId);if(deleted.error){const status=document.getElementById('eventPhotoStatus');if(status)status.textContent=deleted.error.message;return}
+  if(photo.storage_path)await sb().storage.from('vccf-gallery').remove([photo.storage_path]);eventPhotos=eventPhotos.filter(item=>item.id!==photoId);window.dispatchEvent(new CustomEvent('vccf-event-photos-updated',{detail:{eventId:event.id}}));renderEventDetail(event.id);
+}
+function bindEventPhotoControls(event){
+  const input=document.getElementById('eventPhotoInput');if(input)input.onchange=()=>uploadEventPhotos(event,input.files);
+  root?.querySelectorAll('[data-remove-event-photo]').forEach(button=>button.onclick=()=>removeEventPhoto(event,button.dataset.removeEventPhoto));
+}
+
 function renderEventDetail(eventId) {
   if (!root) return;
   selectedEventId = eventId;
@@ -95,12 +138,13 @@ function renderEventDetail(eventId) {
   const attended = rows.filter(isCheckedIn);
   const attendanceRate = rows.length ? Math.round(attended.length / rows.length * 100) : 0;
   const displayRows = attendanceOnly ? attended : rows;
-  root.innerHTML = '<div class="event-attendance-head"><button id="backToEventAttendance" class="cms-small" type="button">← All events</button><button id="exportEventAttendance" class="btn secondary" type="button">Export CSV</button></div><section class="cms-panel card"><div class="cms-panel-head"><div><span class="cms-kicker">EVENT ATTENDANCE</span><h3>'+esc(event.title)+'</h3><p>'+esc(fmtDateTime(event.start_at))+' · '+esc(event.location || 'Location not set')+'</p></div>'+statusBadge(modeLabel(event),attendanceOnly?'ok':'')+'</div><div class="event-attendance-stats '+(attendanceOnly?'attendance-only':'')+'">'+(attendanceOnly?'<div><span>Total attendees</span><strong>'+attended.length+'</strong></div><div><span>Registration</span><strong>Not required</strong></div>':'<div><span>Roster</span><strong>'+rows.length+'</strong></div><div><span>Attended</span><strong>'+attended.length+'</strong></div><div><span>Attendance rate</span><strong>'+attendanceRate+'%</strong></div><div><span>Not checked in</span><strong>'+Math.max(0,rows.length-attended.length)+'</strong></div>')+'</div><div class="cms-info">'+(attendanceOnly?'This event accepts direct attendance with no registration. ':'Walk-ins can be checked in even when they are not on the roster. ')+'Event attendance is separate from Sunday attendance performance.</div></section><div class="event-checkin-grid"><section class="cms-panel card"><div class="cms-panel-head"><div><h3>Scan member QR</h3><p>Scan the QR shown on the member profile.</p></div></div><div id="eventAttendanceReader" class="event-scanner"><span>Camera is off</span></div><div class="cms-actions event-scan-actions"><button id="startEventAttendanceScanner" class="btn" type="button">Start camera</button><button id="stopEventAttendanceScanner" class="btn secondary" type="button" disabled>Stop</button></div><div id="eventScannerStatus" class="event-checkin-status" role="status"></div></section><section class="cms-panel card"><div class="cms-panel-head"><div><h3>Manual check-in</h3><p>Search accessible members and record attendance.</p></div></div><label class="event-member-search">Search member<input id="eventAttendanceMemberSearch" placeholder="Search name or member code…"></label><label class="event-member-search">Member<select id="eventAttendanceMemberSelect"><option value="">Select a member</option>'+memberOptions(eventId)+'</select></label><button id="eventManualCheckin" class="btn" type="button">Check in member</button><div id="eventManualStatus" class="event-checkin-status" role="status"></div></section></div><section class="cms-panel card"><div class="cms-panel-head"><div><h3>'+(attendanceOnly?'Event Attendees':'Event Roster')+'</h3><p>'+(attendanceOnly?'Members who attended this event.':'Registration and check-in status for this event.')+'</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Member</th><th>Area</th><th>Status</th><th>Check-in</th><th>Source</th><th></th></tr></thead><tbody>'+(displayRows.length ? displayRows.map(row => {
+  root.innerHTML = '<div class="event-attendance-head"><button id="backToEventAttendance" class="cms-small" type="button">← All events</button><button id="exportEventAttendance" class="btn secondary" type="button">Export CSV</button></div><section class="cms-panel card"><div class="cms-panel-head"><div><span class="cms-kicker">EVENT ATTENDANCE</span><h3>'+esc(event.title)+'</h3><p>'+esc(fmtDateTime(event.start_at))+' · '+esc(event.location || 'Location not set')+'</p></div>'+statusBadge(modeLabel(event),attendanceOnly?'ok':'')+'</div><div class="event-attendance-stats '+(attendanceOnly?'attendance-only':'')+'">'+(attendanceOnly?'<div><span>Total attendees</span><strong>'+attended.length+'</strong></div><div><span>Registration</span><strong>Not required</strong></div>':'<div><span>Roster</span><strong>'+rows.length+'</strong></div><div><span>Attended</span><strong>'+attended.length+'</strong></div><div><span>Attendance rate</span><strong>'+attendanceRate+'%</strong></div><div><span>Not checked in</span><strong>'+Math.max(0,rows.length-attended.length)+'</strong></div>')+'</div><div class="cms-info">'+(attendanceOnly?'This event accepts direct attendance with no registration. ':'Walk-ins can be checked in even when they are not on the roster. ')+'Event attendance is separate from Sunday attendance performance.</div></section>'+eventPhotoPanel(event)+'<div class="event-checkin-grid"><section class="cms-panel card"><div class="cms-panel-head"><div><h3>Scan member QR</h3><p>Scan the QR shown on the member profile.</p></div></div><div id="eventAttendanceReader" class="event-scanner"><span>Camera is off</span></div><div class="cms-actions event-scan-actions"><button id="startEventAttendanceScanner" class="btn" type="button">Start camera</button><button id="stopEventAttendanceScanner" class="btn secondary" type="button" disabled>Stop</button></div><div id="eventScannerStatus" class="event-checkin-status" role="status"></div></section><section class="cms-panel card"><div class="cms-panel-head"><div><h3>Manual check-in</h3><p>Search accessible members and record attendance.</p></div></div><label class="event-member-search">Search member<input id="eventAttendanceMemberSearch" placeholder="Search name or member code…"></label><label class="event-member-search">Member<select id="eventAttendanceMemberSelect"><option value="">Select a member</option>'+memberOptions(eventId)+'</select></label><button id="eventManualCheckin" class="btn" type="button">Check in member</button><div id="eventManualStatus" class="event-checkin-status" role="status"></div></section></div><section class="cms-panel card"><div class="cms-panel-head"><div><h3>'+(attendanceOnly?'Event Attendees':'Event Roster')+'</h3><p>'+(attendanceOnly?'Members who attended this event.':'Registration and check-in status for this event.')+'</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Member</th><th>Area</th><th>Status</th><th>Check-in</th><th>Source</th><th></th></tr></thead><tbody>'+(displayRows.length ? displayRows.map(row => {
     const member = memberById(row.member_id);
     const checked = isCheckedIn(row);
     return '<tr><td><b>'+esc(memberName(member))+'</b><div class="cms-sub">'+esc(member?.member_code || '')+'</div></td><td>'+esc(areaName(member?.area_id))+'</td><td>'+statusBadge(checked?'Attended':row.status,checked?'ok':'')+'</td><td>'+esc(fmtDateTime(row.checked_in_at))+'</td><td>'+esc(row.check_in_source || '—')+'</td><td><button class="cms-small '+(checked?'danger-text':'')+'" type="button" data-toggle-event-attendance="'+esc(row.id)+'">'+(checked?'Undo check-in':'Check in')+'</button></td></tr>';
   }).join('') : '<tr><td colspan="6">'+empty(attendanceOnly?'No attendees have checked in yet.':'No registrations yet. Walk-ins can still be checked in above.')+'</td></tr>')+'</tbody></table></div></section>';
 
+  bindEventPhotoControls(event);
   document.getElementById('backToEventAttendance').onclick = async () => { await stopScanner(); renderEventList(); };
   document.getElementById('exportEventAttendance').onclick = () => exportCsv(event,rows);
   document.getElementById('startEventAttendanceScanner').onclick = () => startScanner(eventId);

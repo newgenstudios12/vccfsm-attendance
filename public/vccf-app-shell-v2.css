@@ -55,3 +55,13 @@ input,select,textarea,.toolbar input,.toolbar select,.field input,.field select{
 @media(max-width:390px){.stats,.member-metrics,.giving-summary{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 
 .member-detail-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+
+.member-directory-toolbar{flex-wrap:wrap}.member-qr-print-tools{display:flex;gap:8px;align-items:center;margin-left:auto}.member-qr-print-tools select{min-width:170px}.member-directory-qr{width:62px;height:62px;padding:2px;background:#fff;border-radius:7px;display:grid;place-items:center}.member-directory-qr canvas,.member-directory-qr img{width:58px!important;height:58px!important;display:block}.member-row-actions{display:flex;gap:6px;flex-wrap:wrap}.member-directory-table td{vertical-align:middle}
+@media(max-width:760px){.member-qr-print-tools{width:100%;margin-left:0}.member-qr-print-tools select{flex:1;min-width:0}.member-directory-table{min-width:760px}}
+
+
+:root{--font-ui:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;--font-display:"Plus Jakarta Sans","Manrope",system-ui,sans-serif}
+html,body,button,input,select,textarea{font-family:var(--font-ui)!important}
+h1,h2,h3,h4,h5,h6,.brand,.stat strong,.metric strong,.summary-metric strong,.welcome-banner h2,.dashboard-section-head h2,.birthday-head h3,.gallery-hero h2,.gallery-album-copy h3,.member-profile-card h2,.attendance-card-title h2,.cms-panel h3,.cms-stat strong{font-family:var(--font-display)!important;letter-spacing:-.018em}
+body{font-feature-settings:"kern" 1,"liga" 1;text-rendering:optimizeLegibility}

@@ -351,10 +351,18 @@ function renderEvents(){
   document.getElementById('addEvent')?.addEventListener('click',()=>eventForm());
   content().querySelectorAll('[data-event-edit]').forEach(b=>b.onclick=()=>eventForm(data.events.find(x=>x.id===b.dataset.eventEdit)));
   content().querySelectorAll('[data-event-register]').forEach(b=>b.onclick=()=>registrationForm(b.dataset.eventRegister));
-  content().querySelectorAll('[data-event-delete]').forEach(b=>b.onclick=()=>deleteRow('church_events',b.dataset.eventDelete,'Event'));
+  content().querySelectorAll('[data-event-delete]').forEach(b=>b.onclick=()=>deleteEventWithPhotos(b.dataset.eventDelete));
   content().querySelectorAll('[data-reg-delete]').forEach(b=>b.onclick=()=>deleteRow('church_event_registrations',b.dataset.regDelete,'Registration'));
 }
 
+async function deleteEventWithPhotos(eventId){
+  const event=data.events.find(e=>e.id===eventId);if(!event||!confirm('Delete this event? Its registrations, event attendance, and attached event photos will also be removed.'))return;
+  const photoRows=await sb().from('church_event_photos').select('storage_path').eq('event_id',eventId);
+  const paths=(photoRows.data||[]).map(p=>p.storage_path).filter(Boolean);
+  const result=await sb().from('church_events').delete().eq('id',eventId);if(result.error){toast(result.error.message);return}
+  if(paths.length){const removed=await sb().storage.from('vccf-gallery').remove(paths);if(removed.error)console.warn('Event photo cleanup:',removed.error)}
+  await writeAudit('delete','church_events',eventId,{label:'Event',title:event.title});loaded=false;await loadAll(true);renderActive();toast('Event deleted.',true);
+}
 function eventMemberOptions(eventId,query=''){
   const registered=new Set(data.registrations.filter(r=>r.event_id===eventId&&r.status!=='Cancelled').map(r=>r.member_id));
   const q=String(query).trim().toLowerCase();
@@ -461,20 +469,64 @@ function prayerForm(p=null){
 
 function renderAnnouncements(){
   const can=canManageAnnouncements();
-  const rows=data.announcements.map(a=>'<tr><td><b>'+esc(a.title)+'</b><div class="cms-sub">'+esc(a.body.slice(0,100))+(a.body.length>100?'…':'')+'</div></td><td>'+badge(a.audience)+'</td><td>'+fmtDateTime(a.publish_at)+'</td><td>'+badge(a.is_published?'Published':'Draft',a.is_published?'ok':'muted')+'</td><td>'+(can?'<button class="cms-small" data-ann-edit="'+a.id+'">Edit</button>':'')+'</td></tr>').join('');
-  content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Announcements</h3><p>Church-wide or targeted announcements.</p></div>'+(can?'<button id="addAnnouncement" class="btn">Add Announcement</button>':'')+'</div>'+
+  const rows=data.announcements.map(a=>{
+    const body=String(a.body||''),preview=body?esc(body.slice(0,100))+(body.length>100?'…':''):(a.image_url?'Image announcement':'No message');
+    const image=a.image_url?'<img src="'+attr(a.image_url)+'" alt="" style="width:54px;height:38px;object-fit:cover;border-radius:7px;border:1px solid var(--line);margin-right:8px;vertical-align:middle">':'';
+    return '<tr><td><div style="display:flex;align-items:center">'+image+'<div><b>'+esc(a.title)+'</b><div class="cms-sub">'+preview+'</div></div></div></td><td>'+badge(a.audience)+'</td><td>'+fmtDateTime(a.publish_at)+'</td><td>'+badge(a.is_published?'Published':'Draft',a.is_published?'ok':'muted')+'</td><td>'+(can?'<button class="cms-small" data-ann-edit="'+a.id+'">Edit</button>':'')+'</td></tr>';
+  }).join('');
+  content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Announcements</h3><p>Create text, image, or image + text announcements. Published active announcements are featured on the Dashboard.</p></div>'+(can?'<button id="addAnnouncement" class="btn">Add Announcement</button>':'')+'</div>'+
     '<div class="table-wrap"><table class="table"><thead><tr><th>Announcement</th><th>Audience</th><th>Publish</th><th>Status</th><th></th></tr></thead><tbody>'+(rows||'<tr><td colspan="5">'+empty('No announcements.')+'</td></tr>')+'</tbody></table></div></section>';
   document.getElementById('addAnnouncement')?.addEventListener('click',()=>announcementForm());
   content().querySelectorAll('[data-ann-edit]').forEach(b=>b.onclick=()=>announcementForm(data.announcements.find(x=>x.id===b.dataset.annEdit)));
 }
 function announcementForm(a=null){
   modal(a?'Edit Announcement':'Add Announcement',
-    '<label>Title<input name="title" required value="'+attr(a?.title||'')+'"></label><label>Message<textarea name="body" rows="5" required>'+esc(a?.body||'')+'</textarea></label>'+
+    '<label>Title<input name="title" required value="'+attr(a?.title||'')+'"></label>'+
+    '<label>Message<textarea name="body" rows="5" placeholder="Optional when an image is attached">'+esc(a?.body||'')+'</textarea></label>'+
+    '<label>Announcement image<input name="image" type="file" accept="image/jpeg,image/png,image/webp"><span class="cms-sub">'+(a?.image_url?'Current image is attached. Choose another image to replace it.':'Optional. JPEG, PNG, or WebP up to 12 MB.')+'</span></label>'+
+    (a?.image_url?'<label><input name="remove_image" type="checkbox" value="true"> Remove current image</label>':'')+
     '<div class="cms-form-grid"><label>Audience<select name="audience">'+['All','Leaders','Area','Ministry'].map(x=>'<option '+(a?.audience===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label><label>Published<select name="is_published"><option value="true" '+(a?.is_published!==false?'selected':'')+'>Published</option><option value="false" '+(a?.is_published===false?'selected':'')+'>Draft</option></select></label></div>'+
     '<div class="cms-form-grid"><label>Area<select name="area_id">'+areaOptions(a?.area_id||'')+'</select></label><label>Ministry<select name="ministry_id">'+ministryOptions(a?.ministry_id||'')+'</select></label></div>'+
     '<div class="cms-form-grid"><label>Publish at<input name="publish_at" type="datetime-local" value="'+attr(toLocalInput(a?.publish_at||new Date().toISOString()))+'"></label><label>Expires at<input name="expires_at" type="datetime-local" value="'+attr(toLocalInput(a?.expires_at))+'"></label></div>',
-    async f=>saveRow('church_announcements',{title:f.get('title').trim(),body:f.get('body').trim(),audience:f.get('audience'),area_id:f.get('area_id')||null,ministry_id:f.get('ministry_id')||null,is_published:f.get('is_published')==='true',publish_at:manilaIso(f.get('publish_at'))||new Date().toISOString(),expires_at:manilaIso(f.get('expires_at')),created_by:a?.created_by||currentUserId(),updated_at:new Date().toISOString()},a?.id,'Announcement')
+    async f=>saveAnnouncement(f,a)
   );
+}
+function prepareAnnouncementImage(file){
+  return new Promise((resolve,reject)=>{
+    if(!file?.type?.startsWith('image/'))return reject(new Error('Only image files can be uploaded.'));
+    if(file.size>12*1024*1024)return reject(new Error('The announcement image is larger than 12 MB.'));
+    const reader=new FileReader();reader.onload=()=>{const image=new Image();image.onload=()=>{const max=1800,scale=Math.min(1,max/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));const ctx=canvas.getContext('2d');if(!ctx)return reject(new Error('Unable to prepare the announcement image.'));ctx.drawImage(image,0,0,canvas.width,canvas.height);canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Unable to prepare the announcement image.')),'image/jpeg',.86)};image.onerror=()=>reject(new Error('Unable to read the announcement image.'));image.src=reader.result};reader.onerror=()=>reject(new Error('Unable to read the announcement image.'));reader.readAsDataURL(file);
+  });
+}
+async function saveAnnouncement(f,a=null){
+  const client=sb();if(!client)throw new Error('Database client unavailable.');
+  const file=f.get('image'),remove=f.get('remove_image')==='true',title=String(f.get('title')||'').trim(),body=String(f.get('body')||'').trim();
+  const hasNewImage=Boolean(file&&file.name),hasExistingImage=Boolean(a?.image_url&&!remove);
+  if(!title)throw new Error('Announcement title is required.');
+  if(!body&&!hasNewImage&&!hasExistingImage)throw new Error('Add a message or an announcement image.');
+  const values={title,body,audience:f.get('audience'),area_id:f.get('area_id')||null,ministry_id:f.get('ministry_id')||null,is_published:f.get('is_published')==='true',publish_at:manilaIso(f.get('publish_at'))||new Date().toISOString(),expires_at:manilaIso(f.get('expires_at')),created_by:a?.created_by||currentUserId(),updated_at:new Date().toISOString()};
+  const saved=a?.id?await client.from('church_announcements').update(values).eq('id',a.id).select('*').single():await client.from('church_announcements').insert(values).select('*').single();
+  if(saved.error)throw saved.error;
+  const row=saved.data;let newPath=null;
+  try{
+    if(hasNewImage){
+      const blob=await prepareAnnouncementImage(file),token=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2);newPath='announcement/'+row.id+'/'+Date.now()+'-'+token+'.jpg';
+      const up=await client.storage.from('vccf-gallery').upload(newPath,blob,{contentType:'image/jpeg',cacheControl:'3600',upsert:false});if(up.error)throw up.error;
+      const imageUrl=client.storage.from('vccf-gallery').getPublicUrl(newPath).data.publicUrl;
+      const imageSave=await client.from('church_announcements').update({image_url:imageUrl,image_storage_path:newPath,updated_at:new Date().toISOString()}).eq('id',row.id);if(imageSave.error)throw imageSave.error;
+      if(a?.image_storage_path&&a.image_storage_path!==newPath)await client.storage.from('vccf-gallery').remove([a.image_storage_path]);
+    }else if(remove&&a?.image_url){
+      const cleared=await client.from('church_announcements').update({image_url:null,image_storage_path:null,updated_at:new Date().toISOString()}).eq('id',row.id);if(cleared.error)throw cleared.error;
+      if(a.image_storage_path)await client.storage.from('vccf-gallery').remove([a.image_storage_path]);
+    }
+  }catch(error){
+    if(newPath)await client.storage.from('vccf-gallery').remove([newPath]);
+    if(!a?.id&&!body)await client.from('church_announcements').delete().eq('id',row.id);
+    throw error;
+  }
+  await writeAudit(a?.id?'update':'create','church_announcements',row.id,{label:'Announcement'});
+  loaded=false;await loadAll(true);renderActive();toast(a?.id?'Announcement updated.':'Announcement created.',true);
+  window.dispatchEvent(new CustomEvent('vccf-announcement-updated',{detail:{announcementId:row.id}}));
 }
 
 function renderDocuments(){
