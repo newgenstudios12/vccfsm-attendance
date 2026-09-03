@@ -97,14 +97,17 @@ async function renderGallery(){
   root.querySelectorAll('[data-open-summary]').forEach(button=>button.onclick=()=>load(button.dataset.openSummary));
 }
 
+function bindSummaryGalleryBack(){
+  const back=document.getElementById('backToSummaryGallery');
+  if(back)back.onclick=()=>renderGallery();
+}
 async function load(day){
   const root=document.getElementById('sundaySummaryWorkspace');if(!root)return;
   pendingFiles.forEach(x=>URL.revokeObjectURL(x.preview));pendingFiles=[];
   if(!isSunday(day)){
     root.innerHTML='<div class="summary-detail-toolbar"><button id="backToSummaryGallery" class="back-button" type="button">← Summary gallery</button></div><section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>Select a Sunday to prepare its summary.</p></div><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div><div class="notice">The selected date is not a Sunday. Choose a Sunday to create or review a summary.</div></section>';
-    document.getElementById('backToSummaryGallery').onclick=renderGallery;
-    document.getElementById('backToSummaryGallery')?.addEventListener('click',renderGallery);
-  document.getElementById('sundaySummaryDate').onchange=e=>load(e.currentTarget.value);
+    bindSummaryGalleryBack();
+    document.getElementById('sundaySummaryDate').onchange=e=>load(e.currentTarget.value);
     return;
   }
   root.innerHTML='<section class="sunday-summary-card card"><div class="sunday-summary-loading">Loading Sunday summary…</div></section>';
@@ -142,6 +145,7 @@ function render(day){
   const attendance=posted?Number(savedAttendance??liveStats.attendance):liveStats.attendance;
   const rate=posted?Number(savedRate??liveStats.rate):liveStats.rate;
   root.innerHTML='<div class="summary-detail-toolbar"><button id="backToSummaryGallery" class="back-button" type="button">← Summary gallery</button><span>Open a summary to review complete details before posting.</span></div><section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>This is the same summary used by the dashboard after it is posted.</p></div><div class="summary-head-actions"><span class="summary-workflow-pill '+statusClass(status)+'">'+esc(statusText(status))+'</span><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div></div><div class="summary-workflow-line"><span class="'+(status==='draft'?'active':'done')+'">1 Draft</span><i></i><span class="'+(submitted?'active':posted?'done':'')+'">2 Submitted</span><i></i><span class="'+(posted?'active':'')+'">3 Posted</span></div><div class="summary-editor-metrics">'+metric('Attendance',String(attendance),posted?'Posted count':'Live Sunday count')+metric('Member base',String(posted?Number(currentSummary?.member_base_count||liveStats.base):liveStats.base),'Active members in your scope')+metric('Attendance rate',Math.round(rate)+'%','Sunday participation')+(finance?metric('Live tithes',php(liveStats.tithe),'Recorded for this Sunday'):metric('Giving','Restricted','Pastor / Admin only'))+'</div><div class="summary-editor-grid"><div class="summary-editor-fields"><label>Summary notes<textarea id="sundaySummaryNotes" rows="5" placeholder="Sunday highlights, observations, or notes…" '+(posted?'disabled':'')+'>'+esc(notes)+'</textarea></label>'+(finance?'<div class="summary-money-grid"><label>Tithes<input id="sundaySummaryTithe" type="number" min="0" step="0.01" value="'+esc(tithe)+'" '+(posted?'disabled':'')+'></label><label>Offerings<input id="sundaySummaryOffering" type="number" min="0" step="0.01" value="'+esc(offering)+'" '+(posted?'disabled':'')+'></label></div>':'<div class="summary-finance-restricted">Tithes and offerings are completed during Pastor/Admin review.</div>')+'</div><div class="summary-photo-editor"><div class="summary-photo-editor-head"><div><b>Summary photos</b><span>These exact photos will be featured in the dashboard carousel after posting.</span></div>'+(posted?'':'<label class="summary-add-photo">+ Add photos<input id="sundaySummaryPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>')+'</div><div id="sundaySummaryPhotos" class="summary-photo-grid"></div></div></div><div class="summary-submit-bar"><div><b>'+esc(statusText(status))+'</b><span>'+(posted?'This Sunday summary is live on the dashboard.':submitted?(canPost()?'Review the summary, then post it to the dashboard.':'Waiting for Pastor/Admin to post this summary.'):'Save changes or submit when the Sunday summary is ready.')+'</span></div><div class="summary-submit-actions">'+(!posted?'<button id="saveSundaySummary" class="btn secondary" type="button">'+(submitted?'Save changes':'Save draft')+'</button>':'')+(!posted&&!submitted?'<button id="submitSundaySummary" class="btn" type="button">Submit summary</button>':'')+(submitted&&canPost()?'<button id="postSundaySummary" class="btn" type="button">Post to dashboard</button>':'')+'</div></div><div id="sundaySummaryMessage" class="sunday-summary-message"></div></section>';
+  bindSummaryGalleryBack();
   document.getElementById('sundaySummaryDate').onchange=e=>load(e.currentTarget.value);
   const input=document.getElementById('sundaySummaryPhotoInput');
   if(input)input.onchange=()=>{const files=Array.from(input.files||[]).filter(f=>f.type.startsWith('image/')).slice(0,12-currentPhotos.length-pendingFiles.length);files.forEach(file=>pendingFiles.push({file,preview:URL.createObjectURL(file)}));input.value='';renderPhotos()};
