@@ -77,3 +77,9 @@
   .announcement-meta{align-items:flex-start}
   .area-attendance-count{flex-wrap:wrap}
 }
+
+
+/* Dashboard banner social links */
+.welcome-socials{position:relative;z-index:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;min-width:0}.welcome-socials>span{font-size:.66rem;font-weight:850;color:rgba(255,255,255,.92);text-shadow:0 1px 8px rgba(0,0,0,.35);white-space:normal}.welcome-social-icons{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.welcome-social-icons a{width:34px;height:34px;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(255,255,255,.38);background:rgba(8,13,20,.4);color:#fff;text-decoration:none;backdrop-filter:blur(7px);box-shadow:0 4px 14px rgba(0,0,0,.16);transition:transform .18s ease,background .18s ease,border-color .18s ease}.welcome-social-icons a:hover,.welcome-social-icons a:focus-visible{transform:translateY(-1px);background:rgba(8,13,20,.68);border-color:rgba(255,255,255,.7);outline:none}.welcome-social-icons svg{width:17px;height:17px;display:block;fill:currentColor}
+@media(max-width:760px){.welcome-socials{align-items:flex-start;flex-direction:column;gap:8px;margin-top:12px}.welcome-social-icons{gap:8px}.welcome-social-icons a{width:36px;height:36px}}
+@media(max-width:480px){.welcome-socials>span{font-size:.63rem;line-height:1.4}.welcome-social-icons{width:100%}.welcome-social-icons a{flex:0 0 36px}}
