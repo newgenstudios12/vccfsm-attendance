@@ -342,7 +342,7 @@ function renderEvents(){
     const mode=e.participation_mode||(e.registration_required?'registration_required':'registration_optional'),eventRegs=data.registrations.filter(r=>r.event_id===e.id&&r.status!=='Cancelled'),regs=eventRegs.length,attended=eventRegs.filter(r=>r.status==='Attended'||r.checked_in_at).length;
     const scope=e.area_id?areaName(e.area_id):(e.ministry_id?ministryName(e.ministry_id):'Church-wide');
     const participation=mode==='attendance_only'?'<b>'+attended+' attendees</b><div class="cms-sub">Attendance only</div>':'<b>'+regs+(e.capacity?' / '+e.capacity:'')+'</b><div class="cms-sub">'+attended+' attended · '+(regs?Math.round(attended/regs*100):0)+'%</div>';
-    return '<tr><td><b>'+esc(e.title)+'</b><div class="cms-sub">'+esc(e.event_type)+' · '+esc(scope)+'</div></td><td>'+fmtDateTime(e.start_at)+'</td><td>'+esc(e.location||'—')+'</td><td>'+participation+'</td><td>'+badge(e.status,e.status==='Completed'?'ok':'')+'</td><td class="cms-actions">'+(can?'<button class="cms-small" data-event-edit="'+e.id+'">Edit</button>'+(mode==='attendance_only'?'':'<button class="cms-small" data-event-register="'+e.id+'">Register</button>'):'')+'</td></tr>';
+    return '<tr><td><b>'+esc(e.title)+'</b><div class="cms-sub">'+esc(e.event_type)+' · '+esc(scope)+'</div></td><td>'+fmtDateTime(e.start_at)+'</td><td>'+esc(e.location||'—')+'</td><td>'+participation+'</td><td>'+badge(e.status,e.status==='Completed'?'ok':'')+'</td><td class="cms-actions">'+(can?'<button class="cms-small" data-event-edit="'+e.id+'">Edit</button>'+(mode==='attendance_only'?'':'<button class="cms-small" data-event-register="'+e.id+'">Register</button>')+(isAdmin()?'<button class="cms-small danger-text" data-event-delete="'+e.id+'">Delete</button>':''):'')+'</td></tr>';
   }).join('');
   const regRows=data.registrations.slice(0,100).map(r=>'<tr><td>'+esc(data.events.find(e=>e.id===r.event_id)?.title||'Event')+'</td><td>'+esc(memberName(r.member_id))+'</td><td>'+badge(r.status,r.status==='Attended'?'ok':'')+'</td><td>'+fmtDateTime(r.checked_in_at)+'</td><td>'+fmtDate(r.registered_at)+'</td><td>'+(canManageChurch()?'<button class="cms-small danger-text" data-reg-delete="'+r.id+'">Remove</button>':'')+'</td></tr>').join('');
   content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Events</h3><p>Create activities and manage registration. Check-ins are handled in the Attendance module.</p></div>'+(can?'<button id="addEvent" class="btn">Add Event</button>':'')+'</div>'+
@@ -351,6 +351,7 @@ function renderEvents(){
   document.getElementById('addEvent')?.addEventListener('click',()=>eventForm());
   content().querySelectorAll('[data-event-edit]').forEach(b=>b.onclick=()=>eventForm(data.events.find(x=>x.id===b.dataset.eventEdit)));
   content().querySelectorAll('[data-event-register]').forEach(b=>b.onclick=()=>registrationForm(b.dataset.eventRegister));
+  content().querySelectorAll('[data-event-delete]').forEach(b=>b.onclick=()=>deleteRow('church_events',b.dataset.eventDelete,'Event'));
   content().querySelectorAll('[data-reg-delete]').forEach(b=>b.onclick=()=>deleteRow('church_event_registrations',b.dataset.regDelete,'Registration'));
 }
 
