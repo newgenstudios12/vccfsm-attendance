@@ -39,6 +39,30 @@ function financeAllowed(){return ['admin','pastor'].includes(role())}
 function activeMembers(){
   return (state().members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive');
 }
+function upcomingBirthdays(members,days=30,limit=8){
+  const todayKey=phDay(new Date()),parts=todayKey.split('-').map(Number),today=new Date(parts[0],parts[1]-1,parts[2]),out=[];
+  for(const m of members||[]){
+    const raw=String(m.birth_date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))continue;
+    const [,mm,dd]=raw.split('-').map(Number);
+    let next=new Date(parts[0],mm-1,dd);
+    if(next<today)next=new Date(parts[0]+1,mm-1,dd);
+    const diff=Math.round((next-today)/86400000);
+    if(diff<0||diff>days)continue;
+    out.push({member:m,next,diff});
+  }
+  return out.sort((a,b)=>a.diff-b.diff||memberName(a.member).localeCompare(memberName(b.member))).slice(0,limit);
+}
+function birthdayDateLabel(date){
+  return new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long',day:'numeric'}).format(new Date(date.getFullYear(),date.getMonth(),date.getDate(),12));
+}
+function birthdayCard(birthdays){
+  const items=(birthdays||[]).map(({member,next,diff})=>{
+    const name=memberName(member),photo=member.photo_url||'',when=diff===0?'Today':diff===1?'Tomorrow':'In '+diff+' days';
+    const avatar=photo?'<img src="'+esc(photo)+'" alt="" loading="lazy">':'<span>'+esc(name.trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'V')+'</span>';
+    return '<div class="birthday-person"><div class="birthday-avatar">'+avatar+'</div><div class="birthday-person-copy"><b>'+esc(name)+'</b><span>'+esc(birthdayDateLabel(next))+'</span></div><span class="birthday-when '+(diff===0?'today':'')+'">'+esc(when)+'</span></div>';
+  }).join('');
+  return '<section class="birthday-card card"><div class="birthday-head"><div><span class="dashboard-kicker">BIRTHDAYS</span><h3>Upcoming Celebrants 🎂</h3><p>Active members with birthdays in the next 30 days.</p></div><span class="birthday-count">'+(birthdays?.length||0)+' upcoming</span></div><div class="birthday-list">'+(items||'<div class="birthday-empty"><strong>No upcoming birthdays</strong><span>No birthdays are recorded in your accessible member scope for the next 30 days.</span></div>')+'</div></section>';
+}
 function uniqueAttendance(rows,dateKey){
   return new Set(rows.filter(a=>a.checked_in_at&&phDay(a.checked_in_at)===dateKey).map(a=>a.member_id)).size;
 }
@@ -163,8 +187,8 @@ function renderDashboard(){
   const el=document.getElementById('dashboard');if(!el||!dashboardData)return;
   const s=state(),p=s.profile||{},email=s.session?.user?.email||'',name=p.display_name||memberName((s.members||[]).find(m=>m.id===p.member_id))||email||'Kapatid';
   const trend=dashboardData.trend,max=Math.max(1,...trend.map(x=>x.value));
-  const topRate=Math.round(Number(dashboardData.sunday.rate)||0);
-  el.innerHTML='<section class="welcome-banner card"><div><span class="welcome-kicker">VCCF SANTA MARIA</span><h2>Welcome, Kapatid!</h2><p>'+esc(name)+' · '+esc(scopeCopy())+'</p></div><div class="welcome-date">'+esc(new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(new Date()))+'</div></section><div class="dashboard-section-head"><div><span class="dashboard-kicker">SUNDAY ANALYTICS</span><h2>Sunday Analytics & Stats</h2><p>Performance is based on completed Sundays only. Event attendance stays separate.</p></div><span class="scope-chip">'+esc(role().replace(/_/g,' '))+'</span></div><div class="sunday-stat-grid">'+summaryMetric('Previous Sunday',String(dashboardData.sunday.attendance),dateLabel(dashboardData.sunday.date))+summaryMetric('Attendance rate',topRate+'%','Previous Sunday')+summaryMetric('Monthly average',String(dashboardData.monthAvg),'Completed Sundays this month')+summaryMetric(role()==='member'?'Accessible members':'Active members',String(dashboardData.activeCount),'Current analytics scope')+'</div><section class="sunday-trend card"><div class="trend-copy"><span class="dashboard-kicker">5-SUNDAY TREND</span><h3>Attendance movement</h3><p>Each bar represents the accessible attendance count for that Sunday.</p></div><div class="trend-bars">'+trend.map(x=>'<div class="trend-item"><strong>'+x.value+'</strong><div class="trend-track"><i style="height:'+Math.max(8,Math.round(x.value/max*100))+'%"></i></div><span>'+esc(shortDay(x.date))+'</span></div>').join('')+'</div></section><section class="summary-layout"><div class="summary-analytics card"><div class="summary-tabs"><button class="active" type="button" data-summary-kind="sunday">Previous Sunday</button><button type="button" data-summary-kind="event" '+(dashboardData.event.exists?'':'disabled')+'>Latest Event</button></div><div id="summaryAnalyticsBody"></div></div><div class="summary-carousel-card card"><div class="carousel-heading"><div><span class="dashboard-kicker">FEATURED PHOTOS</span><h3>Summary Highlights</h3></div><span>Carousel</span></div><div id="summaryCarousel" class="summary-carousel"></div></div></section>';
+  const topRate=Math.round(Number(dashboardData.sunday.rate)||0),birthdays=upcomingBirthdays(activeMembers());
+  el.innerHTML='<section class="welcome-banner card"><div><span class="welcome-kicker">VCCF SANTA MARIA</span><h2>Welcome, Kapatid!</h2><p>'+esc(name)+' · '+esc(scopeCopy())+'</p></div><div class="welcome-date">'+esc(new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(new Date()))+'</div></section><div class="dashboard-section-head"><div><span class="dashboard-kicker">SUNDAY ANALYTICS</span><h2>Sunday Analytics & Stats</h2><p>Performance is based on completed Sundays only. Event attendance stays separate.</p></div><span class="scope-chip">'+esc(role().replace(/_/g,' '))+'</span></div><div class="sunday-stat-grid">'+summaryMetric('Previous Sunday',String(dashboardData.sunday.attendance),dateLabel(dashboardData.sunday.date))+summaryMetric('Attendance rate',topRate+'%','Previous Sunday')+summaryMetric('Monthly average',String(dashboardData.monthAvg),'Completed Sundays this month')+summaryMetric(role()==='member'?'Accessible members':'Active members',String(dashboardData.activeCount),'Current analytics scope')+'</div>'+birthdayCard(birthdays)+'<section class="sunday-trend card"><div class="trend-copy"><span class="dashboard-kicker">5-SUNDAY TREND</span><h3>Attendance movement</h3><p>Each bar represents the accessible attendance count for that Sunday.</p></div><div class="trend-bars">'+trend.map(x=>'<div class="trend-item"><strong>'+x.value+'</strong><div class="trend-track"><i style="height:'+Math.max(8,Math.round(x.value/max*100))+'%"></i></div><span>'+esc(shortDay(x.date))+'</span></div>').join('')+'</div></section><section class="summary-layout"><div class="summary-analytics card"><div class="summary-tabs"><button class="active" type="button" data-summary-kind="sunday">Previous Sunday</button><button type="button" data-summary-kind="event" '+(dashboardData.event.exists?'':'disabled')+'>Latest Event</button></div><div id="summaryAnalyticsBody"></div></div><div class="summary-carousel-card card"><div class="carousel-heading"><div><span class="dashboard-kicker">FEATURED PHOTOS</span><h3>Summary Highlights</h3></div><span>Carousel</span></div><div id="summaryCarousel" class="summary-carousel"></div></div></section>';
   el.querySelectorAll('[data-summary-kind]').forEach(b=>b.onclick=()=>renderSummary(b.dataset.summaryKind));
   renderSummary(selectedSummary==='event'&&dashboardData.event.exists?'event':'sunday');
 }
