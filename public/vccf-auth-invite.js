@@ -49,3 +49,6 @@ async function handleInviteUrl(){
 window.addEventListener('vccf-force-password-change',async()=>{const response=await client()?.auth.getSession();if(response?.data?.session)showSetup({session:response.data.session,mode:'temporary'})});
 handleInviteUrl();
 })();
+
+// Load the Member 360 enhancement without changing the stable app bootstrap order.
+(()=>{if(document.querySelector('script[data-vccf-member-360]'))return;const s=document.createElement('script');s.src='/vccf-member-360.js?v=20260903-1';s.dataset.vccfMember360='1';s.defer=true;document.head.appendChild(s)})();
