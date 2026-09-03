@@ -9,3 +9,5 @@
 @media(max-width:1050px){.gallery-album-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gallery-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:720px){.gallery-hero,.gallery-album-detail,.gallery-detail-head{align-items:stretch;flex-direction:column}.gallery-admin-actions{justify-content:flex-start}.gallery-photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.member-edit-grid{grid-template-columns:1fr}}
 @media(max-width:450px){.gallery-album-grid,.gallery-photo-grid{grid-template-columns:1fr}}
+
+.gallery-auto-badge.event,.gallery-auto-badge.event_summary{background:rgba(45,92,160,.9);color:#fff}.gallery-auto-badge.sunday_summary{background:rgba(166,45,45,.9);color:#fff}
