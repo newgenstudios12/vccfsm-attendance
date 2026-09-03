@@ -19,4 +19,4 @@ async function handleInviteUrl(){const sb=client();if(!sb)return false;const que
 window.addEventListener('vccf-force-password-change',async()=>{const response=await client()?.auth.getSession();if(response?.data?.session)showSetup({session:response.data.session,mode:'temporary'})});
 handleInviteUrl();
 })();
-(()=>{if(document.querySelector('script[data-vccf-member-360]'))return;const s=document.createElement('script');s.src='/vccf-member-360.js?v=20260903-4';s.dataset.vccfMember360='1';s.defer=true;document.head.appendChild(s)})();
+(()=>{if(document.querySelector('script[data-vccf-member-360]'))return;const s=document.createElement('script');s.src='/vccf-member-360.js?v=20260903-5';s.dataset.vccfMember360='1';s.defer=true;document.head.appendChild(s)})();
