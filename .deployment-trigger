@@ -1,1 +1,3 @@
-Production rebuild after login freeze fix: config now reuses browser Supabase singleton; API key unchanged (2026-09-02 12:14 UTC).
+VCCF production deployment trigger
+Last feature: Sunday summary submission workflow
+Source commit: 444bc6b226043bb11e26f9318326c7a1d2993dad
