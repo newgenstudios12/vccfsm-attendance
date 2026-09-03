@@ -65,7 +65,7 @@ function birthdayCard(birthdays){
   return '<section class="birthday-card card"><div class="birthday-head"><div><span class="dashboard-kicker">BIRTHDAYS</span><h3>Upcoming Celebrants 🎂</h3><p>Active members with birthdays in the next 30 days.</p></div><span class="birthday-count">'+(birthdays?.length||0)+' upcoming</span></div><div class="birthday-list">'+(items||'<div class="birthday-empty"><strong>No upcoming birthdays</strong><span>No birthdays are recorded in your accessible member scope for the next 30 days.</span></div>')+'</div></section>';
 }
 function uniqueAttendance(rows,dateKey){
-  return new Set(rows.filter(a=>a.checked_in_at&&phDay(a.checked_in_at)===dateKey).map(a=>a.member_id)).size;
+  return new Set(rows.filter(a=>(a.attendance_type||'sunday')==='sunday'&&a.checked_in_at&&phDay(a.checked_in_at)===dateKey).map(a=>a.member_id)).size;
 }
 function sumGiving(rows,dateKey,type){
   const wanted=String(type).toLowerCase();
@@ -84,7 +84,7 @@ function summarySnapshot(rows,type,date,title){
 }
 function buildAreaStats(attendance,dateKey,members){
   const accessible=(members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive');
-  const presentIds=new Set((attendance||[]).filter(a=>a.checked_in_at&&phDay(a.checked_in_at)===dateKey).map(a=>a.member_id));
+  const presentIds=new Set((attendance||[]).filter(a=>(a.attendance_type||'sunday')==='sunday'&&a.checked_in_at&&phDay(a.checked_in_at)===dateKey).map(a=>a.member_id));
   const areas=(state().areas||[]).filter(a=>a.is_active!==false&&(role()!=='area_leader'||a.id===state().profile?.area_id));
   const stats=areas.map(area=>{
     const scoped=accessible.filter(m=>m.area_id===area.id),base=scoped.length,present=scoped.filter(m=>presentIds.has(m.id)).length;
@@ -131,7 +131,7 @@ async function loadDashboardData(){
   const prev=previousSundayKey(),rangeStart=new Date(prev+'T00:00:00+08:00');rangeStart.setDate(rangeStart.getDate()-42);
   const fromIso=rangeStart.toISOString(),nowIso=new Date().toISOString();
   const requests=[
-    client.from('attendance').select('member_id,area_id,checked_in_at,source').gte('checked_in_at',fromIso).order('checked_in_at',{ascending:false}),
+    client.from('attendance').select('member_id,area_id,checked_in_at,source,attendance_type').gte('checked_in_at',fromIso).order('checked_in_at',{ascending:false}),
     client.from('church_events').select('id,title,event_type,start_at,location,status,area_id').lt('start_at',nowIso).order('start_at',{ascending:false}).limit(12),
     client.from('photos').select('id,title,storage_path,taken_on,featured,created_at').order('created_at',{ascending:false}).limit(30)
   ];

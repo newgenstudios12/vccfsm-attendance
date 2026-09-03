@@ -2,7 +2,7 @@
 #welcomeBanner{}
 .dashboard-loading{padding:28px;color:var(--muted)}
 .welcome-banner{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:30px 28px;margin-bottom:20px;min-height:210px;background:#1f252d;overflow:hidden;position:relative;color:#fff;isolation:isolate}
-.welcome-banner:before{content:"";position:absolute;inset:0;background:url('/assets/vccf-dashboard-welcome.jpg') center 48%/cover no-repeat;opacity:.5;z-index:-2;pointer-events:none}
+.welcome-banner:before{content:"";position:absolute;inset:0;background:url('/assets/vccf-dashboard-welcome.jpg?v=20260903-2') center 48%/cover no-repeat;opacity:.5;z-index:-2;pointer-events:none}
 .welcome-banner:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(11,18,27,.74) 0%,rgba(11,18,27,.54) 48%,rgba(11,18,27,.35) 100%);z-index:-1;pointer-events:none}
 .welcome-banner>div{position:relative;z-index:1}.welcome-kicker,.dashboard-kicker,.summary-kicker{display:block;font-size:.68rem;font-weight:950;letter-spacing:.12em;text-transform:uppercase;color:var(--brand)}
 .welcome-banner .welcome-kicker{color:#fff;opacity:.9;text-shadow:0 1px 8px rgba(0,0,0,.35)}

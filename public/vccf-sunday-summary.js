@@ -74,7 +74,7 @@ async function renderGallery(){
   const days=recentSundayDays(12),earliest=days[days.length-1],latest=days[0],rangeStart=bounds(earliest).start,rangeEnd=bounds(latest).end,client=sb();
   const [sumRes,attRes]=await Promise.all([
     client.from('cms_sunday_event_summaries').select('*').eq('summary_type','sunday').gte('summary_date',earliest).lte('summary_date',latest).order('summary_date',{ascending:false}),
-    client.from('attendance').select('member_id,checked_in_at').gte('checked_in_at',rangeStart).lt('checked_in_at',rangeEnd)
+    client.from('attendance').select('member_id,checked_in_at,attendance_type').eq('attendance_type','sunday').gte('checked_in_at',rangeStart).lt('checked_in_at',rangeEnd)
   ]);
   if(sumRes.error||attRes.error){
     const error=sumRes.error||attRes.error;root.innerHTML='<section class="summary-gallery-shell"><div class="notice">'+esc(error.message||'Unable to load Sunday summaries.')+'</div></section>';return;
@@ -110,7 +110,7 @@ async function load(day){
   root.innerHTML='<section class="sunday-summary-card card"><div class="sunday-summary-loading">Loading Sunday summary…</div></section>';
   const b=bounds(day),client=sb();
   const reqs=[
-    client.from('attendance').select('member_id').gte('checked_in_at',b.start).lt('checked_in_at',b.end),
+    client.from('attendance').select('member_id,attendance_type').eq('attendance_type','sunday').gte('checked_in_at',b.start).lt('checked_in_at',b.end),
     client.from('cms_sunday_event_summaries').select('*').eq('summary_type','sunday').eq('summary_date',day).maybeSingle()
   ];
   if(canFinance())reqs.push(client.from('giving_records').select('giving_type,amount').eq('given_on',day));
