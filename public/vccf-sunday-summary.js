@@ -25,8 +25,8 @@ function latestSunday(){
 function isSunday(day){return new Date(day+'T12:00:00+08:00').getDay()===0}
 function bounds(day){const start=new Date(day+'T00:00:00+08:00');return {start:start.toISOString(),end:new Date(start.getTime()+86400000).toISOString()}}
 function activeBase(){return (state().members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive').length}
-function statusText(status){return ({draft:'Draft',submitted:'Submitted for posting',posted:'Posted on dashboard'})[status]||'Draft'}
-function statusClass(status){return status==='posted'?'posted':status==='submitted'?'submitted':'draft'}
+function statusText(status){return ({not_prepared:'Not prepared',draft:'Draft',submitted:'Submitted for posting',posted:'Posted on dashboard'})[status]||'Draft'}
+function statusClass(status){return status==='posted'?'posted':status==='submitted'?'submitted':status==='not_prepared'?'not-prepared':'draft'}
 function setMsg(message,kind=''){
   const el=document.getElementById('sundaySummaryMessage');if(!el)return;
   el.className='sunday-summary-message '+kind;el.textContent=message||'';
@@ -52,12 +52,59 @@ function renderPhotos(){
   host.querySelectorAll('[data-remove-pending-photo]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.removePendingPhoto);URL.revokeObjectURL(pendingFiles[i]?.preview||'');pendingFiles.splice(i,1);renderPhotos()});
   host.querySelectorAll('[data-remove-summary-photo]').forEach(b=>b.onclick=()=>removeExistingPhoto(b.dataset.removeSummaryPhoto));
 }
+
+function recentSundayDays(count=12){
+  const days=[],start=new Date(latestSunday()+'T12:00:00+08:00');
+  for(let i=0;i<count;i++){const d=new Date(start);d.setDate(start.getDate()-(i*7));days.push(phDay(d))}
+  return days;
+}
+function shortDate(v){return new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric'}).format(new Date(v+'T12:00:00+08:00'))}
+function summaryGalleryCard(item){
+  const s=item.summary,status=s?.workflow_status||'not_prepared',cover=item.cover?.image_url||'',attendance=s?.workflow_status==='posted'?Number(s.attendance_count||0):item.attendance,base=s?.workflow_status==='posted'?Number(s.member_base_count||item.base):item.base,rate=s?.workflow_status==='posted'?Number(s.attendance_rate||0):(base?Math.round(attendance/base*100):0);
+  const action=status==='submitted'&&canPost()?'Review & Post':status==='posted'?'View Posted Summary':status==='draft'?'Continue Summary':'Prepare Summary';
+  return '<article class="summary-gallery-card card" data-summary-card="'+esc(item.day)+'">'+
+    '<div class="summary-gallery-cover '+(cover?'has-photo':'')+'">'+(cover?'<img src="'+esc(cover)+'" alt="'+esc(item.cover.caption||'Sunday summary photo')+'" loading="lazy">':'<div class="summary-gallery-placeholder"><span>VCCF</span><b>'+esc(shortDate(item.day))+'</b></div>')+'<span class="summary-gallery-status '+statusClass(status)+'">'+esc(statusText(status))+'</span></div>'+
+    '<div class="summary-gallery-copy"><span class="summary-gallery-date">'+esc(dateLabel(item.day))+'</span><h3>Sunday Worship</h3><div class="summary-gallery-metrics"><div><b>'+attendance+'</b><span>Attendance</span></div><div><b>'+Math.round(rate)+'%</b><span>Rate</span></div><div><b>'+item.photoCount+'</b><span>Photos</span></div></div><button type="button" class="summary-gallery-open" data-open-summary="'+esc(item.day)+'">'+esc(action)+' →</button></div>'+
+  '</article>';
+}
+async function renderGallery(){
+  const root=document.getElementById('sundaySummaryWorkspace');if(!root)return;
+  pendingFiles.forEach(x=>URL.revokeObjectURL(x.preview));pendingFiles=[];currentSummary=null;currentPhotos=[];
+  root.innerHTML='<section class="summary-gallery-shell"><div class="summary-gallery-hero card"><div><span class="sunday-summary-kicker">SUNDAY ATTENDANCE SUMMARIES</span><h2>Summary Gallery</h2><p>Choose a Sunday first, then review the full summary before submitting or posting it.</p></div><div class="summary-gallery-picker"><label>Open another Sunday<input id="summaryGalleryDate" type="date" value="'+esc(latestSunday())+'"></label><button id="openSummaryDate" class="btn secondary" type="button">Open</button></div></div><div class="summary-gallery-loading card">Loading recent Sunday summaries…</div></section>';
+  const days=recentSundayDays(12),earliest=days[days.length-1],latest=days[0],rangeStart=bounds(earliest).start,rangeEnd=bounds(latest).end,client=sb();
+  const [sumRes,attRes]=await Promise.all([
+    client.from('cms_sunday_event_summaries').select('*').eq('summary_type','sunday').gte('summary_date',earliest).lte('summary_date',latest).order('summary_date',{ascending:false}),
+    client.from('attendance').select('member_id,checked_in_at').gte('checked_in_at',rangeStart).lt('checked_in_at',rangeEnd)
+  ]);
+  if(sumRes.error||attRes.error){
+    const error=sumRes.error||attRes.error;root.innerHTML='<section class="summary-gallery-shell"><div class="notice">'+esc(error.message||'Unable to load Sunday summaries.')+'</div></section>';return;
+  }
+  const summaries=sumRes.data||[],summaryByDay=new Map(summaries.map(s=>[s.summary_date,s])),attendanceByDay=new Map();
+  (attRes.data||[]).forEach(row=>{const day=phDay(row.checked_in_at);if(!attendanceByDay.has(day))attendanceByDay.set(day,new Set());attendanceByDay.get(day).add(row.member_id)});
+  const summaryIds=summaries.map(s=>s.id),photosBySummary=new Map();
+  if(summaryIds.length){
+    const photoRes=await client.from('cms_summary_photos').select('id,summary_id,image_url,caption,sort_order').in('summary_id',summaryIds).order('sort_order');
+    if(!photoRes.error)(photoRes.data||[]).forEach(photo=>{if(!photosBySummary.has(photo.summary_id))photosBySummary.set(photo.summary_id,[]);photosBySummary.get(photo.summary_id).push(photo)});
+  }
+  const base=activeBase(),items=days.map(day=>{const summary=summaryByDay.get(day)||null,photos=summary?photosBySummary.get(summary.id)||[]:[];return {day,summary,cover:photos[0]||null,photoCount:photos.length,attendance:attendanceByDay.get(day)?.size||0,base}});
+  const counts={draft:0,submitted:0,posted:0,not_prepared:0};items.forEach(item=>counts[item.summary?.workflow_status||'not_prepared']=(counts[item.summary?.workflow_status||'not_prepared']||0)+1);
+  root.innerHTML='<section class="summary-gallery-shell"><div class="summary-gallery-hero card"><div><span class="sunday-summary-kicker">SUNDAY ATTENDANCE SUMMARIES</span><h2>Summary Gallery</h2><p>Choose a Sunday first, then review the full summary before submitting or posting it.</p></div><div class="summary-gallery-picker"><label>Open another Sunday<input id="summaryGalleryDate" type="date" value="'+esc(latestSunday())+'"></label><button id="openSummaryDate" class="btn secondary" type="button">Open</button></div></div>'+
+    '<div class="summary-gallery-status-row"><span><i class="draft"></i>'+counts.draft+' Draft</span><span><i class="submitted"></i>'+counts.submitted+' Submitted</span><span><i class="posted"></i>'+counts.posted+' Posted</span><span><i class="not-prepared"></i>'+counts.not_prepared+' Not prepared</span></div>'+
+    '<div class="summary-gallery-grid">'+items.map(summaryGalleryCard).join('')+'</div></section>';
+  const picker=document.getElementById('summaryGalleryDate'),open=()=>{const day=picker?.value||latestSunday();if(!isSunday(day)){alert('Please choose a Sunday.');return}load(day)};
+  document.getElementById('openSummaryDate').onclick=open;
+  picker.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();open()}};
+  root.querySelectorAll('[data-open-summary]').forEach(button=>button.onclick=()=>load(button.dataset.openSummary));
+}
+
 async function load(day){
   const root=document.getElementById('sundaySummaryWorkspace');if(!root)return;
   pendingFiles.forEach(x=>URL.revokeObjectURL(x.preview));pendingFiles=[];
   if(!isSunday(day)){
-    root.innerHTML='<section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>Select a Sunday to prepare its summary.</p></div><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div><div class="notice">The selected date is not a Sunday. Choose a Sunday to create or review a summary.</div></section>';
-    document.getElementById('sundaySummaryDate').onchange=e=>load(e.currentTarget.value);
+    root.innerHTML='<div class="summary-detail-toolbar"><button id="backToSummaryGallery" class="back-button" type="button">← Summary gallery</button></div><section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>Select a Sunday to prepare its summary.</p></div><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div><div class="notice">The selected date is not a Sunday. Choose a Sunday to create or review a summary.</div></section>';
+    document.getElementById('backToSummaryGallery').onclick=renderGallery;
+    document.getElementById('backToSummaryGallery')?.addEventListener('click',renderGallery);
+  document.getElementById('sundaySummaryDate').onchange=e=>load(e.currentTarget.value);
     return;
   }
   root.innerHTML='<section class="sunday-summary-card card"><div class="sunday-summary-loading">Loading Sunday summary…</div></section>';
@@ -94,7 +141,7 @@ function render(day){
   const savedRate=currentSummary?.attendance_rate;
   const attendance=posted?Number(savedAttendance??liveStats.attendance):liveStats.attendance;
   const rate=posted?Number(savedRate??liveStats.rate):liveStats.rate;
-  root.innerHTML='<section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>This is the same summary used by the dashboard after it is posted.</p></div><div class="summary-head-actions"><span class="summary-workflow-pill '+statusClass(status)+'">'+esc(statusText(status))+'</span><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div></div><div class="summary-workflow-line"><span class="'+(status==='draft'?'active':'done')+'">1 Draft</span><i></i><span class="'+(submitted?'active':posted?'done':'')+'">2 Submitted</span><i></i><span class="'+(posted?'active':'')+'">3 Posted</span></div><div class="summary-editor-metrics">'+metric('Attendance',String(attendance),posted?'Posted count':'Live Sunday count')+metric('Member base',String(posted?Number(currentSummary?.member_base_count||liveStats.base):liveStats.base),'Active members in your scope')+metric('Attendance rate',Math.round(rate)+'%','Sunday participation')+(finance?metric('Live tithes',php(liveStats.tithe),'Recorded for this Sunday'):metric('Giving','Restricted','Pastor / Admin only'))+'</div><div class="summary-editor-grid"><div class="summary-editor-fields"><label>Summary notes<textarea id="sundaySummaryNotes" rows="5" placeholder="Sunday highlights, observations, or notes…" '+(posted?'disabled':'')+'>'+esc(notes)+'</textarea></label>'+(finance?'<div class="summary-money-grid"><label>Tithes<input id="sundaySummaryTithe" type="number" min="0" step="0.01" value="'+esc(tithe)+'" '+(posted?'disabled':'')+'></label><label>Offerings<input id="sundaySummaryOffering" type="number" min="0" step="0.01" value="'+esc(offering)+'" '+(posted?'disabled':'')+'></label></div>':'<div class="summary-finance-restricted">Tithes and offerings are completed during Pastor/Admin review.</div>')+'</div><div class="summary-photo-editor"><div class="summary-photo-editor-head"><div><b>Summary photos</b><span>These exact photos will be featured in the dashboard carousel after posting.</span></div>'+(posted?'':'<label class="summary-add-photo">+ Add photos<input id="sundaySummaryPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>')+'</div><div id="sundaySummaryPhotos" class="summary-photo-grid"></div></div></div><div class="summary-submit-bar"><div><b>'+esc(statusText(status))+'</b><span>'+(posted?'This Sunday summary is live on the dashboard.':submitted?(canPost()?'Review the summary, then post it to the dashboard.':'Waiting for Pastor/Admin to post this summary.'):'Save changes or submit when the Sunday summary is ready.')+'</span></div><div class="summary-submit-actions">'+(!posted?'<button id="saveSundaySummary" class="btn secondary" type="button">'+(submitted?'Save changes':'Save draft')+'</button>':'')+(!posted&&!submitted?'<button id="submitSundaySummary" class="btn" type="button">Submit summary</button>':'')+(submitted&&canPost()?'<button id="postSundaySummary" class="btn" type="button">Post to dashboard</button>':'')+'</div></div><div id="sundaySummaryMessage" class="sunday-summary-message"></div></section>';
+  root.innerHTML='<div class="summary-detail-toolbar"><button id="backToSummaryGallery" class="back-button" type="button">← Summary gallery</button><span>Open a summary to review complete details before posting.</span></div><section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>This is the same summary used by the dashboard after it is posted.</p></div><div class="summary-head-actions"><span class="summary-workflow-pill '+statusClass(status)+'">'+esc(statusText(status))+'</span><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div></div><div class="summary-workflow-line"><span class="'+(status==='draft'?'active':'done')+'">1 Draft</span><i></i><span class="'+(submitted?'active':posted?'done':'')+'">2 Submitted</span><i></i><span class="'+(posted?'active':'')+'">3 Posted</span></div><div class="summary-editor-metrics">'+metric('Attendance',String(attendance),posted?'Posted count':'Live Sunday count')+metric('Member base',String(posted?Number(currentSummary?.member_base_count||liveStats.base):liveStats.base),'Active members in your scope')+metric('Attendance rate',Math.round(rate)+'%','Sunday participation')+(finance?metric('Live tithes',php(liveStats.tithe),'Recorded for this Sunday'):metric('Giving','Restricted','Pastor / Admin only'))+'</div><div class="summary-editor-grid"><div class="summary-editor-fields"><label>Summary notes<textarea id="sundaySummaryNotes" rows="5" placeholder="Sunday highlights, observations, or notes…" '+(posted?'disabled':'')+'>'+esc(notes)+'</textarea></label>'+(finance?'<div class="summary-money-grid"><label>Tithes<input id="sundaySummaryTithe" type="number" min="0" step="0.01" value="'+esc(tithe)+'" '+(posted?'disabled':'')+'></label><label>Offerings<input id="sundaySummaryOffering" type="number" min="0" step="0.01" value="'+esc(offering)+'" '+(posted?'disabled':'')+'></label></div>':'<div class="summary-finance-restricted">Tithes and offerings are completed during Pastor/Admin review.</div>')+'</div><div class="summary-photo-editor"><div class="summary-photo-editor-head"><div><b>Summary photos</b><span>These exact photos will be featured in the dashboard carousel after posting.</span></div>'+(posted?'':'<label class="summary-add-photo">+ Add photos<input id="sundaySummaryPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>')+'</div><div id="sundaySummaryPhotos" class="summary-photo-grid"></div></div></div><div class="summary-submit-bar"><div><b>'+esc(statusText(status))+'</b><span>'+(posted?'This Sunday summary is live on the dashboard.':submitted?(canPost()?'Review the summary, then post it to the dashboard.':'Waiting for Pastor/Admin to post this summary.'):'Save changes or submit when the Sunday summary is ready.')+'</span></div><div class="summary-submit-actions">'+(!posted?'<button id="saveSundaySummary" class="btn secondary" type="button">'+(submitted?'Save changes':'Save draft')+'</button>':'')+(!posted&&!submitted?'<button id="submitSundaySummary" class="btn" type="button">Submit summary</button>':'')+(submitted&&canPost()?'<button id="postSundaySummary" class="btn" type="button">Post to dashboard</button>':'')+'</div></div><div id="sundaySummaryMessage" class="sunday-summary-message"></div></section>';
   document.getElementById('sundaySummaryDate').onchange=e=>load(e.currentTarget.value);
   const input=document.getElementById('sundaySummaryPhotoInput');
   if(input)input.onchange=()=>{const files=Array.from(input.files||[]).filter(f=>f.type.startsWith('image/')).slice(0,12-currentPhotos.length-pendingFiles.length);files.forEach(file=>pendingFiles.push({file,preview:URL.createObjectURL(file)}));input.value='';renderPhotos()};
@@ -169,9 +216,8 @@ function mount(){
   const root=document.getElementById('sundaySummaryWorkspace');if(!root)return;
   const leaders=['admin','pastor','area_leader'];
   if(!leaders.includes(role())){root.innerHTML='';return}
-  const date=document.getElementById('sundaySummaryDate')?.value||latestSunday();
-  load(date);
+  renderGallery();
 }
-window.VCCFSundaySummary={mount,load};
+window.VCCFSundaySummary={mount,load,renderGallery};
 window.addEventListener('vccf-app-ready',()=>setTimeout(mount,60));
 })();
