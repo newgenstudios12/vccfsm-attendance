@@ -1,0 +1,19 @@
+/* Per-event registration and attendance workflow */
+.event-attendance-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.event-attendance-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.event-attendance-stats.attendance-only{grid-template-columns:repeat(2,minmax(160px,1fr));max-width:520px}
+.event-attendance-stats>div{padding:15px;border:1px solid var(--line);border-radius:12px;background:var(--card-soft)}
+.event-attendance-stats span,.event-attendance-stats strong{display:block}
+.event-attendance-stats span{font-size:.68rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.event-attendance-stats strong{font-size:1.25rem;margin-top:6px}
+.event-checkin-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.event-scanner{min-height:250px;display:grid;place-items:center;border:1px dashed var(--line);border-radius:13px;background:var(--card-soft);overflow:hidden;color:var(--muted);font-size:.78rem}
+.event-scanner video{object-fit:cover!important}
+.event-scan-actions{margin-top:12px}
+.event-member-search{display:block;font-size:.72rem;font-weight:800;margin-bottom:12px}
+.event-member-search input,.event-member-search select{width:100%;display:block;margin-top:6px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--input);color:var(--text)}
+.event-checkin-status{min-height:18px;margin-top:10px;font-size:.75rem;color:var(--muted)}
+.event-checkin-status.success{color:#167647}.event-checkin-status.error{color:#b42318}.event-checkin-status.warning{color:#b56c15}
+:root[data-theme="dark"] .event-attendance-stats>div,:root[data-theme="dark"] .event-scanner{background:var(--card-soft)}
+@media(max-width:920px){.event-checkin-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.event-attendance-stats,.event-attendance-stats.attendance-only{grid-template-columns:1fr 1fr}.event-attendance-head{align-items:stretch;flex-direction:column}.event-attendance-head .btn{width:100%}}
