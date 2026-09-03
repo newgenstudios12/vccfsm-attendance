@@ -359,8 +359,8 @@ async function deleteEventWithPhotos(eventId){
   const event=data.events.find(e=>e.id===eventId);if(!event||!confirm('Delete this event? Its registrations, event attendance, and attached event photos will also be removed.'))return;
   const photoRows=await sb().from('church_event_photos').select('storage_path').eq('event_id',eventId);
   const paths=(photoRows.data||[]).map(p=>p.storage_path).filter(Boolean);
+  if(paths.length){const removed=await sb().storage.from('vccf-gallery').remove(paths);if(removed.error){toast(removed.error.message||'Unable to remove event photos.');return}}
   const result=await sb().from('church_events').delete().eq('id',eventId);if(result.error){toast(result.error.message);return}
-  if(paths.length){const removed=await sb().storage.from('vccf-gallery').remove(paths);if(removed.error)console.warn('Event photo cleanup:',removed.error)}
   await writeAudit('delete','church_events',eventId,{label:'Event',title:event.title});loaded=false;await loadAll(true);renderActive();toast('Event deleted.',true);
 }
 function eventMemberOptions(eventId,query=''){
