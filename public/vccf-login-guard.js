@@ -155,6 +155,7 @@ async function authenticate(form){
     b.style.background='#ecfdf3';
     b.style.color='#027a48';
     b.textContent='Sign-in successful. Loading VCCF…';
+    window.__VCCF_AUTH_USER__=data.user;
 
     await loadFullApp(client,data.user);
     b.textContent='';
@@ -188,6 +189,7 @@ async function restore(){
       timeout(6000,'Session restore timed out.')
     ]);
     if(error||!data?.session?.user) return;
+    window.__VCCF_AUTH_USER__=data.session.user;
     await loadFullApp(client,data.session.user);
   }catch(e){
     console.warn('VCCF session restore:',e);
