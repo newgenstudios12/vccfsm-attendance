@@ -17,7 +17,7 @@ async function loadProfile(){const u=state.session?.user;if(!u)return;const r=aw
 async function loadData(){
  const [areas,members,att]=await Promise.all([
   withTimeout(sb.from('areas').select('id,name,is_active').order('name')),
-  withTimeout(sb.from('members').select('id,member_code,first_name,last_name,display_name,area_id,is_active,status,member_type,member_category,address,barangay,birth_date,photo_url,created_at').order('last_name').order('first_name')),
+  withTimeout(sb.from('members').select('id,member_code,first_name,last_name,display_name,area_id,is_active,status,member_type,member_category,address,province,city_municipality,barangay,province_psgc_code,city_municipality_psgc_code,barangay_psgc_code,birth_date,photo_url,created_at').order('last_name').order('first_name')),
   withTimeout(sb.from('attendance').select('id,member_id,area_id,checked_in_at,checked_in_by,source,attendance_type').gte('checked_in_at',new Date(Date.now()-7*86400000).toISOString()).order('checked_in_at',{ascending:false}))
  ]);
  if(areas.error)throw areas.error;if(members.error)throw members.error;if(att.error)throw att.error;state.areas=areas.data||[];state.members=members.data||[];state.attendance=att.data||[];
