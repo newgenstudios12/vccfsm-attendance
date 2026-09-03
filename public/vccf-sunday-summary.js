@@ -144,15 +144,16 @@ async function save(action,button,day){
     const saved=await sb().from('cms_sunday_event_summaries').update(updates).eq('id',currentSummary.id).select('*').single();
     if(saved.error)throw saved.error;currentSummary=saved.data;
     await uploadPending(day);
+    let success='Sunday summary saved.';
     if(action==='submit'){
       const submitted=await sb().from('cms_sunday_event_summaries').update({workflow_status:'submitted'}).eq('id',currentSummary.id).select('*').single();
-      if(submitted.error)throw submitted.error;currentSummary=submitted.data;setMsg('Sunday summary submitted. It is not on the dashboard yet.','success');
+      if(submitted.error)throw submitted.error;currentSummary=submitted.data;success='Sunday summary submitted. It is not on the dashboard yet.';
     }else if(action==='post'){
       if(currentSummary.workflow_status!=='submitted')throw new Error('Submit the Sunday summary before posting it.');
       const posted=await sb().from('cms_sunday_event_summaries').update({workflow_status:'posted'}).eq('id',currentSummary.id).select('*').single();
-      if(posted.error)throw posted.error;currentSummary=posted.data;setMsg('Sunday summary posted to the dashboard.','success');window.dispatchEvent(new CustomEvent('vccf-sunday-summary-posted',{detail:{summaryId:currentSummary.id,date:day}}));window.VCCFSundayDashboard?.refresh?.();
-    }else setMsg('Sunday summary saved.','success');
-    render(day);
+      if(posted.error)throw posted.error;currentSummary=posted.data;success='Sunday summary posted to the dashboard.';window.dispatchEvent(new CustomEvent('vccf-sunday-summary-posted',{detail:{summaryId:currentSummary.id,date:day}}));window.VCCFSundayDashboard?.refresh?.();
+    }
+    render(day);setMsg(success,'success');
   }catch(error){console.error('Sunday summary save',error);setMsg(error.message||'Unable to save the Sunday summary.','error')}
   finally{if(document.body.contains(button)){button.disabled=false;button.textContent=old}}
 }

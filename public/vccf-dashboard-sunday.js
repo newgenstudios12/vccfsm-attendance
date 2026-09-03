@@ -69,7 +69,7 @@ function photoSetFor(data,kind){
   const summary=kind==='event'?data.event.summary:data.sunday.summary;
   const date=kind==='event'?data.event.date:data.sunday.date;
   const linked=(data.summaryPhotos||[]).filter(p=>summary&&p.summary_id===summary.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(p=>({url:p.image_url||publicPhotoUrl(data.photoById[p.photo_id]),caption:p.caption||data.photoById[p.photo_id]?.title||''})).filter(p=>p.url);
-  if(linked.length)return linked;
+  if(summary)return linked;
   const dated=(data.galleryPhotos||[]).filter(p=>p.taken_on===date).map(p=>({url:publicPhotoUrl(p),caption:p.title||''})).filter(p=>p.url);
   if(dated.length)return dated;
   return (data.galleryPhotos||[]).filter(p=>p.featured).map(p=>({url:publicPhotoUrl(p),caption:p.title||''})).filter(p=>p.url);
