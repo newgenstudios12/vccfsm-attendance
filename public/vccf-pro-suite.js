@@ -20,57 +20,5 @@ function start(){if($('#app')?.classList.contains('active'))boot()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 window.addEventListener('vccf-authenticated',()=>setTimeout(boot,0),{once:true});
 
-// Authoritative login handler. Supports both real email addresses and the
-// username@vccf.local convention used by VCCF accounts. It activates the app
-// directly after authentication instead of reloading into a second handler.
-window.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{
-  const form=$('#loginForm');
-  if(!form||window.__VCCF_LOGIN_V8__)return;
-  window.__VCCF_LOGIN_V8__=true;
-  form.onsubmit=async e=>{
-    e.preventDefault();
-    e.stopPropagation();
-    const identifier=($('#loginUser')?.value||'').trim();
-    const password=$('#loginPass')?.value||'';
-    const email=identifier.includes('@')?identifier.toLowerCase():`${identifier.toLowerCase().replace(/[^a-z0-9._-]/g,'')}@vccf.local`;
-    const button=form.querySelector('button[type="submit"],button');
-    let box=$('#vccfLoginError');
-    if(!box){box=document.createElement('div');box.id='vccfLoginError';box.style.cssText='margin-top:14px;padding:12px;border-radius:10px;background:#fff1f1;color:#b42318;font-size:.85rem;white-space:pre-wrap';form.appendChild(box)}
-    box.textContent='';
-    if(button){button.disabled=true;button.textContent='Signing in…'}
-    try{
-      if(!identifier)throw new Error('Please enter your username or email.');
-      if(!password)throw new Error('Please enter your password.');
-      const client=window.supabase.createClient(window.VCCF_SUPABASE_URL,window.VCCF_SUPABASE_PUBLISHABLE_KEY);
-      const {data,error}=await client.auth.signInWithPassword({email,password});
-      if(error)throw new Error(error.message);
-      if(!data?.user)throw new Error('Authentication returned no user.');
-      const {data:profileRow,error:profileError}=await client.from('profiles').select('user_id,role,member_id,area_id,display_name').eq('user_id',data.user.id).maybeSingle();
-      if(profileError)throw new Error(`Profile lookup failed: ${profileError.message}`);
-      if(!profileRow)throw new Error('Authentication succeeded, but this account has no VCCF profile.');
-      window.session={username:identifier,name:profileRow.display_name||identifier,role:profileRow.role==='admin'?'Admin':profileRow.role==='area_leader'?'Area Leader':'Member',area:'',areaId:profileRow.area_id,memberId:profileRow.member_id,memberCode:null};
-      window.profile=profileRow;
-      const login=$('#login'),app=$('#app');
-      if(login)login.style.display='none';
-      if(app)app.classList.add('active');
-      const name=$('#currentName'),role=$('#currentRole'),avatar=$('#avatar'),info=$('#accountInfo');
-      if(name)name.textContent=window.session.name;
-      if(role)role.textContent=window.session.role;
-      if(avatar)avatar.textContent=window.session.name?.[0]||'V';
-      if(info)info.textContent=`${window.session.name} · ${window.session.role}`;
-      box.style.background='#ecfdf3';box.style.color='#027a48';box.textContent='Sign-in successful.';
-      window.dispatchEvent(new CustomEvent('vccf-authenticated'));
-      setTimeout(()=>boot(),0);
-      if(typeof window.loadDb==='function'){
-        try{await window.loadDb();if(typeof window.refresh==='function')window.refresh()}catch(dbError){console.warn('Post-login data load:',dbError)}
-      }
-      setTimeout(()=>window.scrollTo({top:0,behavior:'smooth'}),50);
-    }catch(err){
-      console.error('VCCF authoritative login:',err);
-      box.style.background='#fff1f1';box.style.color='#b42318';box.textContent=`Sign-in failed: ${err?.message||String(err)}`;
-    }finally{
-      if(button){button.disabled=false;button.textContent='Sign in'}
-    }
-  };
-},0));
+// Login is intentionally owned by the Aug 27 flow in vccf-config.js.
 })();
