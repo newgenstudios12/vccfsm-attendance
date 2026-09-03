@@ -91,14 +91,29 @@ function render(){
 function openForm(record=null){
   if(!canManage())return;
   document.getElementById('givingModal')?.remove();
-  const members=activeMembers(),wrap=document.createElement('div');wrap.id='givingModal';wrap.className='giving-modal';
-  wrap.innerHTML='<div class="giving-modal-card card"><div class="giving-modal-head"><div><span class="giving-kicker">FINANCIAL RECORD</span><h3>'+(record?'Edit Giving':'Record Tithe or Offering')+'</h3></div><button type="button" class="giving-close" aria-label="Close">×</button></div>'+
-    '<form id="givingForm"><label>Member<select name="member_id" required><option value="">Select member</option>'+members.map(m=>'<option value="'+attr(m.id)+'" '+(record?.member_id===m.id?'selected':'')+'>'+esc(memberName(m))+' · '+esc(areaName(m.area_id))+'</option>').join('')+'</select></label>'+
+  const members=activeMembers(),areas=(state().areas||[]).filter(a=>a.is_active!==false),recordMember=memberById(record?.member_id),initialArea=recordMember?.area_id||'',wrap=document.createElement('div');wrap.id='givingModal';wrap.className='giving-modal';
+  wrap.innerHTML='<div class="giving-modal-card card"><div class="giving-modal-head"><div><span class="giving-kicker">FINANCIAL RECORD</span><h3>'+(record?'Edit Giving':'Record Tithe or Offering')+'</h3><p>Search and filter the member directory before recording the contribution.</p></div><button type="button" class="giving-close" aria-label="Close">×</button></div>'+
+    '<form id="givingForm"><div class="giving-member-picker"><div class="giving-member-picker-head"><b>Select member</b><span id="givingMemberResultCount"></span></div>'+
+    '<div class="giving-member-filter-grid"><label>Search member<input id="givingRecordMemberSearch" type="search" placeholder="Name or member code…" autocomplete="off"></label><label>Area<select id="givingRecordAreaFilter"><option value="">All areas</option>'+areas.map(a=>'<option value="'+attr(a.id)+'" '+(initialArea===a.id?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></label></div>'+
+    '<label>Member<select id="givingRecordMemberSelect" name="member_id" required><option value="">Select member</option></select></label></div>'+
     '<div class="giving-form-grid"><label>Date<input name="given_on" type="date" required value="'+attr(record?.given_on||todayKey())+'"></label><label>Type<select name="giving_type"><option value="Tithe" '+(String(record?.giving_type||'').toLowerCase()==='tithe'?'selected':'')+'>Tithe</option><option value="Offering" '+(String(record?.giving_type||'').toLowerCase()==='offering'?'selected':'')+'>Offering</option></select></label></div>'+
     '<div class="giving-form-grid"><label>Amount<input name="amount" type="number" min="0.01" step="0.01" required value="'+attr(record?.amount??'')+'" placeholder="0.00"></label><label>Payment method<select name="payment_method">'+['Cash','GCash','Bank Transfer','Check','Other'].map(x=>'<option '+(record?.payment_method===x?'selected':'')+'>'+x+'</option>').join('')+'</select></label></div>'+
     '<label>Reference number<input name="reference_no" value="'+attr(record?.reference_no||'')+'" placeholder="Optional receipt / transaction reference"></label><label>Notes<textarea name="notes" rows="3" placeholder="Optional internal note">'+esc(record?.notes||'')+'</textarea></label>'+
     '<div class="giving-modal-actions"><button type="button" class="btn secondary giving-cancel">Cancel</button><button type="submit" class="btn">'+(record?'Save Changes':'Record Giving')+'</button></div><div id="givingFormMsg" class="giving-form-msg"></div></form></div>';
   document.body.appendChild(wrap);
+
+  const search=wrap.querySelector('#givingRecordMemberSearch'),areaFilter=wrap.querySelector('#givingRecordAreaFilter'),memberSelect=wrap.querySelector('#givingRecordMemberSelect'),count=wrap.querySelector('#givingMemberResultCount');
+  const renderMemberOptions=()=>{
+    const q=String(search.value||'').trim().toLowerCase(),area=areaFilter.value,current=memberSelect.value||record?.member_id||'';
+    const filtered=members.filter(m=>(!area||m.area_id===area)&&(!q||(memberName(m)+' '+(m.member_code||'')+' '+areaName(m.area_id)).toLowerCase().includes(q)));
+    memberSelect.innerHTML='<option value="">Select member</option>'+filtered.map(m=>'<option value="'+attr(m.id)+'" '+(current===m.id?'selected':'')+'>'+esc(memberName(m))+' · '+esc(m.member_code||'No code')+' · '+esc(areaName(m.area_id))+'</option>').join('');
+    if(current&&!filtered.some(m=>m.id===current))memberSelect.value='';
+    count.textContent=filtered.length+' member'+(filtered.length===1?'':'s')+' found';
+  };
+  search.oninput=renderMemberOptions;
+  areaFilter.onchange=renderMemberOptions;
+  renderMemberOptions();
+
   const close=()=>wrap.remove();wrap.querySelector('.giving-close').onclick=close;wrap.querySelector('.giving-cancel').onclick=close;wrap.onclick=e=>{if(e.target===wrap)close()};
   wrap.querySelector('form').onsubmit=async e=>{
     e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type="submit"]'),msg=document.getElementById('givingFormMsg'),fd=new FormData(form),amount=Number(fd.get('amount'));
