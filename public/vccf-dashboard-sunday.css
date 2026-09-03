@@ -39,3 +39,41 @@
 .welcome-banner-edit{position:absolute;right:14px;top:14px;z-index:2;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:7px 10px;background:rgba(8,13,20,.45);color:#fff;font:700 .64rem var(--font-ui);cursor:pointer;backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(0,0,0,.18)}.welcome-banner-edit:hover{background:rgba(8,13,20,.68)}
 .dashboard-banner-modal{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:18px;background:rgba(8,12,18,.66);backdrop-filter:blur(5px)}.dashboard-banner-modal-card{width:min(720px,100%);max-height:92vh;overflow:auto;padding:22px}.dashboard-banner-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}.dashboard-banner-modal-head h3{margin:5px 0 5px}.dashboard-banner-modal-head p{margin:0;color:var(--muted);font-size:.7rem;line-height:1.5}.dashboard-banner-close{width:34px;height:34px;border:1px solid var(--line);border-radius:9px;background:var(--card-soft);color:var(--text);font-size:1.25rem;cursor:pointer}.dashboard-banner-preview{aspect-ratio:16/6;border-radius:14px;background-position:center;background-size:cover;background-repeat:no-repeat;border:1px solid var(--line);margin-bottom:14px}.dashboard-banner-file{display:block;font-size:.68rem;font-weight:850;color:var(--muted)}.dashboard-banner-file input{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--input,var(--card));color:var(--text)}.dashboard-banner-file span{display:block;margin-top:5px;font-size:.6rem;font-weight:500}.dashboard-banner-modal-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:15px}.dashboard-banner-msg{min-height:18px;margin-top:8px;color:var(--muted);font-size:.66rem}
 @media(max-width:620px){.welcome-banner-edit{right:10px;top:10px}.dashboard-banner-modal-card{padding:17px}.dashboard-banner-preview{aspect-ratio:16/8}.dashboard-banner-modal-actions{flex-direction:column}.dashboard-banner-modal-actions .btn{width:100%}}
+
+
+/* Dashboard mobile clipping hardening */
+#dashboard{min-width:0;max-width:100%;overflow-x:hidden}
+#dashboard .card,#dashboard section,#dashboard article,#dashboard div{box-sizing:border-box}
+.welcome-banner,.birthday-card,.dashboard-announcements,.area-attendance-section,.summary-layout,.summary-analytics,.summary-carousel-card{min-width:0;max-width:100%}
+.welcome-banner>div:first-child{min-width:0;max-width:100%}.welcome-banner p,.dashboard-section-head p,.birthday-head p,.announcement-copy p,.summary-note{overflow-wrap:anywhere;word-break:normal}
+.birthday-list,.birthday-person,.birthday-person-copy{min-width:0;max-width:100%}.birthday-person{overflow:hidden}.birthday-when{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.dashboard-announcement-head,.announcement-meta,.area-attendance-head,.summary-title-row,.carousel-heading{min-width:0}.announcement-meta{flex-wrap:wrap}.announcement-copy{max-width:100%}
+.summary-tabs{overflow-x:auto;scrollbar-width:thin}.summary-tabs button{flex:0 0 auto}
+@media(max-width:760px){
+  .welcome-banner{width:100%;min-height:220px;padding:70px 18px 20px;gap:10px;margin-bottom:14px}
+  .welcome-banner>div:first-child{width:100%;padding-right:0}
+  .welcome-banner h2{font-size:clamp(1.55rem,8vw,2rem);line-height:1.08}
+  .welcome-banner p{font-size:.78rem;line-height:1.45}
+  .welcome-date{width:100%;white-space:normal;line-height:1.4}
+  .birthday-card{margin:0 0 16px;padding:16px}
+  .birthday-head{gap:9px;margin-bottom:10px}
+  .birthday-count{white-space:normal}
+  .birthday-person{grid-template-columns:40px minmax(0,1fr) auto;gap:8px}
+  .birthday-avatar{width:40px;height:40px}
+  .dashboard-section-head,.area-attendance-head,.dashboard-announcement-head,.summary-title-row,.carousel-heading{width:100%}
+  .scope-chip{align-self:flex-start;max-width:100%;white-space:normal}
+  .summary-layout{width:100%;grid-template-columns:minmax(0,1fr)}
+  .summary-carousel,.summary-photo-stage{max-width:100%}
+}
+@media(max-width:480px){
+  .welcome-banner{padding:68px 15px 18px;min-height:210px}
+  .welcome-banner-edit{max-width:calc(100% - 20px);white-space:normal;text-align:center}
+  .birthday-person{grid-template-columns:38px minmax(0,1fr)}
+  .birthday-avatar{width:38px;height:38px}
+  .birthday-when{grid-column:2;justify-self:start;white-space:normal}
+  .birthday-person-copy b{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+  .summary-tabs{width:100%}
+  .summary-tabs button{min-width:max-content}
+  .announcement-meta{align-items:flex-start}
+  .area-attendance-count{flex-wrap:wrap}
+}
