@@ -14,6 +14,9 @@ const phDay=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'num
 const dateLabel=v=>new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric',year:'numeric'}).format(new Date(v+'T12:00:00+08:00'));
 let currentSummary=null;
 let currentPhotos=[];
+let givingBatch=null;
+let givingBatchTotals={tithe:0,offering:0};
+let currentDay='';
 let liveStats={attendance:0,base:0,rate:0,tithe:0,offering:0};
 let pendingFiles=[];
 
@@ -32,11 +35,20 @@ function setMsg(message,kind=''){
   el.className='sunday-summary-message '+kind;el.textContent=message||'';
 }
 function getForm(){
-  return {
-    notes:String(document.getElementById('sundaySummaryNotes')?.value||'').trim(),
-    tithe:canFinance()?Number(document.getElementById('sundaySummaryTithe')?.value||0):Number(currentSummary?.tithe_total||0),
-    offering:canFinance()?Number(document.getElementById('sundaySummaryOffering')?.value||0):Number(currentSummary?.offering_total||0)
-  };
+  return {notes:String(document.getElementById('sundaySummaryNotes')?.value||'').trim()};
+}
+function dateTimeLabel(value){
+  return value?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(value)):'—';
+}
+function givingStatusLabel(status){return ({draft:'Draft',submitted:'Awaiting approval',approved:'Approved'})[status]||'No batch'}
+function summaryGivingPanel(){
+  if(!canFinance())return '<div class="summary-finance-restricted">Tithes and offerings are restricted to Pastor/Admin. Sunday finance totals only enter this summary after the Sunday giving batch is e-signed and approved.</div>';
+  if(!givingBatch)return '<div class="summary-giving-approval"><div class="summary-giving-approval-head"><div><b>Sunday Tithes & Offerings</b><span>No Sunday giving batch has been started.</span></div><span class="summary-giving-state none">No batch</span></div><p>Finance totals remain ₱0.00 until a Sunday giving batch is recorded, e-signed, and approved.</p></div>';
+  const status=givingBatch.workflow_status,approved=status==='approved';
+  return '<div class="summary-giving-approval"><div class="summary-giving-approval-head"><div><b>Sunday Tithes & Offerings</b><span>'+esc(givingStatusLabel(status))+' · '+esc(dateLabel(givingBatch.sunday_date))+'</span></div><span class="summary-giving-state '+esc(status)+'">'+esc(givingStatusLabel(status))+'</span></div>'+
+    '<div class="summary-giving-totals"><div><span>Tithes</span><strong>'+php(approved?givingBatchTotals.tithe:0)+'</strong><small>'+php(givingBatchTotals.tithe)+' recorded</small></div><div><span>Offerings</span><strong>'+php(approved?givingBatchTotals.offering:0)+'</strong><small>'+php(givingBatchTotals.offering)+' recorded</small></div></div>'+
+    '<div class="summary-giving-signatures"><div><span>Recorded / e-signed by</span><b>'+esc(givingBatch.recorded_signature_name||'Not signed yet')+'</b><small>'+esc(dateTimeLabel(givingBatch.recorded_signed_at))+'</small></div><div><span>Approved by Admin/Pastor</span><b>'+esc(givingBatch.approved_signature_name||'Not approved yet')+'</b><small>'+esc(dateTimeLabel(givingBatch.approved_at))+'</small></div></div>'+
+    '<p>'+(approved?'✓ Approved totals are automatically synchronized with this Sunday Summary.':status==='submitted'?'These recorded totals will not reflect in the Sunday Summary until Admin/Pastor approval.':'Draft totals do not reflect in the Sunday Summary until the batch is signed, submitted, and approved.')+'</p></div>';
 }
 function photoCard(photo,locked){
   return '<article class="summary-photo-thumb"><img src="'+esc(photo.image_url||'')+'" alt="'+esc(photo.caption||'Sunday summary photo')+'"><div><span>'+esc(photo.caption||'Sunday Worship')+'</span>'+(!locked?'<button type="button" data-remove-summary-photo="'+esc(photo.id)+'">Remove</button>':'')+'</div></article>';
@@ -103,6 +115,7 @@ function bindSummaryGalleryBack(){
 }
 async function load(day){
   const root=document.getElementById('sundaySummaryWorkspace');if(!root)return;
+  currentDay=day;
   pendingFiles.forEach(x=>URL.revokeObjectURL(x.preview));pendingFiles=[];
   if(!isSunday(day)){
     root.innerHTML='<div class="summary-detail-toolbar"><button id="backToSummaryGallery" class="back-button" type="button">← Summary gallery</button></div><section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>Select a Sunday to prepare its summary.</p></div><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div><div class="notice">The selected date is not a Sunday. Choose a Sunday to create or review a summary.</div></section>';
@@ -114,18 +127,22 @@ async function load(day){
   const b=bounds(day),client=sb();
   const reqs=[
     client.from('attendance').select('member_id,attendance_type').eq('attendance_type','sunday').gte('checked_in_at',b.start).lt('checked_in_at',b.end),
-    client.from('cms_sunday_event_summaries').select('*').eq('summary_type','sunday').eq('summary_date',day).maybeSingle()
+    client.from('cms_sunday_event_summaries').select('*').eq('summary_type','sunday').eq('summary_date',day).maybeSingle(),
+    canFinance()?client.from('sunday_giving_batches').select('*').eq('sunday_date',day).maybeSingle():Promise.resolve({data:null,error:null})
   ];
-  if(canFinance())reqs.push(client.from('giving_records').select('giving_type,amount').eq('given_on',day));
-  else reqs.push(Promise.resolve({data:[],error:null}));
-  const [attRes,sumRes,giveRes]=await Promise.all(reqs);
-  if(attRes.error||sumRes.error){
-    const e=attRes.error||sumRes.error;root.innerHTML='<section class="sunday-summary-card card"><div class="notice">'+esc(e.message||'Unable to load Sunday summary.')+'</div></section>';return;
+  const [attRes,sumRes,batchRes]=await Promise.all(reqs);
+  if(attRes.error||sumRes.error||batchRes.error){
+    const e=attRes.error||sumRes.error||batchRes.error;root.innerHTML='<section class="sunday-summary-card card"><div class="notice">'+esc(e.message||'Unable to load Sunday summary.')+'</div></section>';return;
   }
-  currentSummary=sumRes.data||null;
-  const attendance=new Set((attRes.data||[]).map(a=>a.member_id)).size,base=activeBase(),rate=base?Math.round(attendance/base*100):0;
-  const giving=giveRes.data||[],sumType=t=>giving.filter(g=>String(g.giving_type||'').toLowerCase()===t).reduce((n,g)=>n+Number(g.amount||0),0);
-  liveStats={attendance,base,rate,tithe:sumType('tithe'),offering:sumType('offering')};
+  currentSummary=sumRes.data||null;givingBatch=batchRes.data||null;givingBatchTotals={tithe:0,offering:0};
+  if(givingBatch){
+    const giveRes=await client.from('giving_records').select('giving_type,amount').eq('sunday_batch_id',givingBatch.id);
+    if(giveRes.error){root.innerHTML='<section class="sunday-summary-card card"><div class="notice">'+esc(giveRes.error.message||'Unable to load Sunday giving.')+'</div></section>';return}
+    const giving=giveRes.data||[],sumType=t=>giving.filter(g=>String(g.giving_type||'').toLowerCase()===t).reduce((n,g)=>n+Number(g.amount||0),0);
+    givingBatchTotals={tithe:sumType('tithe'),offering:sumType('offering')};
+  }
+  const attendance=new Set((attRes.data||[]).map(a=>a.member_id)).size,base=activeBase(),rate=base?Math.round(attendance/base*100):0,approved=givingBatch?.workflow_status==='approved';
+  liveStats={attendance,base,rate,tithe:approved?givingBatchTotals.tithe:0,offering:approved?givingBatchTotals.offering:0};
   currentPhotos=[];
   if(currentSummary){
     const photos=await client.from('cms_summary_photos').select('id,summary_id,image_url,caption,sort_order,storage_path,uploaded_by').eq('summary_id',currentSummary.id).order('sort_order');
@@ -137,14 +154,14 @@ function metric(label,value,sub){return '<div class="summary-editor-metric"><spa
 function render(day){
   const root=document.getElementById('sundaySummaryWorkspace');if(!root)return;
   const status=currentSummary?.workflow_status||'draft',posted=status==='posted',submitted=status==='submitted',finance=canFinance();
-  const tithe=currentSummary?Number(currentSummary.tithe_total||0):liveStats.tithe;
-  const offering=currentSummary?Number(currentSummary.offering_total||0):liveStats.offering;
+  const tithe=posted?Number(currentSummary?.tithe_total||0):liveStats.tithe;
+  const offering=posted?Number(currentSummary?.offering_total||0):liveStats.offering;
   const notes=currentSummary?.notes||'';
   const savedAttendance=currentSummary?.attendance_count;
   const savedRate=currentSummary?.attendance_rate;
   const attendance=posted?Number(savedAttendance??liveStats.attendance):liveStats.attendance;
   const rate=posted?Number(savedRate??liveStats.rate):liveStats.rate;
-  root.innerHTML='<div class="summary-detail-toolbar"><button id="backToSummaryGallery" class="back-button" type="button">← Summary gallery</button><span>Open a summary to review complete details before posting.</span></div><section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>This is the same summary used by the dashboard after it is posted.</p></div><div class="summary-head-actions"><span class="summary-workflow-pill '+statusClass(status)+'">'+esc(statusText(status))+'</span><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div></div><div class="summary-workflow-line"><span class="'+(status==='draft'?'active':'done')+'">1 Draft</span><i></i><span class="'+(submitted?'active':posted?'done':'')+'">2 Submitted</span><i></i><span class="'+(posted?'active':'')+'">3 Posted</span></div><div class="summary-editor-metrics">'+metric('Attendance',String(attendance),posted?'Posted count':'Live Sunday count')+metric('Member base',String(posted?Number(currentSummary?.member_base_count||liveStats.base):liveStats.base),'Active members in your scope')+metric('Attendance rate',Math.round(rate)+'%','Sunday participation')+(finance?metric('Live tithes',php(liveStats.tithe),'Recorded for this Sunday'):metric('Giving','Restricted','Pastor / Admin only'))+'</div><div class="summary-editor-grid"><div class="summary-editor-fields"><label>Summary notes<textarea id="sundaySummaryNotes" rows="5" placeholder="Sunday highlights, observations, or notes…" '+(posted?'disabled':'')+'>'+esc(notes)+'</textarea></label>'+(finance?'<div class="summary-money-grid"><label>Tithes<input id="sundaySummaryTithe" type="number" min="0" step="0.01" value="'+esc(tithe)+'" '+(posted?'disabled':'')+'></label><label>Offerings<input id="sundaySummaryOffering" type="number" min="0" step="0.01" value="'+esc(offering)+'" '+(posted?'disabled':'')+'></label></div>':'<div class="summary-finance-restricted">Tithes and offerings are completed during Pastor/Admin review.</div>')+'</div><div class="summary-photo-editor"><div class="summary-photo-editor-head"><div><b>Summary photos</b><span>These exact photos will be featured in the dashboard carousel after posting.</span></div>'+(posted?'':'<label class="summary-add-photo">+ Add photos<input id="sundaySummaryPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>')+'</div><div id="sundaySummaryPhotos" class="summary-photo-grid"></div></div></div><div class="summary-submit-bar"><div><b>'+esc(statusText(status))+'</b><span>'+(posted?'This Sunday summary is live on the dashboard.':submitted?(canPost()?'Review the summary, then post it to the dashboard.':'Waiting for Pastor/Admin to post this summary.'):'Save changes or submit when the Sunday summary is ready.')+'</span></div><div class="summary-submit-actions">'+(!posted?'<button id="saveSundaySummary" class="btn secondary" type="button">'+(submitted?'Save changes':'Save draft')+'</button>':'')+(!posted&&!submitted?'<button id="submitSundaySummary" class="btn" type="button">Submit summary</button>':'')+(submitted&&canPost()?'<button id="postSundaySummary" class="btn" type="button">Post to dashboard</button>':'')+'</div></div><div id="sundaySummaryMessage" class="sunday-summary-message"></div></section>';
+  root.innerHTML='<div class="summary-detail-toolbar"><button id="backToSummaryGallery" class="back-button" type="button">← Summary gallery</button><span>Open a summary to review complete details before posting.</span></div><section class="sunday-summary-card card"><div class="sunday-summary-head"><div><span class="sunday-summary-kicker">SUNDAY SUMMARY</span><h2>Sunday Attendance Summary</h2><p>This is the same summary used by the dashboard after it is posted.</p></div><div class="summary-head-actions"><span class="summary-workflow-pill '+statusClass(status)+'">'+esc(statusText(status))+'</span><label class="summary-date-control">Sunday date<input id="sundaySummaryDate" type="date" value="'+esc(day)+'"></label></div></div><div class="summary-workflow-line"><span class="'+(status==='draft'?'active':'done')+'">1 Draft</span><i></i><span class="'+(submitted?'active':posted?'done':'')+'">2 Submitted</span><i></i><span class="'+(posted?'active':'')+'">3 Posted</span></div><div class="summary-editor-metrics">'+metric('Attendance',String(attendance),posted?'Posted count':'Live Sunday count')+metric('Member base',String(posted?Number(currentSummary?.member_base_count||liveStats.base):liveStats.base),'Active members in your scope')+metric('Attendance rate',Math.round(rate)+'%','Sunday participation')+(finance?metric('Approved tithes',php(tithe),givingBatch?.workflow_status==='approved'?'Approved Sunday giving':'Awaiting Sunday giving approval'):metric('Giving','Restricted','Pastor / Admin only'))+'</div><div class="summary-editor-grid"><div class="summary-editor-fields"><label>Summary notes<textarea id="sundaySummaryNotes" rows="5" placeholder="Sunday highlights, observations, or notes…" '+(posted?'disabled':'')+'>'+esc(notes)+'</textarea></label>'+summaryGivingPanel()+'</div><div class="summary-photo-editor"><div class="summary-photo-editor-head"><div><b>Summary photos</b><span>These exact photos will be featured in the dashboard carousel after posting.</span></div>'+(posted?'':'<label class="summary-add-photo">+ Add photos<input id="sundaySummaryPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple></label>')+'</div><div id="sundaySummaryPhotos" class="summary-photo-grid"></div></div></div><div class="summary-submit-bar"><div><b>'+esc(statusText(status))+'</b><span>'+(posted?'This Sunday summary is live on the dashboard.':submitted?(canPost()?'Review the summary, then post it to the dashboard.':'Waiting for Pastor/Admin to post this summary.'):'Save changes or submit when the Sunday summary is ready.')+'</span></div><div class="summary-submit-actions">'+(!posted?'<button id="saveSundaySummary" class="btn secondary" type="button">'+(submitted?'Save changes':'Save draft')+'</button>':'')+(!posted&&!submitted?'<button id="submitSundaySummary" class="btn" type="button">Submit summary</button>':'')+(submitted&&canPost()?'<button id="postSundaySummary" class="btn" type="button">Post to dashboard</button>':'')+'</div></div><div id="sundaySummaryMessage" class="sunday-summary-message"></div></section>';
   bindSummaryGalleryBack();
   document.getElementById('sundaySummaryDate').onchange=e=>load(e.currentTarget.value);
   const input=document.getElementById('sundaySummaryPhotoInput');
@@ -156,7 +173,7 @@ function render(day){
 }
 async function ensureSummary(day){
   if(currentSummary)return currentSummary;
-  const form=getForm(),values={summary_type:'sunday',title:'Sunday Worship',summary_date:day,attendance_count:liveStats.attendance,member_base_count:liveStats.base,attendance_rate:liveStats.rate,tithe_total:canFinance()?form.tithe:0,offering_total:canFinance()?form.offering:0,notes:form.notes||null,created_by:state().session?.user?.id||null,workflow_status:'draft'};
+  const form=getForm(),values={summary_type:'sunday',title:'Sunday Worship',summary_date:day,attendance_count:liveStats.attendance,member_base_count:liveStats.base,attendance_rate:liveStats.rate,notes:form.notes||null,created_by:state().session?.user?.id||null,workflow_status:'draft'};
   const result=await sb().from('cms_sunday_event_summaries').insert(values).select('*').single();
   if(result.error)throw result.error;currentSummary=result.data;return result.data;
 }
@@ -191,7 +208,6 @@ async function save(action,button,day){
     await ensureSummary(day);
     if(currentSummary.workflow_status==='posted')throw new Error('This summary is already posted.');
     const form=getForm(),updates={attendance_count:liveStats.attendance,member_base_count:liveStats.base,attendance_rate:liveStats.rate,notes:form.notes||null};
-    if(canFinance()){updates.tithe_total=form.tithe;updates.offering_total=form.offering}
     const saved=await sb().from('cms_sunday_event_summaries').update(updates).eq('id',currentSummary.id).select('*').single();
     if(saved.error)throw saved.error;currentSummary=saved.data;
     await uploadPending(day);
@@ -224,4 +240,5 @@ function mount(){
 }
 window.VCCFSundaySummary={mount,load,renderGallery};
 window.addEventListener('vccf-app-ready',()=>setTimeout(mount,60));
+window.addEventListener('vccf-sunday-giving-approved',e=>{const day=e.detail?.date||currentDay;if(day&&document.getElementById('sundaySummaryWorkspace'))setTimeout(()=>load(day),40)});
 })();
