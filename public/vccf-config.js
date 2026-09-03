@@ -1,6 +1,6 @@
 // Public Supabase client configuration.
 window.VCCF_SUPABASE_URL = 'https://hvnlstaecjqhjtiojutd.supabase.co';
-window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmxzdGFlY2pxaGp0aW9qdXRkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwNTI1MjQsImV4cCI6MjEwMjYyODUyNH0.2lbYY8dRJEHI-xYsKPG-_8Oe1ByYw_CcPTYmIA9zuF0';
+window.VCCF_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
 
 (() => {
   const g = window.supabase;
