@@ -4,6 +4,7 @@ if(window.__VCCF_PWA__)return;window.__VCCF_PWA__=true;
 
 const state={installPrompt:null,registration:null,pushSubscribed:false};
 const sb=()=>window.VCCF?.sb;
+const appState=()=>window.VCCF?.getState?.()||{};
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(/macintosh/i.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
 const isStandalone=()=>window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
 const supportsNotifications=()=>('serviceWorker' in navigator)&&('Notification' in window)&&('PushManager' in window);
@@ -20,7 +21,7 @@ function ensureStyles(){if(document.getElementById('vccfPwaStyles'))return;const
 async function register(){if(!('serviceWorker' in navigator))return null;try{state.registration=await navigator.serviceWorker.register('/vccf-sw.js?v=20260904-3',{scope:'/'});return state.registration}catch(error){console.error('VCCF PWA service worker registration failed',error);return null}}
 
 async function syncRemotePush(){
-  if(!supportsNotifications()||Notification.permission!=='granted'||!sb())return false;
+  if(!supportsNotifications()||Notification.permission!=='granted'||!sb()||!appState().session?.user)return false;
   const session=(await sb().auth.getSession()).data?.session;if(!session?.user)return false;
   const reg=state.registration||await navigator.serviceWorker.ready;if(!reg?.pushManager)return false;
   let sub=await reg.pushManager.getSubscription();
@@ -39,8 +40,8 @@ function card(){const install=installCopy(),notice=notificationCopy();return `<s
 function paint(replace=true){const settings=document.getElementById('settings'),grid=settings?.querySelector('.settings-grid');if(!grid)return;ensureStyles();const old=document.getElementById('vccfPwaCard');if(replace&&old)old.remove();if(!document.getElementById('vccfPwaCard'))grid.insertAdjacentHTML('beforeend',card());const msg=document.getElementById('vccfPwaMsg'),install=document.getElementById('vccfInstallApp'),notify=document.getElementById('vccfNotifyAction');if(install)install.onclick=()=>handleInstall(install,msg);if(notify)notify.onclick=()=>handleNotification(notify,msg)}
 
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();state.installPrompt=event;paint()});window.addEventListener('appinstalled',()=>{state.installPrompt=null;paint()});window.matchMedia?.('(display-mode: standalone)')?.addEventListener?.('change',()=>paint());
-ensureHead();void register().then(async()=>{try{if(Notification.permission==='granted')await syncRemotePush()}catch(error){console.warn('VCCF push sync:',error)}paint()});
-window.addEventListener('vccf-app-ready',()=>setTimeout(async()=>{try{if(Notification.permission==='granted')await syncRemotePush()}catch(error){console.warn('VCCF push sync:',error)}paint()},250));
+ensureHead();void register().then(async()=>{try{if(Notification.permission==='granted'&&appState().session?.user)await syncRemotePush()}catch(error){console.warn('VCCF push sync:',error)}paint()});
+window.addEventListener('vccf-app-ready',()=>setTimeout(async()=>{try{if(Notification.permission==='granted'&&appState().session?.user)await syncRemotePush()}catch(error){console.warn('VCCF push sync:',error)}paint()},250));
 new MutationObserver(()=>{if(document.getElementById('settings')?.classList.contains('active'))queueMicrotask(()=>paint(false))}).observe(document.documentElement,{childList:true,subtree:true});
 window.VCCFPWA={isInstalled:isStandalone,registration:()=>state.registration,testNotification:showTest,syncRemotePush};
 })();
