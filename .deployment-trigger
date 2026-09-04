@@ -1,3 +1,4 @@
 VCCF production deployment trigger
-Last feature: Sunday summary submission workflow
-Source commit: 444bc6b226043bb11e26f9318326c7a1d2993dad
+Last feature: Square-based pledge campaign module
+Source commit: 337107185dd36578bdbd669959681d1bc1b376c6
+Pledge visual: ₱1,000 default per square; green received, gold pledged, gray remaining
