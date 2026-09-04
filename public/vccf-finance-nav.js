@@ -26,7 +26,8 @@ function normalizeChild(button){
   const icon = button.querySelector('.nav-icon');
   if (icon) icon.remove();
   const label = button.querySelector('.nav-label');
-  if (label && LABELS[button.dataset.route]) label.textContent = LABELS[button.dataset.route];
+  const desired = LABELS[button.dataset.route];
+  if (label && desired && label.textContent !== desired) label.textContent = desired;
 }
 
 function makeGroup(nav, anchor){
