@@ -20,5 +20,5 @@ window.addEventListener('vccf-force-password-change',async()=>{const response=aw
 handleInviteUrl();
 })();
 (()=>{if(document.querySelector('script[data-vccf-member-360]'))return;const s=document.createElement('script');s.src='/vccf-member-360.js?v=20260903-6';s.dataset.vccfMember360='1';s.defer=true;document.head.appendChild(s)})();
-(()=>{if(document.querySelector('script[data-vccf-pwa]'))return;const s=document.createElement('script');s.src='/vccf-pwa.js?v=20260904-2';s.dataset.vccfPwa='1';s.defer=true;document.head.appendChild(s)})();
+(()=>{if(document.querySelector('script[data-vccf-pwa]'))return;const s=document.createElement('script');s.src='/vccf-pwa.js?v=20260904-3';s.dataset.vccfPwa='1';s.defer=true;document.head.appendChild(s)})();
 (()=>{if(document.querySelector('script[data-vccf-notifications]'))return;const s=document.createElement('script');s.src='/vccf-notifications.js?v=20260904-1';s.dataset.vccfNotifications='1';s.defer=true;document.head.appendChild(s)})();
