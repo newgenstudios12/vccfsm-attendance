@@ -1,0 +1,56 @@
+name: Emergency remove Finance navigation regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/emergency-remove-finance-nav.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove Finance dropdown loader and organizer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          index = Path('public/index.html')
+          text = index.read_text()
+          text, count = re.subn(r'<script src="/vccf-finance-nav\.js\?v=[^"]+"></script>', '', text)
+          if count:
+              index.write_text(text)
+          finance = Path('public/vccf-finance-nav.js')
+          if finance.exists():
+              finance.unlink()
+          print(f'Removed Finance nav loader occurrences: {count}')
+          PY
+
+      - name: Commit permanent regression removal
+        run: |
+          git config user.name "vccf-recovery-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/index.html public/vccf-finance-nav.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Remove Finance navigation dropdown causing UI mutation loop"
+            git push
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Promote stable deployment from before Finance navigation change
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel promote https://vccfsm-attendance-7k7hs9ae9-newgenstudios12s-projects.vercel.app --yes --token="$VERCEL_TOKEN"
