@@ -23,6 +23,7 @@ function loadVccfEnhancement(key,src){if(document.querySelector(`script[data-vcc
 loadVccfEnhancement('member-360','/vccf-member-360.js?v=20260903-6');
 loadVccfEnhancement('member-attendance-performance','/vccf-member-attendance-performance.js?v=20260904-1');
 loadVccfEnhancement('member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1');
+loadVccfEnhancement('member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1');
 loadVccfEnhancement('pwa','/vccf-pwa.js?v=20260904-6');
 loadVccfEnhancement('notification-ux','/vccf-notification-ux.js?v=20260904-7');
 loadVccfEnhancement('service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1');
