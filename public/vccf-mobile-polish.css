@@ -1,4 +1,24 @@
-/* Narrow-screen control polish. Loaded last so dynamically injected modules inherit it. */
+/* Shared notification states plus narrow-screen control polish. */
+.notification-unread-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#e4362d;
+  box-shadow:0 0 0 3px rgba(228,54,45,.13);
+  flex:0 0 auto;
+}
+.notification-unread-dot[hidden]{display:none!important}
+.notify-inbox{padding:16px;overflow:hidden}
+.notify-inbox-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.notify-inbox-head h3{margin:0;font-size:.98rem}
+.notify-inbox-head span{display:block;margin-top:3px;color:var(--muted);font-size:.72rem}
+.notify-inbox-list{display:grid}
+.notify-inbox-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.notify-inbox-row.unread{padding-left:12px;border-left:3px solid var(--brand)}
+.notify-inbox-row b,.notify-inbox-row p,.notify-inbox-row small{display:block}
+.notify-inbox-row b{font-size:.84rem}
+.notify-inbox-row p{margin:4px 0;color:var(--text);font-size:.78rem;line-height:1.45}
+.notify-inbox-row small{color:var(--muted);font-size:.68rem}
 @media(max-width:620px){
   .attendance-module-tabs{
     display:grid;
@@ -82,6 +102,14 @@
     min-height:46px;
     white-space:normal;
   }
+  .notify-inbox-head,
+  .notify-inbox-row{
+    align-items:stretch;
+    grid-template-columns:minmax(0,1fr);
+  }
+  .notify-inbox-head{display:grid}
+  .notify-inbox-head .btn,
+  .notify-inbox-row .btn{width:100%;min-height:44px}
   #notifications .notify-card h3,
   #notifications .notify-body,
   #notifications .notify-help,
