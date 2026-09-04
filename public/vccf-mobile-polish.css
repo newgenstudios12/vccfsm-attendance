@@ -1,0 +1,91 @@
+/* Narrow-screen control polish. Loaded last so dynamically injected modules inherit it. */
+@media(max-width:620px){
+  .attendance-module-tabs{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:4px;
+    width:100%;
+    max-width:100%;
+    padding:4px;
+  }
+  .attendance-module-tabs button{
+    width:100%;
+    min-width:0;
+    min-height:56px;
+    padding:8px 6px;
+    white-space:normal;
+    line-height:1.2;
+    text-align:center;
+  }
+
+  .summary-gallery-picker{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    align-items:stretch;
+    gap:10px;
+    width:100%;
+    max-width:100%;
+  }
+  .summary-gallery-picker label,
+  .summary-gallery-picker input,
+  .summary-gallery-picker .btn{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+  }
+  .summary-gallery-picker input,
+  .summary-gallery-picker .btn{
+    min-height:46px;
+  }
+
+  .cms-announcements-panel .cms-panel-head{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    align-items:stretch;
+    gap:12px;
+  }
+  .cms-announcements-panel #addAnnouncement{
+    width:100%;
+    min-height:46px;
+    white-space:normal;
+  }
+
+  .nav [data-route="notifications"]{
+    display:flex!important;
+    visibility:visible!important;
+  }
+  #notifications,
+  #notifications .notify-shell,
+  #notifications .notify-head,
+  #notifications .notify-grid,
+  #notifications .notify-card,
+  #notifications .push-only-panel,
+  #notifications .push-only-item{
+    min-width:0;
+    max-width:100%;
+  }
+  #notifications .notify-head{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    align-items:stretch;
+  }
+  #notifyHeadAction{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:8px;
+    width:100%;
+    min-width:0;
+  }
+  #notifyHeadAction .btn{
+    width:100%;
+    min-width:0;
+    min-height:46px;
+    white-space:normal;
+  }
+  #notifications .notify-card h3,
+  #notifications .notify-body,
+  #notifications .notify-help,
+  #notifications .push-only-body{
+    overflow-wrap:anywhere;
+  }
+}
