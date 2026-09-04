@@ -1,5 +1,5 @@
 const APP_URL='/';
-const APP_ICON='/vccf-app-icon.svg';
+const APP_ICON='/vccf-app-icon-192x192.png?v=20260904-3';
 
 self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
