@@ -1,0 +1,21 @@
+name: Promote verified pledge deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-pledge-deployment.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Promote verified pledge deployment to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel promote https://vccfsm-attendance-7k7hs9ae9-newgenstudios12s-projects.vercel.app --yes --token="$VERCEL_TOKEN"
