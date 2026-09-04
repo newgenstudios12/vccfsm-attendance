@@ -19,28 +19,41 @@ async function handleInviteUrl(){const sb=client();if(!sb)return false;const que
 window.addEventListener('vccf-force-password-change',async()=>{const response=await client()?.auth.getSession();if(response?.data?.session)showSetup({session:response.data.session,mode:'temporary'})});
 handleInviteUrl();
 })();
+
 function loadVccfEnhancement(key,src){if(document.querySelector(`script[data-vccf-${key}]`))return;const s=document.createElement('script');s.src=src;s.dataset[`vccf${key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())}`]='1';s.defer=true;document.head.appendChild(s)}
-loadVccfEnhancement('member-360','/vccf-member-360.js?v=20260903-6');
-loadVccfEnhancement('member-attendance-performance','/vccf-member-attendance-performance.js?v=20260904-1');
-loadVccfEnhancement('member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1');
-loadVccfEnhancement('member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1');
-loadVccfEnhancement('member-contact-info','/vccf-member-contact-info.js?v=20260904-1');
-loadVccfEnhancement('pwa','/vccf-pwa.js?v=20260904-6');
-loadVccfEnhancement('notification-ux','/vccf-notification-ux.js?v=20260904-7');
-loadVccfEnhancement('notification-actions-leadership-photo','/vccf-notification-actions-leadership-photo.js?v=20260904-1');
-loadVccfEnhancement('visual-hierarchy','/vccf-visual-hierarchy.js?v=20260904-2');
-loadVccfEnhancement('service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1');
-loadVccfEnhancement('event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260904-1');
-loadVccfEnhancement('events-gallery','/vccf-events-gallery.js?v=20260904-1');
-loadVccfEnhancement('attendance-nav-reconcile','/vccf-attendance-nav-reconcile.js?v=20260904-1');
-loadVccfEnhancement('service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-2');
-loadVccfEnhancement('event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1');
-loadVccfEnhancement('bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1');
-loadVccfEnhancement('bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260904-1');
-loadVccfEnhancement('bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260904-1');
-loadVccfEnhancement('member-address-filter','/vccf-member-address-filter.js?v=20260904-2');
-loadVccfEnhancement('band-fund','/vccf-band-fund.js?v=20260904-1');
-(()=>{if(window.__VCCF_BSG_PREVIEW_DEDUPE__)return;window.__VCCF_BSG_PREVIEW_DEDUPE__=true;const clean=()=>{const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())};const observer=new MutationObserver(clean);observer.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('vccf-app-ready',clean);setTimeout(clean,0)})();
+const ENHANCEMENTS=[
+  ['member-360','/vccf-member-360.js?v=20260903-6'],
+  ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260904-1'],
+  ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
+  ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],
+  ['member-contact-info','/vccf-member-contact-info.js?v=20260904-1'],
+  ['pwa','/vccf-pwa.js?v=20260904-6'],
+  ['notification-ux','/vccf-notification-ux.js?v=20260904-7'],
+  ['notification-actions-leadership-photo','/vccf-notification-actions-leadership-photo.js?v=20260904-1'],
+  ['visual-hierarchy','/vccf-visual-hierarchy.js?v=20260904-2'],
+  ['service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1'],
+  ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260904-1'],
+  ['events-gallery','/vccf-events-gallery.js?v=20260904-1'],
+  ['attendance-nav-reconcile','/vccf-attendance-nav-reconcile.js?v=20260904-1'],
+  ['service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-2'],
+  ['event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1'],
+  ['bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1'],
+  ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260904-1'],
+  ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260904-1'],
+  ['member-address-filter','/vccf-member-address-filter.js?v=20260904-2'],
+  ['band-fund','/vccf-band-fund.js?v=20260904-1']
+];
+function installBsgPreviewDedupe(){if(window.__VCCF_BSG_PREVIEW_DEDUPE__)return;window.__VCCF_BSG_PREVIEW_DEDUPE__=true;const clean=()=>{const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())};const observer=new MutationObserver(clean);observer.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('vccf-app-ready',clean);setTimeout(clean,0)}
+function loadAuthenticatedEnhancements(){
+  const st=window.VCCF?.getState?.();
+  if(!st?.session?.user)return;
+  if(window.__VCCF_AUTH_ENHANCEMENTS_LOADED__)return;
+  window.__VCCF_AUTH_ENHANCEMENTS_LOADED__=true;
+  ENHANCEMENTS.forEach(([key,src])=>loadVccfEnhancement(key,src));
+  installBsgPreviewDedupe();
+}
+window.addEventListener('vccf-app-ready',loadAuthenticatedEnhancements);
+setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show'))loadAuthenticatedEnhancements()},1200);
 
 /* Login recovery: stale/invalid persisted Supabase refresh tokens can leave a browser session
    waiting on an auth refresh lock. An explicit sign-in should always start from a clean local
