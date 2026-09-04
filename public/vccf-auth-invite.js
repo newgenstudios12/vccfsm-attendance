@@ -3,7 +3,7 @@
 if(window.__VCCF_AUTH_SETUP__)return;
 window.__VCCF_AUTH_SETUP__=true;
 const client=()=>window.VCCF?.sb;
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 function showSetup({session,mode='invite'}){
   if(!session)return;
   document.getElementById('accountSetupOverlay')?.remove();
@@ -28,6 +28,7 @@ loadVccfEnhancement('member-contact-info','/vccf-member-contact-info.js?v=202609
 loadVccfEnhancement('pwa','/vccf-pwa.js?v=20260904-6');
 loadVccfEnhancement('notification-ux','/vccf-notification-ux.js?v=20260904-7');
 loadVccfEnhancement('notification-actions-leadership-photo','/vccf-notification-actions-leadership-photo.js?v=20260904-1');
+loadVccfEnhancement('visual-hierarchy','/vccf-visual-hierarchy.js?v=20260904-1');
 loadVccfEnhancement('service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1');
 loadVccfEnhancement('event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260904-1');
 loadVccfEnhancement('events-gallery','/vccf-events-gallery.js?v=20260904-1');
