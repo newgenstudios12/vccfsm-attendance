@@ -1,9 +1,9 @@
 name: Deploy VCCF Attendance to Vercel
 
-# Prebuilt production deployment workflow. Final application fixes are deployed from main.
+# Vercel's Git integration already deploys pushes to main.
+# Keep this workflow as a manual recovery path only so each commit does not create a duplicate production deployment.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
