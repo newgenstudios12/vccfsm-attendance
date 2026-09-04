@@ -38,3 +38,5 @@ jobs:
           git add public/index.html
           git commit -m "Load Finance navigation dropdown"
           git push
+
+# One-time integration trigger.
