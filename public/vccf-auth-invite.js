@@ -3,7 +3,7 @@
 if(window.__VCCF_AUTH_SETUP__)return;
 window.__VCCF_AUTH_SETUP__=true;
 const client=()=>window.VCCF?.sb;
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function showSetup({session,mode='invite'}){
   if(!session)return;
   document.getElementById('accountSetupOverlay')?.remove();
