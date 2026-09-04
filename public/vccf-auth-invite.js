@@ -27,6 +27,7 @@ loadVccfEnhancement('member-followup-alerts','/vccf-member-followup-alerts.js?v=
 loadVccfEnhancement('member-contact-info','/vccf-member-contact-info.js?v=20260904-1');
 loadVccfEnhancement('pwa','/vccf-pwa.js?v=20260904-6');
 loadVccfEnhancement('notification-ux','/vccf-notification-ux.js?v=20260904-7');
+loadVccfEnhancement('notification-actions-leadership-photo','/vccf-notification-actions-leadership-photo.js?v=20260904-1');
 loadVccfEnhancement('service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1');
 loadVccfEnhancement('event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260904-1');
 loadVccfEnhancement('events-gallery','/vccf-events-gallery.js?v=20260904-1');
