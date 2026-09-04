@@ -1,109 +1,24 @@
 (()=>{
 'use strict';
 if(window.__VCCF_NOTIFICATION_UX__)return;window.__VCCF_NOTIFICATION_UX__=true;
-
-const sb=()=>window.VCCF?.sb;
-const state=()=>window.VCCF?.getState?.()||{};
+const sb=()=>window.VCCF?.sb,state=()=>window.VCCF?.getState?.()||{};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=v=>v?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(v)):'—';
-const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(/macintosh/i.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
-const isStandalone=()=>window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
-let inboxLoading=false;
-
-function styles(){
-  if(document.getElementById('vccfNotificationUxStyles'))return;
-  const s=document.createElement('style');s.id='vccfNotificationUxStyles';s.textContent=`
-  #notifications .notify-head h2{display:none!important}
-  #notifications .notify-head{align-items:center}
-  #notifyInbox{display:none!important}
-  .vccf-user-inbox{padding:16px;display:grid;gap:12px}
-  .vccf-user-inbox-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .vccf-user-inbox-head h3{margin:0;font-size:1rem}.vccf-user-inbox-head span{display:block;margin-top:3px;color:var(--muted);font-size:.73rem}
-  .vccf-user-inbox-list{display:grid;gap:0}.vccf-user-inbox-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 0;border-top:1px solid var(--line)}
-  .vccf-user-inbox-row:first-child{border-top:0}.vccf-user-inbox-row.unread{position:relative;padding-left:14px}.vccf-user-inbox-row.unread:before{content:'';position:absolute;left:0;top:19px;width:7px;height:7px;border-radius:50%;background:#d71920}
-  .vccf-user-inbox-row b{display:block;font-size:.88rem}.vccf-user-inbox-row p{margin:4px 0;color:var(--text);font-size:.8rem;line-height:1.45}.vccf-user-inbox-row small{color:var(--muted);font-size:.7rem}
-  .vccf-user-inbox-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.vccf-user-inbox-actions button{min-height:36px;padding:8px 10px}.vccf-user-inbox-delete{background:#fff!important;color:#b42318!important;border:1px solid #efcaca!important}
-  .vccf-push-onboard{position:fixed;inset:0;z-index:12000;background:rgba(15,23,42,.58);display:grid;place-items:center;padding:18px}.vccf-push-onboard-card{width:min(430px,100%);background:var(--card,#fff);color:var(--text,#15171c);border:1px solid var(--line,#e5e7eb);border-radius:22px;padding:22px;box-shadow:0 24px 70px rgba(15,23,42,.24)}
-  .vccf-push-onboard-icon{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:rgba(215,25,32,.09);font-size:1.35rem;margin-bottom:14px}.vccf-push-onboard h3{margin:0 0 7px;font-size:1.15rem}.vccf-push-onboard p{margin:0;color:var(--muted,#6b7280);font-size:.84rem;line-height:1.55}.vccf-push-onboard-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}.vccf-push-onboard-msg{margin-top:10px;color:var(--muted,#6b7280);font-size:.75rem;line-height:1.4}
-  @media(max-width:620px){.vccf-user-inbox-row{grid-template-columns:1fr}.vccf-user-inbox-actions{display:grid;grid-template-columns:1fr 1fr;justify-content:stretch}.vccf-user-inbox-actions button{width:100%}.vccf-push-onboard-actions{grid-template-columns:1fr}}
-  `;document.head.appendChild(s);
-}
-
-function keepOneHeader(){
-  const h=document.querySelector('#notifications .notify-head h2');if(h)h.remove();
-}
-
-function updateNavBadge(rows){
-  const unread=rows.filter(x=>!x.is_read).length;
-  document.querySelectorAll('.nav [data-route="notifications"],.nav [data-view="notifications"]').forEach(button=>{
-    let dot=button.querySelector('.notification-unread-dot');
-    if(!dot){dot=document.createElement('span');dot.className='notification-unread-dot';dot.setAttribute('aria-hidden','true');button.appendChild(dot)}
-    dot.hidden=!unread;button.setAttribute('aria-label',unread?`Notifications, ${unread} unread`:'Notifications');
-  });
-}
-
-async function markRead(id){
-  const client=sb(),uid=state().session?.user?.id;if(!client||!uid)return;
-  const r=await client.from('vccf_notifications').update({is_read:true}).eq('user_id',uid).eq('id',id);
-  if(r.error){alert(r.error.message||'Unable to mark notification as read.');return}
-  await renderInbox();
-}
-async function markAllRead(){
-  const client=sb(),uid=state().session?.user?.id;if(!client||!uid)return;
-  const r=await client.from('vccf_notifications').update({is_read:true}).eq('user_id',uid).eq('is_read',false);
-  if(r.error){alert(r.error.message||'Unable to mark notifications as read.');return}
-  await renderInbox();
-}
-async function deleteNotification(id,title){
-  const client=sb(),uid=state().session?.user?.id;if(!client||!uid)return;
-  if(!confirm(`Delete notification “${title||'Notification'}”?`))return;
-  const r=await client.from('vccf_notifications').delete().eq('user_id',uid).eq('id',id);
-  if(r.error){alert(r.error.message||'Unable to delete notification.');return}
-  await renderInbox();
-}
-
-async function renderInbox(){
-  if(inboxLoading)return;const client=sb(),uid=state().session?.user?.id,view=document.getElementById('notifications');if(!client||!uid||!view)return;
-  inboxLoading=true;try{
-    const r=await client.from('vccf_notifications').select('id,title,body,kind,is_read,created_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(100);
-    if(r.error)throw r.error;const rows=r.data||[];updateNavBadge(rows);
-    let box=document.getElementById('vccfUserInbox');if(!box){box=document.createElement('section');box.id='vccfUserInbox';box.className='vccf-user-inbox card';const content=document.getElementById('notifyContent');content?.parentNode?.insertBefore(box,content)}
-    if(!rows.length){box.remove();return}
-    const unread=rows.filter(x=>!x.is_read).length;
-    box.innerHTML=`<div class="vccf-user-inbox-head"><div><h3>Your Inbox</h3><span>${unread} unread</span></div>${unread?'<button id="vccfMarkAllRead" class="btn secondary" type="button">Mark all read</button>':''}</div><div class="vccf-user-inbox-list">${rows.map(n=>`<article class="vccf-user-inbox-row ${n.is_read?'':'unread'}"><div><b>${esc(n.title||'Notification')}</b>${n.body?`<p>${esc(n.body)}</p>`:''}<small>${esc(fmt(n.created_at))}</small></div><div class="vccf-user-inbox-actions">${!n.is_read?`<button class="btn secondary" type="button" data-vccf-read="${esc(n.id)}">Mark read</button>`:''}<button class="btn vccf-user-inbox-delete" type="button" data-vccf-delete="${esc(n.id)}" data-vccf-title="${esc(n.title||'Notification')}">Delete</button></div></article>`).join('')}</div>`;
-    document.getElementById('vccfMarkAllRead')?.addEventListener('click',markAllRead);
-    box.querySelectorAll('[data-vccf-read]').forEach(b=>b.addEventListener('click',()=>markRead(b.dataset.vccfRead)));
-    box.querySelectorAll('[data-vccf-delete]').forEach(b=>b.addEventListener('click',()=>deleteNotification(b.dataset.vccfDelete,b.dataset.vccfTitle)));
-  }catch(error){console.warn('VCCF user inbox:',error)}finally{inboxLoading=false}
-}
-
-function loadPwa(){
-  if(window.VCCFPWA)return Promise.resolve();
-  return new Promise(resolve=>{let s=document.querySelector('script[data-vccf-pwa-loader]');if(s){s.addEventListener('load',resolve,{once:true});setTimeout(resolve,1500);return}s=document.createElement('script');s.src='/vccf-pwa.js?v=20260904-5';s.defer=true;s.dataset.vccfPwaLoader='1';s.onload=resolve;s.onerror=resolve;document.head.appendChild(s)});
-}
-function promptKey(uid){return `vccf-push-onboarding-v1:${uid}`}
-async function maybePromptPush(){
-  const client=sb();if(!client||document.getElementById('vccfPushOnboard'))return;
-  const session=(await client.auth.getSession()).data?.session;if(!session?.user?.id)return;
-  const uid=session.user.id,key=promptKey(uid);try{if(localStorage.getItem(key))return}catch(_){}
-  if(!('Notification' in window)||!('serviceWorker' in navigator)||!('PushManager' in window))return;
-  if(Notification.permission!=='default'){try{localStorage.setItem(key,'permission-'+Notification.permission)}catch(_){};return}
-  await loadPwa();
-  const wrap=document.createElement('div');wrap.id='vccfPushOnboard';wrap.className='vccf-push-onboard';
-  const iosNeedsInstall=isIOS()&&!isStandalone();
-  wrap.innerHTML=`<div class="vccf-push-onboard-card" role="dialog" aria-modal="true" aria-labelledby="vccfPushTitle"><div class="vccf-push-onboard-icon">🔔</div><h3 id="vccfPushTitle">Receive VCCF notifications?</h3><p>${iosNeedsInstall?'To receive push notifications on iPhone/iPad, add VCCF Connect to your Home Screen first, then open the installed app and enable notifications.':'Allow VCCF Connect to send church announcements, reminders, and important updates to this device.'}</p><div id="vccfPushMsg" class="vccf-push-onboard-msg"></div><div class="vccf-push-onboard-actions"><button class="btn secondary" type="button" data-not-now>Not now</button><button class="btn" type="button" data-enable>${iosNeedsInstall?'Got it':'Enable notifications'}</button></div></div>`;
-  document.body.appendChild(wrap);const msg=wrap.querySelector('#vccfPushMsg'),done=value=>{try{localStorage.setItem(key,value)}catch(_){};wrap.remove()};
-  wrap.querySelector('[data-not-now]').onclick=()=>done('not-now');
-  wrap.querySelector('[data-enable]').onclick=async()=>{
-    if(iosNeedsInstall){done('install-needed');return}
-    const btn=wrap.querySelector('[data-enable]');btn.disabled=true;btn.textContent='Enabling…';
-    try{const permission=await Notification.requestPermission();if(permission!=='granted'){msg.textContent=permission==='denied'?'Notifications were blocked. You can change this later in device/browser settings.':'Notification permission was not granted.';if(permission==='denied')setTimeout(()=>done('denied'),900);return}await loadPwa();await window.VCCFPWA?.syncRemotePush?.();msg.textContent='Notifications are enabled for this device.';setTimeout(()=>done('enabled'),700)}catch(error){msg.textContent=error?.message||'Unable to enable notifications right now.'}finally{if(document.body.contains(wrap)){btn.disabled=false;btn.textContent='Enable notifications'}}
-  };
-}
-
-function refresh(){styles();keepOneHeader();if(document.getElementById('notifications'))void renderInbox()}
-function appReady(){styles();setTimeout(()=>{refresh();void maybePromptPush()},700)}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',appReady,{once:true});else appReady();
-window.addEventListener('vccf-app-ready',appReady);window.addEventListener('vccf-authenticated',appReady);window.addEventListener('focus',()=>{refresh()});
-new MutationObserver(()=>{keepOneHeader();if(document.getElementById('notifications')?.classList.contains('active'))queueMicrotask(()=>renderInbox())}).observe(document.documentElement,{childList:true,subtree:true});
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(/macintosh/i.test(navigator.userAgent)&&navigator.maxTouchPoints>1),isStandalone=()=>window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+let inboxLoading=false,authGuardInstalled=false;
+function styles(){if(document.getElementById('vccfNotificationUxStyles'))return;const s=document.createElement('style');s.id='vccfNotificationUxStyles';s.textContent=`#notifications .notify-head h2{display:none!important}#notifications .notify-head{align-items:center}#notifyInbox{display:none!important}.vccf-user-inbox{padding:16px;display:grid;gap:12px}.vccf-user-inbox-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.vccf-user-inbox-head h3{margin:0;font-size:1rem}.vccf-user-inbox-head span{display:block;margin-top:3px;color:var(--muted);font-size:.73rem}.vccf-user-inbox-list{display:grid;gap:0}.vccf-user-inbox-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 0;border-top:1px solid var(--line)}.vccf-user-inbox-row:first-child{border-top:0}.vccf-user-inbox-row.unread{position:relative;padding-left:14px}.vccf-user-inbox-row.unread:before{content:'';position:absolute;left:0;top:19px;width:7px;height:7px;border-radius:50%;background:#d71920}.vccf-user-inbox-row b{display:block;font-size:.88rem}.vccf-user-inbox-row p{margin:4px 0;color:var(--text);font-size:.8rem;line-height:1.45}.vccf-user-inbox-row small{color:var(--muted);font-size:.7rem}.vccf-user-inbox-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.vccf-user-inbox-actions button{min-height:36px;padding:8px 10px}.vccf-user-inbox-delete{background:#fff!important;color:#b42318!important;border:1px solid #efcaca!important}.vccf-push-onboard{position:fixed;inset:0;z-index:12000;background:rgba(15,23,42,.58);display:grid;place-items:center;padding:18px}.vccf-push-onboard-card{width:min(430px,100%);background:var(--card,#fff);color:var(--text,#15171c);border:1px solid var(--line,#e5e7eb);border-radius:22px;padding:22px;box-shadow:0 24px 70px rgba(15,23,42,.24)}.vccf-push-onboard-icon{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:rgba(215,25,32,.09);font-size:1.35rem;margin-bottom:14px}.vccf-push-onboard h3{margin:0 0 7px;font-size:1.15rem}.vccf-push-onboard p{margin:0;color:var(--muted,#6b7280);font-size:.84rem;line-height:1.55}.vccf-push-onboard-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}.vccf-push-onboard-msg{margin-top:10px;color:var(--muted,#6b7280);font-size:.75rem;line-height:1.4}@media(max-width:620px){.vccf-user-inbox-row{grid-template-columns:1fr}.vccf-user-inbox-actions{display:grid;grid-template-columns:1fr 1fr;justify-content:stretch}.vccf-user-inbox-actions button{width:100%}.vccf-push-onboard-actions{grid-template-columns:1fr}}`;document.head.appendChild(s)}
+function keepOneHeader(){document.querySelector('#notifications .notify-head h2')?.remove()}
+function updateNavBadge(rows){const unread=rows.filter(x=>!x.is_read).length;document.querySelectorAll('.nav [data-route="notifications"],.nav [data-view="notifications"]').forEach(button=>{let dot=button.querySelector('.notification-unread-dot');if(!dot){dot=document.createElement('span');dot.className='notification-unread-dot';dot.setAttribute('aria-hidden','true');button.appendChild(dot)}dot.hidden=!unread;button.setAttribute('aria-label',unread?`Notifications, ${unread} unread`:'Notifications')})}
+async function markRead(id){const client=sb(),uid=state().session?.user?.id;if(!client||!uid)return;const r=await client.from('vccf_notifications').update({is_read:true}).eq('user_id',uid).eq('id',id);if(r.error){alert(r.error.message||'Unable to mark notification as read.');return}await renderInbox()}
+async function markAllRead(){const client=sb(),uid=state().session?.user?.id;if(!client||!uid)return;const r=await client.from('vccf_notifications').update({is_read:true}).eq('user_id',uid).eq('is_read',false);if(r.error){alert(r.error.message||'Unable to mark notifications as read.');return}await renderInbox()}
+async function deleteNotification(id,title){const client=sb(),uid=state().session?.user?.id;if(!client||!uid)return;if(!confirm(`Delete notification “${title||'Notification'}”?`))return;const r=await client.from('vccf_notifications').delete().eq('user_id',uid).eq('id',id);if(r.error){alert(r.error.message||'Unable to delete notification.');return}await renderInbox()}
+async function renderInbox(){if(inboxLoading)return;const client=sb(),uid=state().session?.user?.id,view=document.getElementById('notifications');if(!client||!uid||!view)return;inboxLoading=true;try{const r=await client.from('vccf_notifications').select('id,title,body,kind,is_read,created_at').eq('user_id',uid).order('created_at',{ascending:false}).limit(100);if(r.error)throw r.error;const rows=r.data||[];updateNavBadge(rows);let box=document.getElementById('vccfUserInbox');if(!rows.length){box?.remove();return}if(!box){box=document.createElement('section');box.id='vccfUserInbox';box.className='vccf-user-inbox card';const content=document.getElementById('notifyContent');content?.parentNode?.insertBefore(box,content)}const unread=rows.filter(x=>!x.is_read).length;box.innerHTML=`<div class="vccf-user-inbox-head"><div><h3>Your Inbox</h3><span>${unread} unread</span></div>${unread?'<button id="vccfMarkAllRead" class="btn secondary" type="button">Mark all read</button>':''}</div><div class="vccf-user-inbox-list">${rows.map(n=>`<article class="vccf-user-inbox-row ${n.is_read?'':'unread'}"><div><b>${esc(n.title||'Notification')}</b>${n.body?`<p>${esc(n.body)}</p>`:''}<small>${esc(fmt(n.created_at))}</small></div><div class="vccf-user-inbox-actions">${!n.is_read?`<button class="btn secondary" type="button" data-vccf-read="${esc(n.id)}">Mark read</button>`:''}<button class="btn vccf-user-inbox-delete" type="button" data-vccf-delete="${esc(n.id)}" data-vccf-title="${esc(n.title||'Notification')}">Delete</button></div></article>`).join('')}</div>`;document.getElementById('vccfMarkAllRead')?.addEventListener('click',markAllRead);box.querySelectorAll('[data-vccf-read]').forEach(b=>b.addEventListener('click',()=>markRead(b.dataset.vccfRead)));box.querySelectorAll('[data-vccf-delete]').forEach(b=>b.addEventListener('click',()=>deleteNotification(b.dataset.vccfDelete,b.dataset.vccfTitle)))}catch(error){console.warn('VCCF user inbox:',error)}finally{inboxLoading=false}}
+function unauthorized(error){const status=error?.context?.status||error?.status||0,msg=String(error?.message||'');return status===401||/401|unauthor|jwt|session not found|token.*expired/i.test(msg)}
+function installDispatchAuthGuard(){const client=sb();if(!client||authGuardInstalled||!client.functions?.invoke)return;authGuardInstalled=true;const original=client.functions.invoke.bind(client.functions);client.functions.invoke=async(name,options={})=>{if(name!=='vccf-notification-dispatch')return original(name,options);let session=(await client.auth.getSession()).data?.session;if(session?.expires_at&&session.expires_at*1000<Date.now()+90000){const refreshed=await client.auth.refreshSession();if(!refreshed.error)session=refreshed.data?.session||session}let result=await original(name,options);if(result?.error&&unauthorized(result.error)){const refreshed=await client.auth.refreshSession();if(!refreshed.error&&refreshed.data?.session)result=await original(name,options)}return result}}
+function loadPwa(){if(window.VCCFPWA)return Promise.resolve();return new Promise(resolve=>{let s=document.querySelector('script[data-vccf-pwa-loader],script[data-vccf-pwa]');if(s){if(window.VCCFPWA)return resolve();s.addEventListener('load',resolve,{once:true});setTimeout(resolve,1600);return}s=document.createElement('script');s.src='/vccf-pwa.js?v=20260904-6';s.defer=true;s.dataset.vccfPwaLoader='1';s.onload=resolve;s.onerror=resolve;document.head.appendChild(s)})}
+function promptKey(uid){return `vccf-push-onboarding-v2:${uid}`}
+async function maybePromptPush(){const client=sb();if(!client||document.getElementById('vccfPushOnboard')||document.getElementById('accountSetupOverlay'))return;const session=(await client.auth.getSession()).data?.session;if(!session?.user?.id)return;const uid=session.user.id,key=promptKey(uid);try{if(localStorage.getItem(key))return}catch(_){}if(!('Notification'in window)||!('serviceWorker'in navigator)||!('PushManager'in window))return;if(Notification.permission!=='default'){try{localStorage.setItem(key,'permission-'+Notification.permission)}catch(_){}return}await loadPwa();const iosNeedsInstall=isIOS()&&!isStandalone(),wrap=document.createElement('div');wrap.id='vccfPushOnboard';wrap.className='vccf-push-onboard';wrap.innerHTML=`<div class="vccf-push-onboard-card" role="dialog" aria-modal="true" aria-labelledby="vccfPushTitle"><div class="vccf-push-onboard-icon">🔔</div><h3 id="vccfPushTitle">Receive VCCF notifications?</h3><p>${iosNeedsInstall?'On iPhone/iPad, add VCCF Connect to the Home Screen first. Open the installed app afterward and VCCF Connect will ask for notification permission.':'Allow VCCF Connect to send church announcements, reminders, and important updates to this device.'}</p><div id="vccfPushMsg" class="vccf-push-onboard-msg"></div><div class="vccf-push-onboard-actions"><button class="btn secondary" type="button" data-not-now>Not now</button><button class="btn" type="button" data-enable>${iosNeedsInstall?'How to enable':'Enable notifications'}</button></div></div>`;document.body.appendChild(wrap);const msg=wrap.querySelector('#vccfPushMsg'),done=value=>{if(!iosNeedsInstall){try{localStorage.setItem(key,value)}catch(_){}}wrap.remove()};wrap.querySelector('[data-not-now]').onclick=()=>done('not-now');wrap.querySelector('[data-enable]').onclick=async()=>{if(iosNeedsInstall){msg.textContent='Safari: tap Share → Add to Home Screen → Add. Then open VCCF Connect from the Home Screen.';return}const btn=wrap.querySelector('[data-enable]');btn.disabled=true;btn.textContent='Enabling…';try{const permission=await Notification.requestPermission();if(permission!=='granted'){msg.textContent=permission==='denied'?'Notifications were blocked. You can change this later in device/browser settings.':'Notification permission was not granted.';if(permission==='denied')setTimeout(()=>done('denied'),1000);return}await loadPwa();await window.VCCFPWA?.syncRemotePush?.();msg.textContent='Notifications are enabled for this device.';setTimeout(()=>done('enabled'),750)}catch(error){msg.textContent=error?.message||'Unable to enable notifications right now.'}finally{if(document.body.contains(wrap)){btn.disabled=false;btn.textContent='Enable notifications'}}}}
+function refresh(){styles();installDispatchAuthGuard();keepOneHeader();if(document.getElementById('notifications'))void renderInbox()}
+function appReady(){styles();installDispatchAuthGuard();setTimeout(()=>{refresh();void maybePromptPush()},800);setTimeout(()=>void maybePromptPush(),2400)}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',appReady,{once:true});else appReady();window.addEventListener('vccf-app-ready',appReady);window.addEventListener('focus',()=>{refresh();setTimeout(()=>void maybePromptPush(),300)});new MutationObserver(()=>{keepOneHeader();if(document.getElementById('notifications')?.classList.contains('active'))queueMicrotask(()=>renderInbox());if(!document.getElementById('accountSetupOverlay'))setTimeout(()=>void maybePromptPush(),500)}).observe(document.documentElement,{childList:true,subtree:true});
 })();
