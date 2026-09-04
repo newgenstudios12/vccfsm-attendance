@@ -89,7 +89,7 @@ window.matchMedia?.('(display-mode: standalone)')?.addEventListener?.('change',(
 
 ensureHead();void register().then(()=>paint());
 window.addEventListener('vccf-app-ready',()=>setTimeout(()=>paint(),250));
-new MutationObserver(()=>{if(document.getElementById('settings')?.classList.contains('active'))queueMicrotask(()=>paint())}).observe(document.documentElement,{childList:true,subtree:true});
+new MutationObserver(()=>{if(document.getElementById('settings')?.classList.contains('active'))queueMicrotask(()=>paint(false))}).observe(document.documentElement,{childList:true,subtree:true});
 
 window.VCCFPWA={isInstalled:isStandalone,registration:()=>state.registration,testNotification:showTest};
 })();
