@@ -16,133 +16,19 @@ jobs:
       - name: Checkout safe branch
         uses: actions/checkout@v4
 
-      - name: Implement Finance group without DOM observers
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
+      - name: Apply safe Finance navigation patch
+        run: python3 .github/scripts/apply-safe-finance-nav.py
 
-          shell_path = Path('public/vccf-app-shell-v2.js')
-          band_path = Path('public/vccf-band-fund.js')
-          index_path = Path('public/index.html')
-
-          shell = shell_path.read_text()
-
-          old = "giving:['Tithes & Offerings','Giving records and member stewardship summaries'],sermons:"
-          new = "giving:['Tithes & Offerings','Giving records and member stewardship summaries'],pledges:['Pledges','Campaign pledges and fulfillment progress'],bandfund:['Band Funds','Music/Band ministry fund'],sermons:"
-          assert shell.count(old) == 1, 'TITLES insertion point changed'
-          shell = shell.replace(old, new, 1)
-
-          old = "const STANDALONE=[['gallery','Gallery','gallery'],['sermons','Sermons','sermons'],['giving','Tithes & Offerings','giving'],"
-          new = "const FINANCE_CHILDREN=[['pledges','Pledges'],['giving','Tithes & Offerings']];\nconst STANDALONE=[['gallery','Gallery','gallery'],['sermons','Sermons','sermons'],"
-          assert shell.count(old) == 1, 'STANDALONE insertion point changed'
-          shell = shell.replace(old, new, 1)
-
-          old = "+'</div></div></div><div class=\"nav-section-label\">More</div>'+standalone.map"
-          finance = "+'</div></div></div><div class=\"nav-group\" id=\"financeNavGroup\"><button class=\"nav-group-toggle\" type=\"button\" aria-expanded=\"false\"><span class=\"nav-icon\">'+ICONS.giving+'</span><span class=\"nav-label\">Finance</span><span class=\"nav-chevron\">'+ICONS.chevron+'</span></button><div class=\"nav-children\"><div class=\"nav-children-inner\">'+FINANCE_CHILDREN.map(x=>navButton(x[0],x[1],null,true)).join('')+'</div></div></div><div class=\"nav-section-label\">More</div>'+standalone.map"
-          assert shell.count(old) == 1, 'Navigation group insertion point changed'
-          shell = shell.replace(old, finance, 1)
-
-          old = "const group=document.getElementById('churchNavGroup');group.querySelector('.nav-group-toggle').onclick=()=>{const open=group.classList.toggle('open');group.querySelector('.nav-group-toggle').setAttribute('aria-expanded',String(open));};"
-          new = "const bindGroup=id=>{const group=document.getElementById(id),toggle=group?.querySelector('.nav-group-toggle');if(!group||!toggle)return;toggle.onclick=()=>{const open=group.classList.toggle('open');toggle.setAttribute('aria-expanded',String(open));};};bindGroup('churchNavGroup');bindGroup('financeNavGroup');"
-          assert shell.count(old) == 1, 'Group binding insertion point changed'
-          shell = shell.replace(old, new, 1)
-
-          old = "function setActive(route){document.querySelectorAll('[data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===route));const child=CMS_CHILDREN.some(x=>x[0]===route),group=document.getElementById('churchNavGroup');group?.querySelector('.nav-group-toggle')?.classList.toggle('active',child);if(child){group?.classList.add('open');group?.querySelector('.nav-group-toggle')?.setAttribute('aria-expanded','true');}}"
-          new = "function setActive(route){document.querySelectorAll('[data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===route));const cmsChild=CMS_CHILDREN.some(x=>x[0]===route),church=document.getElementById('churchNavGroup'),financeChild=FINANCE_CHILDREN.some(x=>x[0]===route)||route==='bandfund',finance=document.getElementById('financeNavGroup');church?.querySelector('.nav-group-toggle')?.classList.toggle('active',cmsChild);finance?.querySelector('.nav-group-toggle')?.classList.toggle('active',financeChild);if(cmsChild){church?.classList.add('open');church?.querySelector('.nav-group-toggle')?.setAttribute('aria-expanded','true');}if(financeChild){finance?.classList.add('open');finance?.querySelector('.nav-group-toggle')?.setAttribute('aria-expanded','true');}}"
-          assert shell.count(old) == 1, 'setActive implementation changed'
-          shell = shell.replace(old, new, 1)
-
-          old = "if(route==='giving'){showOnly('giving');window.VCCFGiving?.mount?.();return}if(route==='notifications')"
-          new = "if(route==='giving'){showOnly('giving');window.VCCFGiving?.mount?.();return}if(route==='pledges'){showOnly('pledges');window.VCCFPledges?.mount?.();return}if(route==='bandfund'){window.VCCFBandFund?.open?.();return}if(route==='notifications')"
-          assert shell.count(old) == 1, 'Finance route insertion point changed'
-          shell = shell.replace(old, new, 1)
-
-          shell_path.write_text(shell)
-
-          band = band_path.read_text()
-          ensure_nav = '''function ensureNav(){
-  if(!allowed)return;
-  const nav=document.querySelector('.sidebar .nav');if(!nav)return;
-  let b=nav.querySelector('[data-route="bandfund"]');
-  if(!b){
-    const financeInner=nav.querySelector('#financeNavGroup .nav-children-inner');
-    b=document.createElement('button');b.type='button';b.className=financeInner?'nav-item nav-child':'nav-item';b.dataset.route='bandfund';
-    b.innerHTML=financeInner?'<span class="nav-label">Band Funds</span>':'<span class="nav-icon">'+icon()+'</span><span class="nav-label">Band Funds</span>';
-    if(financeInner)financeInner.appendChild(b);
-    else{
-      const giving=nav.querySelector('[data-route="giving"]'),settings=nav.querySelector('[data-route="settings"]');
-      if(giving)giving.insertAdjacentElement('afterend',b);else if(settings)settings.insertAdjacentElement('beforebegin',b);else nav.appendChild(b);
-    }
-  }
-  const shellManaged=nav.closest('.sidebar')?.dataset.shellV2==='1';
-  if(!shellManaged&&!b.dataset.bandFundBound){b.dataset.bandFundBound='1';b.addEventListener('click',openBandFund)}
-  ensureView();
-}
-function removeAccessUi()'''
-          band, count = re.subn(r"function ensureNav\(\)\{.*?\n\}\nfunction removeAccessUi\(\)", ensure_nav, band, count=1, flags=re.S)
-          assert count == 1, 'Band Fund ensureNav implementation changed'
-
-          open_band = '''function openBandFund(){
-  if(!allowed)return;
-  ensureNav();const v=ensureView();
-  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));v.classList.add('active');
-  document.querySelectorAll('[data-route]').forEach(x=>x.classList.toggle('active',x.dataset?.route==='bandfund'));
-  const finance=document.getElementById('financeNavGroup'),toggle=finance?.querySelector('.nav-group-toggle');
-  finance?.classList.add('open');toggle?.classList.add('active');toggle?.setAttribute('aria-expanded','true');
-  document.querySelector('.sidebar')?.classList.remove('open');document.getElementById('mobileShade')?.classList.remove('open');
-  setHeading();void renderBandFund();
-}
-
-async function checkAccess'''
-          band, count = re.subn(r"function openBandFund\(\)\{.*?\n\}\n\nasync function checkAccess", open_band, band, count=1, flags=re.S)
-          assert count == 1, 'Band Fund open implementation changed'
-
-          marker = 'let domTimer=0;function queueDom()'
-          idx = band.find(marker)
-          assert idx >= 0, 'Band Fund observer tail changed'
-          band = band[:idx] + '''window.VCCFBandFund={open:openBandFund,checkAccess,refresh:async()=>{if(await checkAccess(true))await renderBandFund()}};
-window.addEventListener('vccf-app-ready',()=>checkAccess(true));
-window.addEventListener('vccf-signed-out',()=>{allowed=false;removeAccessUi()});
-window.addEventListener('focus',()=>{if(state().session?.user?.id)checkAccess(false)});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state().session?.user?.id)checkAccess(false)});
-})();
-'''
-          band_path.write_text(band)
-
-          index = index_path.read_text()
-          old = '<script src="/vccf-app-shell-v2.js?v=20260904-2"></script>'
-          new = '<script src="/vccf-app-shell-v2.js?v=20260904-3"></script><script src="/vccf-band-fund.js?v=20260904-3"></script>'
-          assert index.count(old) == 1, 'App shell loader version changed'
-          index = index.replace(old, new, 1)
-          assert '/vccf-finance-nav.js' not in index, 'Legacy Finance observer loader must remain absent'
-          index_path.write_text(index)
-          PY
-
-      - name: Validate JavaScript and safety invariants
+      - name: Validate JavaScript syntax
         run: |
           node --check public/vccf-app-shell-v2.js
           node --check public/vccf-band-fund.js
-          python3 - <<'PY'
-          from pathlib import Path
-          shell=Path('public/vccf-app-shell-v2.js').read_text()
-          band=Path('public/vccf-band-fund.js').read_text()
-          index=Path('public/index.html').read_text()
-          assert shell.count('id="financeNavGroup"') == 1
-          assert "const FINANCE_CHILDREN=[['pledges','Pledges'],['giving','Tithes & Offerings']]" in shell
-          assert "['giving','Tithes & Offerings','giving']" not in shell
-          assert "new MutationObserver" not in band
-          assert "window.VCCFBandFund={open:openBandFund" in band
-          assert '/vccf-finance-nav.js' not in index
-          assert '/vccf-band-fund.js?v=20260904-3' in index
-          print('Safe Finance navigation checks passed.')
-          PY
 
-      - name: Commit safe implementation to branch
+      - name: Commit isolated implementation
         run: |
-          rm -f .github/workflows/build-safe-finance-nav.yml
+          rm -f .github/workflows/build-safe-finance-nav.yml .github/scripts/apply-safe-finance-nav.py
           git config user.name "vccf-safe-nav-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add public/vccf-app-shell-v2.js public/vccf-band-fund.js public/index.html .github/workflows/build-safe-finance-nav.yml
+          git add public/vccf-app-shell-v2.js public/vccf-band-fund.js public/index.html .github/workflows/build-safe-finance-nav.yml .github/scripts/apply-safe-finance-nav.py
           git commit -m "Add safe event-driven Finance navigation group"
           git push origin HEAD:safe-finance-navigation
