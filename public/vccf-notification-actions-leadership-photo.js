@@ -8,14 +8,16 @@ const sb=()=>V()?.sb;
 const state=()=>V()?.getState?.()||{};
 const initials=name=>String(name||'Member').trim().split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'M';
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_code||'Member';
-let busy=false,decorateQueued=false;
+let decorateQueued=false;
 
 function installStyles(){
   if(document.getElementById('vccfNotificationLeadershipFixStyles'))return;
   const style=document.createElement('style');
   style.id='vccfNotificationLeadershipFixStyles';
   style.textContent=`
-  .vccf-leader-member{display:flex;align-items:center;gap:10px;min-width:180px}.vccf-leader-photo{width:44px;height:44px;flex:0 0 44px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:linear-gradient(135deg,rgba(215,25,32,.12),rgba(255,138,24,.16));border:1px solid var(--line);font-size:.76rem;font-weight:900;color:var(--text)}.vccf-leader-photo img{width:100%;height:100%;object-fit:cover;display:block}.vccf-leader-member-copy{min-width:0}.vccf-leader-member-copy b{display:block;overflow-wrap:anywhere}@media(max-width:620px){.vccf-leader-photo{width:40px;height:40px;flex-basis:40px}}
+  .vccf-leader-member{display:flex;align-items:center;gap:10px;min-width:180px}.vccf-leader-photo{width:44px;height:44px;flex:0 0 44px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:linear-gradient(135deg,rgba(215,25,32,.12),rgba(255,138,24,.16));border:1px solid var(--line);font-size:.76rem;font-weight:900;color:var(--text)}.vccf-leader-photo img{width:100%;height:100%;object-fit:cover;display:block}.vccf-leader-member-copy{min-width:0}.vccf-leader-member-copy b{display:block;overflow-wrap:anywhere}
+  .vccf-user-inbox-row>div:first-child{min-width:0}.vccf-user-inbox-actions{position:relative;z-index:20;isolation:isolate;pointer-events:auto!important}.vccf-user-inbox-actions button,.vccf-user-inbox-delete,[data-vccf-delete]{position:relative;z-index:21;pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation}
+  @media(max-width:620px){.vccf-leader-photo{width:40px;height:40px;flex-basis:40px}}
   `;
   document.head.appendChild(style);
 }
@@ -51,13 +53,22 @@ function updateBadgeFromDom(){
 
 function setButtonBusy(button,on,label='Working…'){
   if(!button)return;
-  if(on){button.dataset.vccfOldText=button.textContent||'';button.disabled=true;button.textContent=label;}
-  else{button.disabled=false;if(button.dataset.vccfOldText!==undefined){button.textContent=button.dataset.vccfOldText;delete button.dataset.vccfOldText;}}
+  if(on){
+    if(button.dataset.vccfBusy==='1')return;
+    button.dataset.vccfBusy='1';
+    button.dataset.vccfOldText=button.textContent||'';
+    button.disabled=true;
+    button.textContent=label;
+  }else{
+    button.disabled=false;
+    delete button.dataset.vccfBusy;
+    if(button.dataset.vccfOldText!==undefined){button.textContent=button.dataset.vccfOldText;delete button.dataset.vccfOldText;}
+  }
 }
 
 async function markRead(button,id){
-  if(!id||busy)return;
-  busy=true;setButtonBusy(button,true,'Marking…');
+  if(!id||button?.dataset.vccfBusy==='1')return;
+  setButtonBusy(button,true,'Marking…');
   try{
     const client=sb(),session=await liveSession(),uid=session?.user?.id;
     if(!client||!uid)throw new Error('Your session is no longer active. Please sign in again.');
@@ -69,12 +80,11 @@ async function markRead(button,id){
     button?.remove();
     updateBadgeFromDom();
   }catch(error){console.error('VCCF mark notification read:',error);alert(error?.message||'Unable to mark notification as read.');setButtonBusy(button,false);}
-  finally{busy=false;}
 }
 
 async function markAllRead(button){
-  if(busy)return;
-  busy=true;setButtonBusy(button,true,'Marking…');
+  if(button?.dataset.vccfBusy==='1')return;
+  setButtonBusy(button,true,'Marking…');
   try{
     const client=sb(),session=await liveSession(),uid=session?.user?.id;
     if(!client||!uid)throw new Error('Your session is no longer active. Please sign in again.');
@@ -85,13 +95,12 @@ async function markAllRead(button){
     button?.remove();
     updateBadgeFromDom();
   }catch(error){console.error('VCCF mark all notifications read:',error);alert(error?.message||'Unable to mark notifications as read.');setButtonBusy(button,false);}
-  finally{busy=false;}
 }
 
 async function deleteNotification(button,id,title){
-  if(!id||busy)return;
+  if(!id||button?.dataset.vccfBusy==='1')return;
   if(!confirm(`Delete notification “${title||'Notification'}”?`))return;
-  busy=true;setButtonBusy(button,true,'Deleting…');
+  setButtonBusy(button,true,'Deleting…');
   try{
     const client=sb(),session=await liveSession(),uid=session?.user?.id;
     if(!client||!uid)throw new Error('Your session is no longer active. Please sign in again.');
@@ -101,13 +110,13 @@ async function deleteNotification(button,id,title){
     button?.closest('.vccf-user-inbox-row,.notify-inbox-row')?.remove();
     updateBadgeFromDom();
   }catch(error){console.error('VCCF delete notification:',error);alert(error?.message||'Unable to delete notification.');setButtonBusy(button,false);}
-  finally{busy=false;}
 }
 
 function handleNotificationClick(event){
-  const read=event.target.closest?.('[data-vccf-read],[data-inbox-read]');
-  const del=event.target.closest?.('[data-vccf-delete]');
-  const all=event.target.closest?.('#vccfMarkAllRead,#markAllNotificationsRead');
+  const target=event.target instanceof Element?event.target:event.target?.parentElement;
+  const read=target?.closest?.('[data-vccf-read],[data-inbox-read]');
+  const del=target?.closest?.('[data-vccf-delete]');
+  const all=target?.closest?.('#vccfMarkAllRead,#markAllNotificationsRead');
   if(!read&&!del&&!all)return;
   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
   if(read)return void markRead(read,read.dataset.vccfRead||read.dataset.inboxRead);
