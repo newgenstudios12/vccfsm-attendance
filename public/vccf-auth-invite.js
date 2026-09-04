@@ -21,6 +21,7 @@ handleInviteUrl();
 })();
 function loadVccfEnhancement(key,src){if(document.querySelector(`script[data-vccf-${key}]`))return;const s=document.createElement('script');s.src=src;s.dataset[`vccf${key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())}`]='1';s.defer=true;document.head.appendChild(s)}
 loadVccfEnhancement('member-360','/vccf-member-360.js?v=20260903-6');
+loadVccfEnhancement('member-attendance-performance','/vccf-member-attendance-performance.js?v=20260904-1');
 loadVccfEnhancement('pwa','/vccf-pwa.js?v=20260904-6');
 loadVccfEnhancement('notification-ux','/vccf-notification-ux.js?v=20260904-7');
 loadVccfEnhancement('service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1');
@@ -32,5 +33,5 @@ loadVccfEnhancement('event-attendance-area-stats','/vccf-event-attendance-area-s
 loadVccfEnhancement('bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1');
 loadVccfEnhancement('bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260904-1');
 loadVccfEnhancement('bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260904-1');
-loadVccfEnhancement('member-address-filter','/vccf-member-address-filter.js?v=20260904-1');
+loadVccfEnhancement('member-address-filter','/vccf-member-address-filter.js?v=20260904-2');
 (()=>{if(window.__VCCF_BSG_PREVIEW_DEDUPE__)return;window.__VCCF_BSG_PREVIEW_DEDUPE__=true;const clean=()=>{const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())};const observer=new MutationObserver(clean);observer.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('vccf-app-ready',clean);setTimeout(clean,0)})();
