@@ -1,0 +1,18 @@
+name: Roll back Finance navigation deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rollback-finance-nav.yml'
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Promote last stable deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel promote https://vccfsm-attendance-7k7hs9ae9-newgenstudios12s-projects.vercel.app --yes --token="$VERCEL_TOKEN"
