@@ -39,7 +39,7 @@ function repairVisibility(){
 function ensureScript(id,src){if(document.getElementById(id))return;const s=document.createElement('script');s.id=id;s.src=src;s.async=false;document.head.appendChild(s)}
 function ensureSuite(){
   if(!$('#app')?.classList.contains('active'))return;
-  ensureScript('vccfDailyVerseScript','/vccf-daily-verse.js?v=20260904-1');
+  ensureScript('vccfDailyVerseScript','/vccf-daily-verse.js?v=20260904-2');
   if(!$('#vccfSuite')){
     const old=document.getElementById('vccfAuthoritativeSuiteLoader');
     if(!old){
