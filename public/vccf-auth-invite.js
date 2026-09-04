@@ -41,3 +41,61 @@ loadVccfEnhancement('bible-study-barangay-dropdown','/vccf-bible-study-barangay-
 loadVccfEnhancement('member-address-filter','/vccf-member-address-filter.js?v=20260904-2');
 loadVccfEnhancement('band-fund','/vccf-band-fund.js?v=20260904-1');
 (()=>{if(window.__VCCF_BSG_PREVIEW_DEDUPE__)return;window.__VCCF_BSG_PREVIEW_DEDUPE__=true;const clean=()=>{const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())};const observer=new MutationObserver(clean);observer.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('vccf-app-ready',clean);setTimeout(clean,0)})();
+
+/* Login recovery: stale/invalid persisted Supabase refresh tokens can leave a browser session
+   waiting on an auth refresh lock. An explicit sign-in should always start from a clean local
+   auth client, then reload into the normal app bootstrap after a successful password login. */
+(()=>{
+'use strict';
+if(window.__VCCF_LOGIN_RECOVERY__)return;
+window.__VCCF_LOGIN_RECOVERY__=true;
+const form=document.getElementById('loginForm');
+if(!form)return;
+const projectRef='hvnlstaecjqhjtiojutd';
+const storagePrefix='sb-'+projectRef+'-auth-token';
+const clearAuthStorage=()=>{
+  for(const storage of [window.localStorage,window.sessionStorage]){
+    try{
+      for(let i=storage.length-1;i>=0;i--){
+        const key=storage.key(i);
+        if(key&&(key===storagePrefix||key.startsWith(storagePrefix)))storage.removeItem(key);
+      }
+    }catch(_){ }
+  }
+};
+const withTimeout=(promise,ms)=>new Promise((resolve,reject)=>{
+  const timer=setTimeout(()=>reject(new Error('Authentication request timed out. Please check your connection and try again.')),ms);
+  Promise.resolve(promise).then(value=>{clearTimeout(timer);resolve(value)},error=>{clearTimeout(timer);reject(error)});
+});
+const setLoginMessage=(text,good=false)=>{const node=document.getElementById('loginMsg');if(!node)return;node.textContent=text;node.style.color=good?'#167647':'#b42318'};
+form.addEventListener('submit',async event=>{
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const button=document.getElementById('loginBtn');
+  const emailInput=document.getElementById('email');
+  const passwordInput=document.getElementById('password');
+  const raw=String(emailInput?.value||'').trim().toLowerCase();
+  const password=String(passwordInput?.value||'');
+  if(!raw||!password){setLoginMessage('Enter your email/username and password.');return}
+  const normalized=raw.includes('@')?raw:raw.replace(/[^a-z0-9._-]/g,'').replace(/^[-_.]+|[-_.]+$/g,'')+'@vccf.local';
+  if(button){button.disabled=true;button.textContent='Signing in…'}
+  setLoginMessage('');
+  try{
+    try{window.VCCF?.sb?.auth?.stopAutoRefresh?.()}catch(_){ }
+    clearAuthStorage();
+    const url=window.VCCF_SUPABASE_URL,key=window.VCCF_SUPABASE_PUBLISHABLE_KEY;
+    if(!window.supabase?.createClient||!url||!key)throw new Error('Authentication service did not initialize. Reload VCCF Connect and try again.');
+    const fresh=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+    if(window.VCCF)window.VCCF.sb=fresh;
+    const response=await withTimeout(fresh.auth.signInWithPassword({email:normalized,password}),10000);
+    if(response?.error)throw response.error;
+    if(!response?.data?.session)throw new Error('No authenticated session returned.');
+    setLoginMessage('Signed in successfully. Opening VCCF Connect…',true);
+    setTimeout(()=>location.reload(),120);
+  }catch(error){
+    console.error('VCCF login recovery',error);
+    setLoginMessage(error?.message||'Unable to sign in.');
+    if(button){button.disabled=false;button.textContent='Sign in'}
+  }
+},true);
+})();
