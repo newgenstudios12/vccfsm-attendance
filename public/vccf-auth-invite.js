@@ -30,3 +30,4 @@ loadVccfEnhancement('attendance-nav-reconcile','/vccf-attendance-nav-reconcile.j
 loadVccfEnhancement('service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-1');
 loadVccfEnhancement('event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1');
 loadVccfEnhancement('bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1');
+(()=>{if(window.__VCCF_BSG_PREVIEW_DEDUPE__)return;window.__VCCF_BSG_PREVIEW_DEDUPE__=true;const clean=()=>{const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())};const observer=new MutationObserver(clean);observer.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('vccf-app-ready',clean);setTimeout(clean,0)})();
