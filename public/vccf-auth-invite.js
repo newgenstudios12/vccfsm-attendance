@@ -19,5 +19,10 @@ async function handleInviteUrl(){const sb=client();if(!sb)return false;const que
 window.addEventListener('vccf-force-password-change',async()=>{const response=await client()?.auth.getSession();if(response?.data?.session)showSetup({session:response.data.session,mode:'temporary'})});
 handleInviteUrl();
 })();
-(()=>{if(document.querySelector('script[data-vccf-member-360]'))return;const s=document.createElement('script');s.src='/vccf-member-360.js?v=20260903-6';s.dataset.vccfMember360='1';s.defer=true;document.head.appendChild(s)})();
-(()=>{if(document.querySelector('script[data-vccf-pwa]'))return;const s=document.createElement('script');s.src='/vccf-pwa.js?v=20260904-4';s.dataset.vccfPwa='1';s.defer=true;document.head.appendChild(s)})();
+function loadVccfEnhancement(key,src){if(document.querySelector(`script[data-vccf-${key}]`))return;const s=document.createElement('script');s.src=src;s.dataset[`vccf${key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())}`]='1';s.defer=true;document.head.appendChild(s)}
+loadVccfEnhancement('member-360','/vccf-member-360.js?v=20260903-6');
+loadVccfEnhancement('pwa','/vccf-pwa.js?v=20260904-6');
+loadVccfEnhancement('notification-ux','/vccf-notification-ux.js?v=20260904-7');
+loadVccfEnhancement('service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1');
+loadVccfEnhancement('event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260904-1');
+loadVccfEnhancement('events-gallery','/vccf-events-gallery.js?v=20260904-1');
