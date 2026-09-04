@@ -15,7 +15,7 @@ let loading=false;
 const state=()=>window.VCCF?.getState?.()||{};
 const sb=()=>window.VCCF?.sb;
 const role=()=>String(state().profile?.role||'member').toLowerCase();
-const finance=()=>['admin','pastor','treasurer'].includes(role());
+const finance=()=>window.VCCFFinanceAccess?.()===true||['admin','pastor','treasurer'].includes(role());
 const currentUserId=()=>state().session?.user?.id||null;
 const currentMemberId=()=>state().profile?.member_id||null;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -57,6 +57,7 @@ function ensureView(){
 
 function pledgeIcon(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>'}
 function installNavigation(){
+  if(!finance())return true;
   ensureView();
   if(document.querySelector('[data-route="pledges"]'))return true;
   const giving=document.querySelector('[data-route="giving"]');
@@ -74,7 +75,7 @@ function scheduleInstall(attempt=0){
 }
 
 async function loadDirectory(){
-  if(role()==='treasurer'){
+  if(finance()){
     const result=await sb().rpc('get_giving_member_directory');
     if(result.error)throw result.error;
     directory=result.data||[];
@@ -219,11 +220,11 @@ async function voidPayment(payment){
 }
 
 async function refresh(showLoading=true){
-  ensureView();if(!root||loading)return;loading=true;if(showLoading)root.innerHTML='<div class="pledge-loading card">Loading pledge campaigns…</div>';
+  ensureView();if(!root||loading)return;if(!finance()){root.innerHTML='<div class="notice">Pledges is restricted to pastors, administrators, treasurers, and members of the Treasurer ministry.</div>';return}loading=true;if(showLoading)root.innerHTML='<div class="pledge-loading card">Loading pledge campaigns…</div>';
   try{await loadAll();render()}catch(error){console.error('VCCF Pledges',error);root.innerHTML='<div class="notice">Pledges could not be loaded. '+esc(error.message||'Please try again.')+'</div>'}finally{loading=false}
 }
 
-async function open(){activateShell();await refresh();}
+async function open(){if(!finance())return;activateShell();await refresh();}
 window.VCCFPledges={open,refresh,mount:open,unmount:()=>{}};
 
 window.addEventListener('vccf-app-ready',()=>setTimeout(()=>scheduleInstall(),80));

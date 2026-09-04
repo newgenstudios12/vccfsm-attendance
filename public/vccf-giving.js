@@ -14,7 +14,7 @@ let selectedSunday='';
 const state=()=>window.VCCF?.getState?.()||{};
 const sb=()=>window.VCCF?.sb;
 const role=()=>String(state().profile?.role||'member').toLowerCase();
-const canManage=()=>['admin','pastor','treasurer'].includes(role());
+const canManage=()=>window.VCCFFinanceAccess?.()===true||['admin','pastor','treasurer'].includes(role());
 const canApprove=()=>['admin','pastor'].includes(role());
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const attr=esc;
@@ -31,7 +31,7 @@ const dateLabel=value=>value?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Man
 const dateTimeLabel=value=>value?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(value)):'—';
 const isSunday=day=>day&&new Date(day+'T12:00:00+08:00').getDay()===0;
 const latestSunday=()=>{const now=new Date(),ph=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Manila'})),d=new Date(ph);d.setHours(12,0,0,0);d.setDate(d.getDate()-d.getDay());return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(d)};
-const scopeCopy=()=>role()==='admin'||role()==='pastor'?'Church-wide financial records.':role()==='treasurer'?'Church-wide giving encoding and Sunday finance preparation. Admin/Pastor approval is required.':role()==='area_leader'?'Giving records for members in your assigned area.':'Your personal tithes and offerings history.';
+const scopeCopy=()=>role()==='admin'||role()==='pastor'?'Church-wide financial records.':canManage()?'Church-wide giving encoding and Sunday finance preparation. Admin/Pastor approval is required.':'Finance access is restricted.';
 const activeMembers=()=>((givingMembers.length?givingMembers:(state().members||[]))).slice().sort((a,b)=>memberName(a).localeCompare(memberName(b)));
 const batchStatusLabel=status=>({draft:'Draft',submitted:'Awaiting approval',approved:'Approved'})[status]||'Not started';
 const batchStatusClass=status=>status==='approved'?'approved':status==='submitted'?'submitted':'draft';
@@ -42,7 +42,7 @@ async function load(month){
   const client=sb();if(!client)throw new Error('Giving service is unavailable.');
   if(!selectedSunday)selectedSunday=latestSunday();
   const bounds=monthBounds(month);
-  if(role()==='treasurer'){
+  if(canManage()){
     const directory=await client.rpc('get_giving_member_directory');
     if(directory.error)throw directory.error;
     givingMembers=directory.data||[];
@@ -271,7 +271,7 @@ async function refresh(month=loadedMonth||monthKey()){
   try{await load(month);render()}catch(error){console.error('VCCF Giving',error);root.innerHTML='<div class="notice">Tithes & Offerings could not be loaded. '+esc(error.message||'Please try again.')+'</div>'}
 }
 
-function mount(container=document.getElementById('giving')){root=container;if(root){selectedSunday=selectedSunday||latestSunday();refresh(monthKey())}}
+function mount(container=document.getElementById('giving')){root=container;if(!root)return;if(!canManage()){root.innerHTML='<div class="notice">Tithes & Offerings is restricted to pastors, administrators, treasurers, and members of the Treasurer ministry.</div>';return}selectedSunday=selectedSunday||latestSunday();refresh(monthKey())}
 function unmount(){root=null}
 window.VCCFGiving={mount,unmount,refresh};
 })();
