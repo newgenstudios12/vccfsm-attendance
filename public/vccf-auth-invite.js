@@ -29,3 +29,4 @@ loadVccfEnhancement('events-gallery','/vccf-events-gallery.js?v=20260904-1');
 loadVccfEnhancement('attendance-nav-reconcile','/vccf-attendance-nav-reconcile.js?v=20260904-1');
 loadVccfEnhancement('service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-1');
 loadVccfEnhancement('event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1');
+loadVccfEnhancement('bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1');
