@@ -1,1 +1,1 @@
-{"release":"2026-09-04-notifications-v1","features":["notifications-module","dashboard-announcements","remote-web-push","daily-recurring-notifications","announcement-delete"]}
+{"release":"2026-09-04-notifications-v2","features":["dashboard-announcements","push-only-notifications","daily-recurring-push","deleteable-notifications","uploaded-app-icon-ready"]}
