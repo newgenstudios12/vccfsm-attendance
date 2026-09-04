@@ -36,11 +36,17 @@ function ensureNav(){
   const nav=document.querySelector('.sidebar .nav');if(!nav)return;
   let b=nav.querySelector('[data-route="bandfund"]');
   if(!b){
-    b=document.createElement('button');b.type='button';b.className='nav-item';b.dataset.route='bandfund';b.innerHTML='<span class="nav-icon">'+icon()+'</span><span class="nav-label">Band Fund</span>';
-    const giving=nav.querySelector('[data-route="giving"]'),settings=nav.querySelector('[data-route="settings"]');
-    if(giving)giving.insertAdjacentElement('afterend',b);else if(settings)settings.insertAdjacentElement('beforebegin',b);else nav.appendChild(b);
+    const financeInner=nav.querySelector('#financeNavGroup .nav-children-inner');
+    b=document.createElement('button');b.type='button';b.className=financeInner?'nav-item nav-child':'nav-item';b.dataset.route='bandfund';
+    b.innerHTML=financeInner?'<span class="nav-label">Band Funds</span>':'<span class="nav-icon">'+icon()+'</span><span class="nav-label">Band Funds</span>';
+    if(financeInner)financeInner.appendChild(b);
+    else{
+      const giving=nav.querySelector('[data-route="giving"]'),settings=nav.querySelector('[data-route="settings"]');
+      if(giving)giving.insertAdjacentElement('afterend',b);else if(settings)settings.insertAdjacentElement('beforebegin',b);else nav.appendChild(b);
+    }
   }
-  if(!b.dataset.bandFundBound){b.dataset.bandFundBound='1';b.addEventListener('click',openBandFund)}
+  const shellManaged=nav.closest('.sidebar')?.dataset.shellV2==='1';
+  if(!shellManaged&&!b.dataset.bandFundBound){b.dataset.bandFundBound='1';b.addEventListener('click',openBandFund)}
   ensureView();
 }
 function removeAccessUi(){
@@ -57,7 +63,9 @@ function openBandFund(){
   if(!allowed)return;
   ensureNav();const v=ensureView();
   document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));v.classList.add('active');
-  document.querySelectorAll('[data-route],.nav-group-toggle').forEach(x=>x.classList.toggle('active',x.dataset?.route==='bandfund'));
+  document.querySelectorAll('[data-route]').forEach(x=>x.classList.toggle('active',x.dataset?.route==='bandfund'));
+  const finance=document.getElementById('financeNavGroup'),toggle=finance?.querySelector('.nav-group-toggle');
+  finance?.classList.add('open');toggle?.classList.add('active');toggle?.setAttribute('aria-expanded','true');
   document.querySelector('.sidebar')?.classList.remove('open');document.getElementById('mobileShade')?.classList.remove('open');
   setHeading();void renderBandFund();
 }
@@ -133,9 +141,9 @@ async function renderBandFund(){
   }catch(error){view.innerHTML='<div class="notice">'+esc(error.message||'Unable to load Band Fund.')+'</div>'}finally{rendering=false}
 }
 
-let domTimer=0;function queueDom(){clearTimeout(domTimer);domTimer=setTimeout(()=>{if(allowed)ensureNav()},120)}
-new MutationObserver(queueDom).observe(document.documentElement,{childList:true,subtree:true});
-window.addEventListener('vccf-app-ready',()=>checkAccess(true));window.addEventListener('focus',()=>checkAccess(false));
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkAccess(false)});
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>checkAccess(true),300),{once:true});else setTimeout(()=>checkAccess(true),300);
+window.VCCFBandFund={open:openBandFund,checkAccess,refresh:async()=>{if(await checkAccess(true))await renderBandFund()}};
+window.addEventListener('vccf-app-ready',()=>checkAccess(true));
+window.addEventListener('vccf-signed-out',()=>{allowed=false;removeAccessUi()});
+window.addEventListener('focus',()=>{if(state().session?.user?.id)checkAccess(false)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state().session?.user?.id)checkAccess(false)});
 })();
