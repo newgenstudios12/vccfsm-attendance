@@ -66,6 +66,8 @@ window.__VCCF_LOGIN_RECOVERY__=true;
 const form=document.getElementById('loginForm');
 if(!form)return;
 const projectRef='hvnlstaecjqhjtiojutd';
+const fallbackUrl='https://hvnlstaecjqhjtiojutd.supabase.co';
+const fallbackKey='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
 const storagePrefix='sb-'+projectRef+'-auth-token';
 const clearAuthStorage=()=>{
   for(const storage of [window.localStorage,window.sessionStorage]){
@@ -81,6 +83,14 @@ const withTimeout=(promise,ms)=>new Promise((resolve,reject)=>{
   const timer=setTimeout(()=>reject(new Error('Authentication request timed out. Please check your connection and try again.')),ms);
   Promise.resolve(promise).then(value=>{clearTimeout(timer);resolve(value)},error=>{clearTimeout(timer);reject(error)});
 });
+const ensureSupabase=async()=>{
+  if(window.supabase?.createClient)return window.supabase;
+  let script=document.querySelector('script[data-vccf-supabase-fallback="1"]');
+  if(!script){script=document.createElement('script');script.src='https://unpkg.com/@supabase/supabase-js@2';script.dataset.vccfSupabaseFallback='1';document.head.appendChild(script)}
+  await withTimeout(new Promise((resolve,reject)=>{if(window.supabase?.createClient){resolve();return}script.addEventListener('load',resolve,{once:true});script.addEventListener('error',()=>reject(new Error('Unable to load the authentication library. Please check your connection and try again.')),{once:true})}),8000);
+  if(!window.supabase?.createClient)throw new Error('Authentication library did not initialize. Please try again.');
+  return window.supabase;
+};
 const setLoginMessage=(text,good=false)=>{const node=document.getElementById('loginMsg');if(!node)return;node.textContent=text;node.style.color=good?'#167647':'#b42318'};
 form.addEventListener('submit',async event=>{
   event.preventDefault();
@@ -97,10 +107,11 @@ form.addEventListener('submit',async event=>{
   try{
     try{window.VCCF?.sb?.auth?.stopAutoRefresh?.()}catch(_){ }
     clearAuthStorage();
-    const url=window.VCCF_SUPABASE_URL,key=window.VCCF_SUPABASE_PUBLISHABLE_KEY;
-    if(!window.supabase?.createClient||!url||!key)throw new Error('Authentication service did not initialize. Reload VCCF Connect and try again.');
-    const fresh=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-    if(window.VCCF)window.VCCF.sb=fresh;
+    const url=window.VCCF_SUPABASE_URL||fallbackUrl,key=window.VCCF_SUPABASE_PUBLISHABLE_KEY||fallbackKey;
+    window.VCCF_SUPABASE_URL=url;window.VCCF_SUPABASE_PUBLISHABLE_KEY=key;
+    const library=await ensureSupabase();
+    const fresh=library.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+    if(window.VCCF)window.VCCF.sb=fresh;else window.VCCF={sb:fresh,getState:()=>({})};
     const response=await withTimeout(fresh.auth.signInWithPassword({email:normalized,password}),10000);
     if(response?.error)throw response.error;
     if(!response?.data?.session)throw new Error('No authenticated session returned.');
