@@ -8,12 +8,12 @@ const sb=()=>window.VCCF?.sb;
 const role=()=>String(state().profile?.role||'member').toLowerCase();
 const canManage=()=>['admin','pastor','area_leader'].includes(role());
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let photos=new Map(),timer=0,observer=null,previewSummaryId='';
+let photos=new Map(),timer=0,previewSummaryId='';
 
 function installStyles(){
  if(document.getElementById('vccfBibleStudySummaryPhotosCss'))return;
  const s=document.createElement('style');s.id='vccfBibleStudySummaryPhotosCss';s.textContent=`
-.bssg-photo-frame{position:relative;width:100%;aspect-ratio:16/9;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:linear-gradient(135deg,rgba(215,25,32,.055),rgba(255,138,24,.07));display:grid;place-items:center}.bssg-photo-frame img{width:100%;height:100%;object-fit:cover;display:block}.bssg-photo-empty{display:grid;place-items:center;gap:6px;color:var(--muted);font-size:.68rem;font-weight:800;text-align:center;padding:18px}.bssg-photo-empty svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.72}.bssg-photo-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.bssg-photo-actions button{flex:1 1 120px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:8px 10px;font:inherit;font-size:.67rem;font-weight:900;cursor:pointer}.bssg-photo-actions button:hover{border-color:var(--brand);color:var(--brand)}.bssg-photo-actions .bssg-remove{flex:0 0 auto;color:#b42318}.bssg-photo-status{font-size:.63rem;line-height:1.4;color:var(--muted);min-height:.9em}.bssg-photo-status.good{color:#167647}.bssg-photo-status.bad{color:#b42318}.bssg-preview-photo{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card-soft,var(--card))}.bssg-preview-photo img{display:block;width:100%;max-height:420px;object-fit:cover}.bssg-preview-photo span{display:block;padding:8px 11px;color:var(--muted);font-size:.65rem;font-weight:800}@media(max-width:680px){.bssg-photo-actions{display:grid;grid-template-columns:1fr}.bssg-photo-actions .bssg-remove{width:100%}}
+.bssg-photo-frame{position:relative;width:100%;aspect-ratio:16/9;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:linear-gradient(135deg,rgba(215,25,32,.055),rgba(255,138,24,.07));display:grid;place-items:center;min-height:120px}.bssg-photo-frame img{width:100%;height:100%;object-fit:cover;display:block}.bssg-photo-empty{display:grid;place-items:center;gap:6px;color:var(--muted);font-size:.68rem;font-weight:800;text-align:center;padding:18px}.bssg-photo-empty svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.72}.bssg-photo-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.bssg-photo-actions button{flex:1 1 120px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:8px 10px;font:inherit;font-size:.67rem;font-weight:900;cursor:pointer}.bssg-photo-actions button:hover{border-color:var(--brand);color:var(--brand)}.bssg-photo-actions .bssg-remove{flex:0 0 auto;color:#b42318}.bssg-photo-status{font-size:.63rem;line-height:1.4;color:var(--muted);min-height:.9em}.bssg-photo-status.good{color:#167647}.bssg-photo-status.bad{color:#b42318}.bssg-preview-photo{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card-soft,var(--card))}.bssg-preview-photo img{display:block;width:100%;max-height:420px;object-fit:cover}.bssg-preview-photo span{display:block;padding:8px 11px;color:var(--muted);font-size:.65rem;font-weight:800}@media(max-width:680px){.bssg-photo-actions{display:grid;grid-template-columns:1fr}.bssg-photo-actions .bssg-remove{width:100%}}
 `;document.head.appendChild(s)
 }
 
@@ -87,7 +87,7 @@ async function scanGallery(){
  if(!cards.length||!sb())return;
  const ids=[...new Set(cards.map(c=>String(c.dataset.summaryId||'')).filter(Boolean))];if(!ids.length)return;
  const result=await sb().from('cms_service_summary_photos').select('summary_id,image_url,storage_path,caption,updated_at').in('summary_id',ids);
- if(result.error){console.warn('Bible Study summary pictures',result.error);cards.forEach(c=>{c.dataset.bssgPhotoReady='1';decorateCard(c,null)});return}
+ if(result.error){console.warn('Bible Study summary pictures',result.error);cards.forEach(c=>decorateCard(c,null));return}
  for(const p of result.data||[])photos.set(String(p.summary_id),p);
  cards.forEach(card=>decorateCard(card,photos.get(String(card.dataset.summaryId||''))||null));
 }
@@ -100,9 +100,10 @@ function decoratePreview(){
  const box=document.createElement('div');box.className='bssg-preview-photo';box.innerHTML='<img src="'+esc(photo.image_url)+'" alt="Bible Study summary picture"><span>Picture attached to this Bible Study submission</span>';body.prepend(box)
 }
 
-function queue(){clearTimeout(timer);timer=setTimeout(()=>void scanGallery(),90)}
-function watch(){if(observer)return;observer=new MutationObserver(queue);observer.observe(document.documentElement,{childList:true,subtree:true})}
+function queue(){clearTimeout(timer);timer=setTimeout(()=>void scanGallery(),40)}
 document.addEventListener('click',e=>{const b=e.target.closest?.('[data-preview-service-summary]');if(!b)return;previewSummaryId=String(b.dataset.previewServiceSummary||'');setTimeout(decoratePreview,0)});
-window.addEventListener('vccf-app-ready',queue);window.addEventListener('vccf-bible-study-summary-photo-updated',queue);
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{watch();queue()},{once:true});else{watch();queue()}
+window.addEventListener('vccf-service-summary-gallery-rendered',queue);
+window.addEventListener('vccf-app-ready',queue);
+window.addEventListener('vccf-bible-study-summary-photo-updated',queue);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{queue();setTimeout(queue,300)},{once:true});else{queue();setTimeout(queue,300)}
 })();
