@@ -1,7 +1,7 @@
 (() => {
 'use strict';
-if (window.__VCCF_MEMBERS_ADD_LOADER_V4__) return;
-window.__VCCF_MEMBERS_ADD_LOADER_V4__ = true;
+if (window.__VCCF_MEMBERS_ADD_LOADER_V5__) return;
+window.__VCCF_MEMBERS_ADD_LOADER_V5__ = true;
 
 let loading = null;
 let loaded = false;
@@ -31,7 +31,7 @@ function loadModule() {
   ensureStyles();
   loading = new Promise(resolve => {
     const script = document.createElement('script');
-    script.src = '/vccf-members-add.js?v=20260905-3';
+    script.src = '/vccf-members-add.js?v=20260905-4';
     script.dataset.vccfMembersAddModule = '1';
     script.onload = () => { loaded = true; loading = null; activate(); resolve(true); };
     script.onerror = () => { loading = null; console.error('Add Member module failed to load. The rest of VCCF Connect remains available.'); resolve(false); };
