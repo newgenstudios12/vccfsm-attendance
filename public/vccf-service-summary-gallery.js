@@ -41,7 +41,7 @@ function card(row){
 }
 function draw(shell,rows){
  const search=shell.querySelector('[data-summary-search]'),status=shell.querySelector('[data-summary-status]'),grid=shell.querySelector('.service-summary-gallery-grid');
- const render=()=>{const q=String(search?.value||'').trim().toLowerCase(),st=String(status?.value||'');const filtered=rows.filter(row=>{const hay=[row.title,fmtDate(row.summary_date),areaName(row.area_id),row.barangay,row.notes,statusLabel(row.workflow_status)].join(' ').toLowerCase();return(!q||hay.includes(q))&&(!st||String(row.workflow_status||'draft')===st)});grid.innerHTML=filtered.length?filtered.map(card).join(''):'<div class="service-summary-gallery-empty">No Bible Study summaries match these filters.</div>'};
+ const render=()=>{const q=String(search?.value||'').trim().toLowerCase(),st=String(status?.value||'');const filtered=rows.filter(row=>{const hay=[row.title,fmtDate(row.summary_date),areaName(row.area_id),row.barangay,row.notes,statusLabel(row.workflow_status)].join(' ').toLowerCase();return(!q||hay.includes(q))&&(!st||String(row.workflow_status||'draft')===st)});const key=[q,st,...filtered.map(row=>[row.id,row.updated_at,row.workflow_status,row.attendance_count,row.member_count,row.notes].join(':'))].join('|');if(grid.dataset.renderKey===key)return;grid.dataset.renderKey=key;grid.innerHTML=filtered.length?filtered.map(card).join(''):'<div class="service-summary-gallery-empty">No Bible Study summaries match these filters.</div>';window.dispatchEvent(new CustomEvent('vccf-service-summary-gallery-rendered',{detail:{ids:filtered.map(row=>String(row.id))}}))};
  if(search&&!search.dataset.bound){search.dataset.bound='1';search.addEventListener('input',render)}
  if(status&&!status.dataset.bound){status.dataset.bound='1';status.addEventListener('change',render)}
  render();
@@ -64,7 +64,6 @@ async function reconcile(){
  if(currentType()!=='bible_study'){h.querySelector('[data-service-summary-gallery]')?.remove();return}
  const token=++renderToken;
  const shell=ensureShell(h);
- if(rowsCache.length){draw(shell,rowsCache)}
  try{
   const rows=await fetchRows();
   if(token!==renderToken||!shell.isConnected||currentType()!=='bible_study')return;
@@ -90,7 +89,7 @@ function openPreview(row){
 
 document.addEventListener('click',e=>{const b=e.target.closest?.('[data-preview-service-summary]');if(!b)return;const row=rowsCache.find(x=>String(x.id)===String(b.dataset.previewServiceSummary));if(row){e.preventDefault();openPreview(row)}},true);
 function queue(){clearTimeout(scheduled);scheduled=setTimeout(reconcile,110)}
-new MutationObserver(mutations=>{if(mutations.some(m=>m.target?.id==='serviceSummaryHost'||m.target?.closest?.('#serviceSummaryHost')))queue()}).observe(document.documentElement,{childList:true,subtree:true});
+new MutationObserver(mutations=>{if(mutations.some(m=>{const target=m.target?.nodeType===1?m.target:m.target?.parentElement;if(!target)return false;if(target.closest?.('[data-service-summary-gallery]'))return false;return target.id==='serviceSummaryHost'||Boolean(target.closest?.('#serviceSummaryHost'))}))queue()}).observe(document.documentElement,{childList:true,subtree:true});
 document.addEventListener('change',e=>{if(['serviceAttendanceType','serviceStudyArea','serviceStudyBarangay','serviceAttendanceDate'].includes(e.target?.id))queue()});
 window.addEventListener('vccf-app-ready',queue);window.addEventListener('focus',queue);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',queue,{once:true});else queue();
