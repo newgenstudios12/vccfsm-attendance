@@ -1,7 +1,7 @@
 (() => {
 'use strict';
-if (window.__VCCF_MEMBERS_ADD_V3__) return;
-window.__VCCF_MEMBERS_ADD_V3__ = true;
+if (window.__VCCF_MEMBERS_ADD_V4__) return;
+window.__VCCF_MEMBERS_ADD_V4__ = true;
 
 const state = () => window.VCCF?.getState?.() || {};
 const client = () => window.VCCF?.sb;
@@ -10,6 +10,10 @@ const role = () => String(state().profile?.role || '').toLowerCase().trim().repl
 const canAdd = () => ['admin','pastor','area_leader'].includes(role());
 const memberName = m => m?.display_name || [m?.first_name,m?.last_name].filter(Boolean).join(' ') || m?.member_code || 'Member';
 const areaName = id => (state().areas || []).find(a => a.id === id)?.name || 'Unassigned';
+const PSGC_API = 'https://psgc.cloud/api/v2';
+const psgcCache = new Map();
+const psgcCode = x => String(x?.code || x?.psgc_code || '');
+const psgcName = x => String(x?.name || x?.area_name || '');
 
 if (!state().session?.user || !client()) {
   console.warn('Add Member skipped: authenticated app state is not ready.');
@@ -31,6 +35,136 @@ function activeAreaOptions(selected='') {
     .filter(a => a.is_active !== false)
     .map(a => '<option value="'+esc(a.id)+'" '+(a.id===selected?'selected':'')+'>'+esc(a.name)+'</option>')
     .join('');
+}
+
+async function psgcGet(path) {
+  if (psgcCache.has(path)) return psgcCache.get(path);
+  const request = fetch(PSGC_API + path, {headers:{Accept:'application/json'}})
+    .then(async response => {
+      if (!response.ok) throw new Error('Philippine address list is temporarily unavailable.');
+      const json = await response.json();
+      return Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : Array.isArray(json?.results) ? json.results : [];
+    })
+    .catch(error => {
+      psgcCache.delete(path);
+      throw error;
+    });
+  psgcCache.set(path, request);
+  return request;
+}
+
+function fillAddressSelect(select, items, placeholder, currentCode='', currentName='') {
+  const sorted = [...items]
+    .filter(x => psgcCode(x) && psgcName(x))
+    .sort((a,b) => psgcName(a).localeCompare(psgcName(b)));
+  select.innerHTML = '<option value="">'+esc(placeholder)+'</option>' + sorted.map(x =>
+    '<option value="'+esc(psgcCode(x))+'" data-name="'+esc(psgcName(x))+'">'+esc(psgcName(x))+'</option>'
+  ).join('');
+  let found = false;
+  if (currentCode) {
+    select.value = String(currentCode);
+    found = !!select.value;
+  }
+  if (!found && currentName) {
+    const hit = sorted.find(x => psgcName(x).localeCompare(String(currentName), undefined, {sensitivity:'base'}) === 0);
+    if (hit) {
+      select.value = psgcCode(hit);
+      found = true;
+    }
+  }
+  if (!found && currentName) {
+    const option = document.createElement('option');
+    option.value = 'legacy:' + currentName;
+    option.dataset.name = currentName;
+    option.textContent = currentName + ' (current)';
+    select.appendChild(option);
+    select.value = option.value;
+  }
+  select.disabled = false;
+}
+
+async function initAddressPicker(wrap) {
+  const province = wrap.querySelector('[name="province_psgc_code"]');
+  const city = wrap.querySelector('[name="city_municipality_psgc_code"]');
+  const barangay = wrap.querySelector('[name="barangay_psgc_code"]');
+  const msg = wrap.querySelector('#vccfMemberAddressMsg');
+  if (!province || !city || !barangay) return;
+
+  const current = {
+    province:'Laguna', provinceCode:'',
+    city:'Santa Maria', cityCode:'',
+    barangay:'', barangayCode:''
+  };
+  const setBusy = (el, text) => {
+    el.disabled = true;
+    el.innerHTML = '<option value="">'+esc(text)+'</option>';
+  };
+
+  async function loadBarangays(keep=true) {
+    const code = city.value;
+    if (!code || code.startsWith('legacy:')) {
+      setBusy(barangay, 'Select town/city first');
+      return;
+    }
+    setBusy(barangay, 'Loading barangays…');
+    try {
+      const rows = await psgcGet('/cities-municipalities/' + encodeURIComponent(code) + '/barangays');
+      fillAddressSelect(barangay, rows, 'Select barangay', keep ? current.barangayCode : '', keep ? current.barangay : '');
+    } catch (error) {
+      setBusy(barangay, 'Unable to load barangays');
+      if (msg) msg.textContent = error.message;
+    }
+  }
+
+  async function loadCities(keep=true) {
+    const code = province.value;
+    if (!code || code.startsWith('legacy:')) {
+      setBusy(city, 'Select province first');
+      setBusy(barangay, 'Select town/city first');
+      return;
+    }
+    setBusy(city, 'Loading towns/cities…');
+    setBusy(barangay, 'Select town/city first');
+    try {
+      const path = code === 'NCR'
+        ? '/regions/130000000/cities-municipalities'
+        : '/provinces/' + encodeURIComponent(code) + '/cities-municipalities';
+      const rows = await psgcGet(path);
+      fillAddressSelect(city, rows, 'Select town/city', keep ? current.cityCode : '', keep ? current.city : '');
+      await loadBarangays(keep);
+    } catch (error) {
+      setBusy(city, 'Unable to load towns/cities');
+      if (msg) msg.textContent = error.message;
+    }
+  }
+
+  setBusy(province, 'Loading provinces…');
+  setBusy(city, 'Select province first');
+  setBusy(barangay, 'Select town/city first');
+  try {
+    const rows = await psgcGet('/provinces');
+    rows.push({code:'NCR', name:'Metro Manila (NCR)'});
+    fillAddressSelect(province, rows, 'Select province / NCR', current.provinceCode, current.province);
+    await loadCities(true);
+  } catch (error) {
+    setBusy(province, 'Unable to load provinces');
+    if (msg) msg.textContent = error.message;
+  }
+
+  province.addEventListener('change', () => {
+    current.city = '';
+    current.cityCode = '';
+    current.barangay = '';
+    current.barangayCode = '';
+    if (msg) msg.textContent = '';
+    void loadCities(false);
+  });
+  city.addEventListener('change', () => {
+    current.barangay = '';
+    current.barangayCode = '';
+    if (msg) msg.textContent = '';
+    void loadBarangays(false);
+  });
 }
 
 function profilePhotoFromFile(file) {
@@ -135,15 +269,16 @@ function openAddMember() {
         '<div class="vccf-member-field"><label for="vccfMemberBirth">Birthday</label><input id="vccfMemberBirth" name="birth_date" type="date"></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberContact">Contact number</label><input id="vccfMemberContact" name="contact_number" type="tel" autocomplete="tel"></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberEmail">Email</label><input id="vccfMemberEmail" name="email" type="email" autocomplete="email"></div>'+
-        '<div class="vccf-member-field"><label for="vccfMemberBarangay">Barangay</label><input id="vccfMemberBarangay" name="barangay"></div>'+
-        '<div class="vccf-member-field"><label for="vccfMemberCity">City / Municipality</label><input id="vccfMemberCity" name="city_municipality" value="Santa Maria"></div>'+
-        '<div class="vccf-member-field"><label for="vccfMemberProvince">Province</label><input id="vccfMemberProvince" name="province" value="Laguna"></div>'+
-        '<div class="vccf-member-field full"><label for="vccfMemberAddress">Address</label><textarea id="vccfMemberAddress" name="address" placeholder="Street / sitio / subdivision and other address details"></textarea></div>'+
+        '<div class="vccf-member-field"><label for="vccfMemberProvince">Province *</label><select id="vccfMemberProvince" name="province_psgc_code" required disabled><option value="">Loading provinces…</option></select></div>'+
+        '<div class="vccf-member-field"><label for="vccfMemberCity">Town / City *</label><select id="vccfMemberCity" name="city_municipality_psgc_code" required disabled><option value="">Select province first</option></select></div>'+
+        '<div class="vccf-member-field"><label for="vccfMemberBarangay">Barangay</label><select id="vccfMemberBarangay" name="barangay_psgc_code" disabled><option value="">Select town/city first</option></select></div>'+
+        '<div class="vccf-member-field full"><label for="vccfMemberAddress">House / Street / Sitio / Subdivision</label><textarea id="vccfMemberAddress" name="address" placeholder="Optional detailed address"></textarea><div class="vccf-member-help">Philippine address hierarchy: Province → Town/City → Barangay. Laguna → Santa Maria is selected automatically for faster encoding.</div><div id="vccfMemberAddressMsg" class="vccf-member-help" style="color:#b42318"></div></div>'+
       '</div>'+
       '<div class="vccf-member-form-actions"><button type="button" class="btn secondary" id="vccfMemberCancel">Cancel</button><button type="submit" class="btn" id="vccfMemberSave">Add Member</button></div>'+
       '<div id="vccfMemberFormMsg" class="vccf-member-form-msg" role="status"></div>'+
     '</form></div>';
   document.body.appendChild(wrap);
+  void initAddressPicker(wrap);
 
   const close = () => closeModal();
   wrap.querySelector('.vccf-member-modal-close').onclick = close;
@@ -193,6 +328,22 @@ function openAddMember() {
     const last = String(fd.get('last_name') || '').trim();
     if (!first || !last) return;
 
+    const provinceSelect = form.elements.province_psgc_code;
+    const citySelect = form.elements.city_municipality_psgc_code;
+    const barangaySelect = form.elements.barangay_psgc_code;
+    const provinceValue = String(provinceSelect?.value || '');
+    const cityValue = String(citySelect?.value || '');
+    if (!provinceValue || !cityValue) {
+      msg.textContent = 'Choose a province and town/city before adding the member.';
+      msg.style.color = '#b42318';
+      return;
+    }
+    const provinceName = provinceSelect?.selectedOptions?.[0]?.dataset?.name || provinceSelect?.selectedOptions?.[0]?.textContent || '';
+    const cityName = citySelect?.selectedOptions?.[0]?.dataset?.name || citySelect?.selectedOptions?.[0]?.textContent || '';
+    const barangayName = barangaySelect?.selectedOptions?.[0]?.dataset?.name || (barangaySelect?.value ? barangaySelect?.selectedOptions?.[0]?.textContent : '') || '';
+    const detail = String(fd.get('address') || '').trim();
+    const canonicalAddress = [detail, barangayName, cityName, provinceName].filter(Boolean).join(', ');
+
     const status = String(fd.get('status') || 'active');
     const areaId = isAreaLeader ? leaderAreaId : (document.getElementById('vccfMemberArea')?.value || null);
     const payload = {
@@ -207,11 +358,14 @@ function openAddMember() {
       birth_date:String(fd.get('birth_date') || '').trim() || null,
       contact_number:String(fd.get('contact_number') || '').trim() || null,
       email:String(fd.get('email') || '').trim() || null,
-      barangay:String(fd.get('barangay') || '').trim() || null,
-      city_municipality:String(fd.get('city_municipality') || '').trim() || null,
-      province:String(fd.get('province') || '').trim() || null,
+      province_psgc_code: provinceValue && !provinceValue.startsWith('legacy:') ? provinceValue : null,
+      province: provinceName || null,
+      city_municipality_psgc_code: cityValue && !cityValue.startsWith('legacy:') ? cityValue : null,
+      city_municipality: cityName || null,
+      barangay_psgc_code: (() => { const v=String(barangaySelect?.value || ''); return v && !v.startsWith('legacy:') ? v : null; })(),
+      barangay: barangayName || null,
       photo_url:null,
-      address:String(fd.get('address') || '').trim()
+      address:canonicalAddress
     };
 
     save.disabled = true;
@@ -226,7 +380,7 @@ function openAddMember() {
       }
       const db = client();
       if (!state().session?.user || !db) throw new Error('Your session is no longer active. Sign in again and retry.');
-      const {data,error} = await db.from('members').insert(payload).select('id,member_code,first_name,last_name,display_name,area_id,is_active,status,member_type,member_category,address,province,city_municipality,barangay,birth_date,photo_url,contact_number,email,created_at').single();
+      const {data,error} = await db.from('members').insert(payload).select('id,member_code,first_name,last_name,display_name,area_id,is_active,status,member_type,member_category,address,province,province_psgc_code,city_municipality,city_municipality_psgc_code,barangay,barangay_psgc_code,birth_date,photo_url,contact_number,email,created_at').single();
       if (error) throw error;
       syncNewMember(data);
       closeModal();
