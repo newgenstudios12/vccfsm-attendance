@@ -1,7 +1,7 @@
 (() => {
 'use strict';
-if (window.__VCCF_MEMBERS_ADD_V2__) return;
-window.__VCCF_MEMBERS_ADD_V2__ = true;
+if (window.__VCCF_MEMBERS_ADD_V3__) return;
+window.__VCCF_MEMBERS_ADD_V3__ = true;
 
 const state = () => window.VCCF?.getState?.() || {};
 const client = () => window.VCCF?.sb;
@@ -33,11 +33,45 @@ function activeAreaOptions(selected='') {
     .join('');
 }
 
+function profilePhotoFromFile(file) {
+  if (!file) return Promise.resolve(null);
+  if (!String(file.type || '').startsWith('image/')) return Promise.reject(new Error('Profile picture must be an image.'));
+  if (file.size > 5 * 1024 * 1024) return Promise.reject(new Error('Profile picture must be 5 MB or smaller.'));
+  return new Promise((resolve,reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Unable to read the selected profile picture.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Unable to process the selected profile picture.'));
+      image.onload = () => {
+        try {
+          const max = 640;
+          const scale = Math.min(1, max / Math.max(image.width || 1, image.height || 1));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('Image processing is unavailable on this device.');
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', .82));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function closeModal() {
   const modal = document.getElementById('vccfMemberModal');
   if (!modal) return;
   const handler = modal.__vccfEscapeHandler;
   if (handler) document.removeEventListener('keydown', handler);
+  if (modal.__vccfPhotoObjectUrl) {
+    try { URL.revokeObjectURL(modal.__vccfPhotoObjectUrl); } catch (_) {}
+  }
   modal.remove();
 }
 
@@ -58,6 +92,9 @@ function syncNewMember(member) {
     option.value = member.id;
     option.textContent = memberName(member) + ' — ' + (member.member_code || '');
     memberSelect.appendChild(option);
+  }
+  if (document.getElementById('richMemberTable')) {
+    setTimeout(() => document.querySelector('[data-route="members"]')?.click(), 0);
   }
 }
 
@@ -87,6 +124,7 @@ function openAddMember() {
     '<div class="vccf-member-modal-head"><div><h2 id="vccfMemberModalTitle">Add Member</h2><div class="hint">Create a member record only. Login account creation is handled separately.</div></div><button class="vccf-member-modal-close" type="button" aria-label="Close">×</button></div>'+
     '<form id="vccfMemberForm" class="vccf-member-form">'+
       '<div class="vccf-member-form-grid">'+
+        '<div class="vccf-member-field full"><label for="vccfMemberPhotoFile">Profile picture</label><div class="vccf-member-photo-upload"><div class="vccf-member-photo-preview" id="vccfMemberPhotoPreview" aria-hidden="true"><span>Photo</span></div><div class="vccf-member-photo-picker"><input id="vccfMemberPhotoFile" name="photo_file" type="file" accept="image/*"><div class="vccf-member-help">Choose a photo from your library or take a new one. Images are resized automatically. Maximum 5 MB.</div></div></div></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberFirst">First name *</label><input id="vccfMemberFirst" name="first_name" autocomplete="given-name" required></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberLast">Last name *</label><input id="vccfMemberLast" name="last_name" autocomplete="family-name" required></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberDisplay">Display name</label><input id="vccfMemberDisplay" name="display_name" placeholder="Optional"></div>'+
@@ -100,7 +138,6 @@ function openAddMember() {
         '<div class="vccf-member-field"><label for="vccfMemberBarangay">Barangay</label><input id="vccfMemberBarangay" name="barangay"></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberCity">City / Municipality</label><input id="vccfMemberCity" name="city_municipality" value="Santa Maria"></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberProvince">Province</label><input id="vccfMemberProvince" name="province" value="Laguna"></div>'+
-        '<div class="vccf-member-field"><label for="vccfMemberPhoto">Profile photo URL</label><input id="vccfMemberPhoto" name="photo_url" type="url" placeholder="Optional"></div>'+
         '<div class="vccf-member-field full"><label for="vccfMemberAddress">Address</label><textarea id="vccfMemberAddress" name="address" placeholder="Street / sitio / subdivision and other address details"></textarea></div>'+
       '</div>'+
       '<div class="vccf-member-form-actions"><button type="button" class="btn secondary" id="vccfMemberCancel">Cancel</button><button type="submit" class="btn" id="vccfMemberSave">Add Member</button></div>'+
@@ -115,6 +152,35 @@ function openAddMember() {
   const escClose = e => { if(e.key === 'Escape') close(); };
   wrap.__vccfEscapeHandler = escClose;
   document.addEventListener('keydown', escClose);
+
+  const photoInput = document.getElementById('vccfMemberPhotoFile');
+  const photoPreview = document.getElementById('vccfMemberPhotoPreview');
+  photoInput.onchange = () => {
+    const file = photoInput.files?.[0];
+    if (wrap.__vccfPhotoObjectUrl) {
+      try { URL.revokeObjectURL(wrap.__vccfPhotoObjectUrl); } catch (_) {}
+      wrap.__vccfPhotoObjectUrl = null;
+    }
+    if (!file) {
+      photoPreview.innerHTML = '<span>Photo</span>';
+      return;
+    }
+    if (!String(file.type || '').startsWith('image/')) {
+      notify('Please choose an image for the profile picture.');
+      photoInput.value = '';
+      photoPreview.innerHTML = '<span>Photo</span>';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      notify('Profile picture must be 5 MB or smaller.');
+      photoInput.value = '';
+      photoPreview.innerHTML = '<span>Photo</span>';
+      return;
+    }
+    wrap.__vccfPhotoObjectUrl = URL.createObjectURL(file);
+    photoPreview.innerHTML = '<img src="'+esc(wrap.__vccfPhotoObjectUrl)+'" alt="Selected profile picture preview">';
+  };
+
   setTimeout(() => document.getElementById('vccfMemberFirst')?.focus(), 30);
 
   document.getElementById('vccfMemberForm').onsubmit = async e => {
@@ -144,7 +210,7 @@ function openAddMember() {
       barangay:String(fd.get('barangay') || '').trim() || null,
       city_municipality:String(fd.get('city_municipality') || '').trim() || null,
       province:String(fd.get('province') || '').trim() || null,
-      photo_url:String(fd.get('photo_url') || '').trim() || null,
+      photo_url:null,
       address:String(fd.get('address') || '').trim()
     };
 
@@ -152,6 +218,12 @@ function openAddMember() {
     save.textContent = 'Saving…';
     msg.textContent = '';
     try {
+      const selectedPhoto = photoInput.files?.[0] || null;
+      if (selectedPhoto) {
+        save.textContent = 'Preparing photo…';
+        payload.photo_url = await profilePhotoFromFile(selectedPhoto);
+        save.textContent = 'Saving…';
+      }
       const db = client();
       if (!state().session?.user || !db) throw new Error('Your session is no longer active. Sign in again and retry.');
       const {data,error} = await db.from('members').insert(payload).select('id,member_code,first_name,last_name,display_name,area_id,is_active,status,member_type,member_category,address,province,city_municipality,barangay,birth_date,photo_url,contact_number,email,created_at').single();
