@@ -36,6 +36,7 @@ const ENHANCEMENTS=[
   ['events-gallery','/vccf-events-gallery.js?v=20260904-1'],
   ['attendance-nav-reconcile','/vccf-attendance-nav-reconcile.js?v=20260904-1'],
   ['service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-2'],
+  ['bible-study-summary-photos','/vccf-bible-study-summary-photos.js?v=20260905-1'],
   ['event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1'],
   ['bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1'],
   ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260904-1'],
