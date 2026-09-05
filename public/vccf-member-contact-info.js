@@ -107,3 +107,17 @@ window.addEventListener('vccf-app-ready',queue);window.addEventListener('focus',
 new MutationObserver(queue).observe(document.documentElement,{childList:true,subtree:true});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',queue,{once:true});else queue();
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_MEMBERS_ADD_BRIDGE__)return;
+window.__VCCF_MEMBERS_ADD_BRIDGE__=true;
+const state=window.VCCF?.getState?.();
+if(!state?.session?.user)return;
+if(document.querySelector('script[data-vccf-members-add-loader]'))return;
+const script=document.createElement('script');
+script.src='/vccf-members-add-loader.js?v=20260905-2';
+script.dataset.vccfMembersAddLoader='1';
+script.onerror=()=>console.error('Add Member loader could not be started. Other VCCF features are unaffected.');
+document.head.appendChild(script);
+})();
