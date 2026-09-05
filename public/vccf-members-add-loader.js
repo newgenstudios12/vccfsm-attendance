@@ -1,7 +1,7 @@
 (() => {
 'use strict';
-if (window.__VCCF_MEMBERS_ADD_LOADER_V2__) return;
-window.__VCCF_MEMBERS_ADD_LOADER_V2__ = true;
+if (window.__VCCF_MEMBERS_ADD_LOADER_V3__) return;
+window.__VCCF_MEMBERS_ADD_LOADER_V3__ = true;
 
 let loading = null;
 let loaded = false;
@@ -49,10 +49,13 @@ function loadForMembersView() {
 }
 
 document.addEventListener('click', event => {
-  if (event.target.closest('[data-view="members"]')) loadForMembersView();
+  if (event.target.closest('[data-view="members"], [data-route="members"]')) loadForMembersView();
 }, true);
 window.addEventListener('vccf-app-ready', loadForMembersView);
+window.addEventListener('focus', loadForMembersView);
+window.addEventListener('popstate', loadForMembersView);
 window.addEventListener('vccf-signed-out', () => {
   document.getElementById('vccfMemberModal')?.remove();
 });
+loadForMembersView();
 })();
