@@ -3,8 +3,11 @@ if(window.__VCCF_PUBLIC_EVENT_POLICY__)return;
 window.__VCCF_PUBLIC_EVENT_POLICY__=true;
 const SUPABASE_URL='https://hvnlstaecjqhjtiojutd.supabase.co';
 const SUPABASE_KEY='sb_publishable_5nUROPeBjpxHf0B77RjO2w_XBXBXc3g';
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const fmt=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+const client=window.supabase?.createClient?.(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+let observer=null;
+let queued=false;
 const isVisibleEvent=(e,now=Date.now())=>{
   if(String(e?.status||'').toLowerCase()!=='scheduled')return false;
   const start=new Date(e.start_at).getTime();
@@ -25,16 +28,33 @@ function renderQuickEvent(event){
   if(event){if(p)p.textContent=event.title+(event.location?' · '+event.location:'');if(meta)meta.textContent=fmt.format(new Date(event.start_at));}
   else{if(p)p.textContent='Upcoming church events will appear here.';if(meta)meta.textContent='Check back soon';}
 }
+function attachObserver(){
+  const targets=[document.getElementById('eventsGrid'),document.getElementById('quickGrid')].filter(Boolean);
+  if(!targets.length)return;
+  if(!observer)observer=new MutationObserver(()=>queuePolicy());
+  observer.disconnect();
+  targets.forEach(t=>observer.observe(t,{childList:true,subtree:true}));
+}
+function queuePolicy(){
+  if(queued)return;
+  queued=true;
+  setTimeout(()=>{queued=false;applyPolicy();},0);
+}
 async function applyPolicy(){
-  if(!window.supabase?.createClient)return;
+  if(!client)return;
   try{
-    const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
     const {data,error}=await client.from('church_events').select('id,title,description,start_at,end_at,location,registration_required,status').order('start_at',{ascending:true});
     if(error)throw error;
     const visible=(data||[]).filter(e=>isVisibleEvent(e));
+    observer?.disconnect();
     renderEvents(visible);
     renderQuickEvent(visible[0]||null);
-  }catch(error){console.warn('Public event policy:',error);}
+    attachObserver();
+  }catch(error){
+    console.warn('Public event policy:',error);
+    attachObserver();
+  }
 }
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(applyPolicy,0),{once:true});else setTimeout(applyPolicy,0);
+function start(){attachObserver();queuePolicy();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
