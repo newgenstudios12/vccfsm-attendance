@@ -34,7 +34,7 @@ const fileSize=n=>{
 async function signedUrl(row,download=false){
   const client=sb();if(!client||!row?.file_path)throw new Error('Sermon file is unavailable.');
   const options=download?{download:row.file_name||'sermon'}:undefined;
-  const result=await client.storage.from('vccf-sermons').createSignedUrl(row.file_path,300,options);
+  const result=await client.storage.from('vccf-sermons').createSignedUrl(row.file_path,900,options);
   if(result.error)throw result.error;
   return result.data.signedUrl;
 }
@@ -108,11 +108,14 @@ async function previewSermon(row){
   wrap.querySelector('#sermonPreviewDownload').onclick=e=>downloadSermon(row,e.currentTarget);
   const body=wrap.querySelector('#sermonPreviewBody');
   try{
-    const url=await signedUrl(row,false);
-    if(fileType(row)==='PDF'){
+    const url=await signedUrl(row,false),type=fileType(row);
+    if(type==='PDF'){
       body.innerHTML='<iframe src="'+attr(url)+'#toolbar=1&navpanes=0" title="'+attr(row.title)+' sermon preview"></iframe>';
+    }else if(type==='PowerPoint'||type==='Word'){
+      const viewer='https://view.officeapps.live.com/op/embed.aspx?src='+encodeURIComponent(url);
+      body.innerHTML='<iframe src="'+attr(viewer)+'" title="'+attr(row.title)+' '+attr(type)+' preview" allowfullscreen></iframe>';
     }else{
-      body.innerHTML='<div class="sermon-nonpdf-preview">'+iconFor(row)+'<h4>'+esc(row.file_name||row.title)+'</h4><p>This file type may not preview reliably inside a browser. You can open it in a new tab or download it.</p><div><a class="btn secondary" href="'+attr(url)+'" target="_blank" rel="noopener">Open File</a></div></div>';
+      body.innerHTML='<div class="sermon-nonpdf-preview">'+iconFor(row)+'<h4>'+esc(row.file_name||row.title)+'</h4><p>This file type cannot be previewed reliably inside a browser. You can open it in a new tab or download it.</p><div><a class="btn secondary" href="'+attr(url)+'" target="_blank" rel="noopener">Open File</a></div></div>';
     }
   }catch(error){body.innerHTML='<div class="sermon-preview-error">'+esc(error.message||'Unable to preview this sermon.')+'</div>'}
 }
@@ -136,7 +139,7 @@ function openForm(row=null){
     '<label>Title<input name="title" required value="'+attr(row?.title||'')+'" placeholder="Sermon title"></label>'+
     '<div class="sermon-form-grid"><label>Preacher / Teacher<input name="preacher" value="'+attr(row?.preacher||'')+'" placeholder="Name"></label><label>Sermon date<input name="sermon_date" type="date" value="'+attr(row?.sermon_date||'')+'"></label></div>'+
     '<label>Description<textarea name="description" rows="4" placeholder="Theme, scripture, or short summary">'+esc(row?.description||'')+'</textarea></label>'+
-    '<label>Sermon file<input name="file" type="file" '+(row?'':'required')+' accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"><span class="sermon-form-help">'+(row?'Leave blank to keep '+esc(row.file_name)+'.':'PDF is recommended for the best in-app preview. Maximum 50 MB.')+'</span></label>'+
+    '<label>Sermon file<input name="file" type="file" '+(row?'':'required')+' accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"><span class="sermon-form-help">'+(row?'Leave blank to keep '+esc(row.file_name)+'.':'PDF, Word, and PowerPoint files can be previewed in-app. Maximum 50 MB.')+'</span></label>'+
     '<div class="sermon-form-actions"><button class="btn secondary sermon-cancel" type="button">Cancel</button><button class="btn" type="submit">'+(row?'Save Changes':'Upload Sermon')+'</button></div><div id="sermonFormMsg" class="sermon-form-msg"></div></form></div>';
   document.body.appendChild(wrap);
   const close=()=>wrap.remove();wrap.querySelector('.sermon-close').onclick=close;wrap.querySelector('.sermon-cancel').onclick=close;wrap.onclick=e=>{if(e.target===wrap)close()};
