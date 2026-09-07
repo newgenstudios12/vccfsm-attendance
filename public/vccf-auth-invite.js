@@ -113,3 +113,47 @@ form.addEventListener('submit',async event=>{
   }
 },true);
 })();
+
+/* Login page: always use a light login surface and provide a return path to the public guest view. */
+(()=>{
+'use strict';
+if(window.__VCCF_LOGIN_GUEST_LIGHT__)return;
+window.__VCCF_LOGIN_GUEST_LIGHT__=true;
+function installLoginGuestLight(){
+  const login=document.getElementById('loginScreen'),card=login?.querySelector('.login-card');
+  if(!login||!card)return;
+  login.dataset.loginTheme='light';
+  if(!document.getElementById('vccfLoginLightStyle')){
+    const style=document.createElement('style');
+    style.id='vccfLoginLightStyle';
+    style.textContent=`
+#loginScreen[data-login-theme="light"]{color-scheme:light;--bg:#f5f6f8;--card:#fff;--card-soft:#fafafa;--text:#15171c;--muted:#6b7280;--line:#e5e7eb;--brand:#d71920;--brand2:#ff8a18;--brand-soft:#fff0ed;--input:#fff;--hover:#f6f7f9;--shadow:0 12px 32px rgba(15,23,42,.08);background:#f7f7f8!important;color:#15171c!important}
+#loginScreen[data-login-theme="light"] .login-panel{background:rgba(250,250,251,.98)!important;border-color:rgba(15,23,42,.08)!important;color:#15171c!important}
+#loginScreen[data-login-theme="light"] .login-card{background:#fff!important;color:#15171c!important;border-color:#e5e7eb!important;box-shadow:0 12px 32px rgba(15,23,42,.08)!important}
+#loginScreen[data-login-theme="light"] .login-brand img{filter:none!important}
+#loginScreen[data-login-theme="light"] .login-brand h1,#loginScreen[data-login-theme="light"] .field label{color:#15171c!important}
+#loginScreen[data-login-theme="light"] .login-brand p{color:#6b7280!important}
+#loginScreen[data-login-theme="light"] .field input{background:#fff!important;color:#15171c!important;border-color:#e5e7eb!important;box-shadow:none}
+#loginScreen[data-login-theme="light"] .field input::placeholder{color:#9ca3af!important}
+#loginScreen[data-login-theme="light"] .field input:focus{border-color:#d71920!important;box-shadow:0 0 0 3px rgba(215,25,32,.08)!important}
+#loginScreen[data-login-theme="light"] #loginBtn{background:linear-gradient(135deg,#d71920,#f0442f 50%,#ff8a18)!important;color:#fff!important}
+#loginScreen[data-login-theme="light"] .msg{color:#b42318}
+.vccf-guest-return{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:10px;padding:11px 14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;text-decoration:none;font-size:.78rem;font-weight:800;transition:background .16s,border-color .16s,color .16s,transform .16s}
+.vccf-guest-return:hover{background:#f9fafb;border-color:#d1d5db;color:#d71920}.vccf-guest-return:active{transform:scale(.99)}.vccf-guest-return:focus-visible{outline:3px solid rgba(215,25,32,.18);outline-offset:2px}
+@media(max-width:600px){#loginScreen[data-login-theme="light"]{background:url('/Churchfront_login.png?v=20260903-2') center/cover no-repeat!important}#loginScreen[data-login-theme="light"] .login-panel{background:transparent!important;border:0!important}#loginScreen[data-login-theme="light"] .login-card{background:rgba(255,255,255,.94)!important}.vccf-guest-return{min-height:44px}}
+`;
+    document.head.appendChild(style);
+  }
+  if(!document.getElementById('guestReturnLink')){
+    const link=document.createElement('a');
+    link.id='guestReturnLink';
+    link.className='vccf-guest-return';
+    link.href='/';
+    link.setAttribute('aria-label','Back to guest page');
+    link.innerHTML='← <span>Back to Guest Page</span>';
+    card.appendChild(link);
+  }
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installLoginGuestLight,{once:true});else installLoginGuestLight();
+window.addEventListener('vccf-signed-out',installLoginGuestLight);
+})();
