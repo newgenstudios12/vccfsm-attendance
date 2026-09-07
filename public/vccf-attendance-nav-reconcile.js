@@ -28,8 +28,16 @@ function reconcile(){
   return false;
 }
 
-function schedule(){[80,300,800,1600,3000].forEach(ms=>setTimeout(reconcile,ms))}
-window.addEventListener('vccf-app-ready',()=>setTimeout(reconcile,120));
+function loadChatModule(){
+  if(window.__VCCF_CHAT_V3__||document.querySelector('script[data-vccf-chat-v3]'))return;
+  const script=document.createElement('script');
+  script.src='/vccf-chat-v3.js?v=20260906-1';
+  script.defer=true;
+  script.dataset.vccfChatV3='1';
+  document.head.appendChild(script);
+}
+function schedule(){loadChatModule();[80,300,800,1600,3000].forEach(ms=>setTimeout(reconcile,ms))}
+window.addEventListener('vccf-app-ready',()=>{loadChatModule();setTimeout(reconcile,120)});
 window.addEventListener('vccf-authenticated',schedule);
 window.addEventListener('focus',()=>setTimeout(reconcile,100));
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule,{once:true});else schedule();
