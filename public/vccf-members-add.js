@@ -1,7 +1,7 @@
 (() => {
 'use strict';
-if (window.__VCCF_MEMBERS_ADD_V4__) return;
-window.__VCCF_MEMBERS_ADD_V4__ = true;
+if (window.__VCCF_MEMBERS_ADD_V5__) return;
+window.__VCCF_MEMBERS_ADD_V5__ = true;
 
 const state = () => window.VCCF?.getState?.() || {};
 const client = () => window.VCCF?.sb;
@@ -9,11 +9,12 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const role = () => String(state().profile?.role || '').toLowerCase().trim().replace(/\s+/g, '_');
 const canAdd = () => ['admin','pastor','area_leader'].includes(role());
 const memberName = m => m?.display_name || [m?.first_name,m?.last_name].filter(Boolean).join(' ') || m?.member_code || 'Member';
-const areaName = id => (state().areas || []).find(a => a.id === id)?.name || 'Unassigned';
+const areaName = id => (state().areas || []).find(a => String(a.id) === String(id))?.name || 'Unassigned';
 const PSGC_API = 'https://psgc.cloud/api/v2';
 const psgcCache = new Map();
 const psgcCode = x => String(x?.code || x?.psgc_code || '');
-const psgcName = x => String(x?.name || x?.area_name || '');
+const normalizePlaceName = value => String(value || '').trim().replace(/\bLos Banos\b/gi, 'Los Baños');
+const psgcName = x => normalizePlaceName(x?.name || x?.area_name || '');
 
 if (!state().session?.user || !client()) {
   console.warn('Add Member skipped: authenticated app state is not ready.');
@@ -33,7 +34,7 @@ function notify(message, good=false) {
 function activeAreaOptions(selected='') {
   return '<option value="">Unassigned</option>' + (state().areas || [])
     .filter(a => a.is_active !== false)
-    .map(a => '<option value="'+esc(a.id)+'" '+(a.id===selected?'selected':'')+'>'+esc(a.name)+'</option>')
+    .map(a => '<option value="'+esc(a.id)+'" '+(String(a.id)===String(selected)?'selected':'')+'>'+esc(a.name)+'</option>')
     .join('');
 }
 
@@ -56,27 +57,30 @@ async function psgcGet(path) {
 function fillAddressSelect(select, items, placeholder, currentCode='', currentName='') {
   const sorted = [...items]
     .filter(x => psgcCode(x) && psgcName(x))
-    .sort((a,b) => psgcName(a).localeCompare(psgcName(b)));
-  select.innerHTML = '<option value="">'+esc(placeholder)+'</option>' + sorted.map(x =>
-    '<option value="'+esc(psgcCode(x))+'" data-name="'+esc(psgcName(x))+'">'+esc(psgcName(x))+'</option>'
-  ).join('');
+    .sort((a,b) => psgcName(a).localeCompare(psgcName(b), undefined, {sensitivity:'base'}));
+  select.innerHTML = '<option value="">'+esc(placeholder)+'</option>' + sorted.map(x => {
+    const name = psgcName(x);
+    return '<option value="'+esc(psgcCode(x))+'" data-name="'+esc(name)+'">'+esc(name)+'</option>';
+  }).join('');
   let found = false;
   if (currentCode) {
     select.value = String(currentCode);
     found = !!select.value;
   }
   if (!found && currentName) {
-    const hit = sorted.find(x => psgcName(x).localeCompare(String(currentName), undefined, {sensitivity:'base'}) === 0);
+    const wanted = normalizePlaceName(currentName);
+    const hit = sorted.find(x => psgcName(x).localeCompare(wanted, undefined, {sensitivity:'base'}) === 0);
     if (hit) {
       select.value = psgcCode(hit);
       found = true;
     }
   }
   if (!found && currentName) {
+    const corrected = normalizePlaceName(currentName);
     const option = document.createElement('option');
-    option.value = 'legacy:' + currentName;
-    option.dataset.name = currentName;
-    option.textContent = currentName + ' (current)';
+    option.value = 'legacy:' + corrected;
+    option.dataset.name = corrected;
+    option.textContent = corrected + ' (current)';
     select.appendChild(option);
     select.value = option.value;
   }
@@ -211,7 +215,7 @@ function closeModal() {
 
 function syncNewMember(member) {
   const s = state();
-  if (member && Array.isArray(s.members) && !s.members.some(m => m.id === member.id)) {
+  if (member && Array.isArray(s.members) && !s.members.some(m => String(m.id) === String(member.id))) {
     s.members.push(member);
     s.members.sort((a,b) => memberName(a).localeCompare(memberName(b)));
   }
@@ -221,7 +225,7 @@ function syncNewMember(member) {
   const active = document.getElementById('activeMembers');
   if (active) active.textContent = String((s.members || []).filter(m => m.is_active && String(m.status || '').toLowerCase() !== 'inactive').length);
   const memberSelect = document.getElementById('memberSelect');
-  if (memberSelect && member?.is_active && !memberSelect.querySelector('option[value="'+CSS.escape(member.id)+'"]')) {
+  if (memberSelect && member?.is_active && !memberSelect.querySelector('option[value="'+CSS.escape(String(member.id))+'"]')) {
     const option = document.createElement('option');
     option.value = member.id;
     option.textContent = memberName(member) + ' — ' + (member.member_code || '');
@@ -261,7 +265,6 @@ function openAddMember() {
         '<div class="vccf-member-field full"><label for="vccfMemberPhotoFile">Profile picture</label><div class="vccf-member-photo-upload"><div class="vccf-member-photo-preview" id="vccfMemberPhotoPreview" aria-hidden="true"><span>Photo</span></div><div class="vccf-member-photo-picker"><input id="vccfMemberPhotoFile" name="photo_file" type="file" accept="image/*"><div class="vccf-member-help">Choose a photo from your library or take a new one. Images are resized automatically. Maximum 5 MB.</div></div></div></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberFirst">First name *</label><input id="vccfMemberFirst" name="first_name" autocomplete="given-name" required></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberLast">Last name *</label><input id="vccfMemberLast" name="last_name" autocomplete="family-name" required></div>'+
-        '<div class="vccf-member-field"><label for="vccfMemberDisplay">Display name</label><input id="vccfMemberDisplay" name="display_name" placeholder="Optional"></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberArea">Area</label>'+areaControl+'</div>'+
         '<div class="vccf-member-field"><label for="vccfMemberType">Member type *</label><select id="vccfMemberType" name="member_type">'+typeOptions+'</select></div>'+
         '<div class="vccf-member-field"><label for="vccfMemberCategory">Category</label><select id="vccfMemberCategory" name="member_category"><option value="">None</option><option value="Youth">Youth</option><option value="Couples">Couples</option></select></div>'+
@@ -326,7 +329,11 @@ function openAddMember() {
     const fd = new FormData(form);
     const first = String(fd.get('first_name') || '').trim();
     const last = String(fd.get('last_name') || '').trim();
-    if (!first || !last) return;
+    if (!first || !last) {
+      msg.textContent = 'First name and last name are required.';
+      msg.style.color = '#b42318';
+      return;
+    }
 
     const provinceSelect = form.elements.province_psgc_code;
     const citySelect = form.elements.city_municipality_psgc_code;
@@ -338,9 +345,10 @@ function openAddMember() {
       msg.style.color = '#b42318';
       return;
     }
-    const provinceName = provinceSelect?.selectedOptions?.[0]?.dataset?.name || provinceSelect?.selectedOptions?.[0]?.textContent || '';
-    const cityName = citySelect?.selectedOptions?.[0]?.dataset?.name || citySelect?.selectedOptions?.[0]?.textContent || '';
-    const barangayName = barangaySelect?.selectedOptions?.[0]?.dataset?.name || (barangaySelect?.value ? barangaySelect?.selectedOptions?.[0]?.textContent : '') || '';
+
+    const provinceName = normalizePlaceName(provinceSelect?.selectedOptions?.[0]?.dataset?.name || provinceSelect?.selectedOptions?.[0]?.textContent || '');
+    const cityName = normalizePlaceName(citySelect?.selectedOptions?.[0]?.dataset?.name || citySelect?.selectedOptions?.[0]?.textContent || '');
+    const barangayName = normalizePlaceName(barangaySelect?.selectedOptions?.[0]?.dataset?.name || (barangaySelect?.value ? barangaySelect?.selectedOptions?.[0]?.textContent : '') || '');
     const detail = String(fd.get('address') || '').trim();
     const canonicalAddress = [detail, barangayName, cityName, provinceName].filter(Boolean).join(', ');
 
@@ -349,7 +357,6 @@ function openAddMember() {
     const payload = {
       first_name:first,
       last_name:last,
-      display_name:String(fd.get('display_name') || '').trim() || null,
       area_id:areaId || null,
       member_type:String(fd.get('member_type') || 'Member'),
       member_category:String(fd.get('member_category') || '').trim() || null,
@@ -380,6 +387,7 @@ function openAddMember() {
       }
       const db = client();
       if (!state().session?.user || !db) throw new Error('Your session is no longer active. Sign in again and retry.');
+      // display_name is a GENERATED ALWAYS database column. Do not send it on INSERT.
       const {data,error} = await db.from('members').insert(payload).select('id,member_code,first_name,last_name,display_name,area_id,is_active,status,member_type,member_category,address,province,province_psgc_code,city_municipality,city_municipality_psgc_code,barangay,barangay_psgc_code,birth_date,photo_url,contact_number,email,created_at').single();
       if (error) throw error;
       syncNewMember(data);
