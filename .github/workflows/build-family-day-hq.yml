@@ -1,0 +1,43 @@
+name: Build Family Day HQ asset
+
+on:
+  push:
+    branches:
+      - preview/family-day-hq
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Assemble high-quality background
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat public/.family-avif-parts/part-*.txt | tr -d '\n\r ' | base64 -d > public/vccf-family-day-2026-hq.avif
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('public/guest.html')
+          text = p.read_text()
+          text = text.replace("url('/vccf-family-day-2026-v2.webp?v=2')", "url('/vccf-family-day-2026-hq.avif?v=1')")
+          p.write_text(text)
+          PY
+          test "$(wc -c < public/vccf-family-day-2026-hq.avif)" -gt 60000
+          rm -rf public/.family-avif-parts public/.family-hq-parts
+
+      - name: Commit assembled asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: use high-quality Family Day guest background'
+          git push
