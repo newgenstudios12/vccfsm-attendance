@@ -1,0 +1,45 @@
+name: Wire Worship Ministry module
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/install-worship-ministry.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  wire-module:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add Worship Ministry script to app shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('public/index.html')
+          text = path.read_text(encoding='utf-8')
+          tag = '<script src="/vccf-worship-ministry.js?v=20260907-1"></script>'
+          if tag in text:
+              raise SystemExit(0)
+          anchor = '<script src="/vccf-band-fund.js?v=20260904-3"></script>'
+          if anchor not in text:
+              raise SystemExit('Expected app-shell anchor was not found in public/index.html')
+          path.write_text(text.replace(anchor, anchor + tag, 1), encoding='utf-8')
+          PY
+
+          if git diff --quiet -- public/index.html; then
+            exit 0
+          fi
+          git config user.name 'VCCF Deploy Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add public/index.html
+          git commit -m 'Load Worship Ministry module in app shell'
+          git push origin HEAD:main
