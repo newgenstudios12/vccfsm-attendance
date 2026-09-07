@@ -38,6 +38,10 @@ async function load(){
   data={albums:albums.data||[],photos:photos.data||[],summaries:summaries.data||[],summaryPhotos:summaryPhotos.data||[],events:events.data||[],eventPhotos:eventPhotos.data||[]};
 }
 function cover(album){return album.photos?.[0]?.image_url||''}
+function downloadUrl(url){
+  if(!url)return '#';
+  return url.includes('/storage/v1/object/public/')?url+(url.includes('?')?'&':'?')+'download=':url;
+}
 function render(){
   const el=document.getElementById('gallery');if(!el)return;
   const albums=allAlbums();
@@ -65,7 +69,7 @@ function openAlbum(id){
 }
 function photoGrid(album){
   if(!album.photos?.length)return '<div class="gallery-empty card"><b>No photos in this album yet</b><span>'+(album.auto?'Photos attached to this Summary or Event will appear here automatically.':'Use Add photos to upload church photos.')+'</span></div>';
-  return album.photos.map(p=>'<article class="gallery-photo-card"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"><div><span>'+esc(p.caption||'Church photo')+'</span>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></article>').join('');
+  return album.photos.map(p=>'<article class="gallery-photo-card"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"><div><span>'+esc(p.caption||'Church photo')+'</span><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><a href="'+esc(downloadUrl(p.image_url))+'" download target="_blank" rel="noopener" style="color:var(--brand);font-size:.62rem;font-weight:900;text-decoration:none;white-space:nowrap">↓ Download</a>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></div></article>').join('');
 }
 function bindPhotoButtons(album){document.querySelectorAll('[data-delete-gallery-photo]').forEach(b=>b.onclick=()=>deletePhoto(album,b.dataset.deleteGalleryPhoto))}
 function renderCreateAlbum(){
