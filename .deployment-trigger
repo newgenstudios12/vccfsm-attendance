@@ -1,4 +1,4 @@
 VCCF production deployment trigger
-Last feature: Square-based pledge campaign module
-Source commit: 337107185dd36578bdbd669959681d1bc1b376c6
-Pledge visual: ₱1,000 default per square; green received, gold pledged, gray remaining
+Recovery deploy: restore pre-gallery-download stable source after responsiveness regression
+Restored source commit: c75bea9e70d2df9ad055fbcbb8bfbad4e9e6f7a5
+Triggered: 2026-09-07 09:19 Asia/Manila
