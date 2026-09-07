@@ -42,6 +42,24 @@ function downloadUrl(url){
   if(!url)return '#';
   return url.includes('/storage/v1/object/public/')?url+(url.includes('?')?'&':'?')+'download=':url;
 }
+function openPhotoPreview(photo,album){
+  if(!photo?.image_url)return;
+  document.getElementById('galleryImagePreview')?.remove();
+  const caption=photo.caption||'Church photo';
+  const dialog=document.createElement('dialog');
+  dialog.id='galleryImagePreview';
+  dialog.className='gallery-image-preview';
+  dialog.innerHTML='<div class="gallery-image-preview-shell"><div class="gallery-image-preview-head"><div><span class="gallery-kicker">PHOTO PREVIEW</span><strong>'+esc(caption)+'</strong></div><button type="button" class="gallery-image-preview-close" data-close-gallery-preview aria-label="Close photo preview">×</button></div><div class="gallery-image-preview-stage"><img src="'+esc(photo.image_url)+'" alt="'+esc(caption)+'"></div><div class="gallery-image-preview-footer"><span>'+esc(album?.title||'VCCF Gallery')+'</span><a class="btn gallery-image-preview-download" href="'+esc(downloadUrl(photo.image_url))+'" download target="_blank" rel="noopener">↓ Download</a></div></div>';
+  document.body.appendChild(dialog);
+  const closePreview=()=>{
+    if(typeof dialog.close==='function'&&dialog.open)dialog.close();
+    else dialog.remove();
+  };
+  dialog.querySelector('[data-close-gallery-preview]').onclick=closePreview;
+  dialog.addEventListener('click',event=>{if(event.target===dialog)closePreview()});
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+}
 function render(){
   const el=document.getElementById('gallery');if(!el)return;
   const albums=allAlbums();
@@ -69,9 +87,13 @@ function openAlbum(id){
 }
 function photoGrid(album){
   if(!album.photos?.length)return '<div class="gallery-empty card"><b>No photos in this album yet</b><span>'+(album.auto?'Photos attached to this Summary or Event will appear here automatically.':'Use Add photos to upload church photos.')+'</span></div>';
-  return album.photos.map(p=>'<article class="gallery-photo-card"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"><div><span>'+esc(p.caption||'Church photo')+'</span><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><a href="'+esc(downloadUrl(p.image_url))+'" download target="_blank" rel="noopener" style="color:var(--brand);font-size:.62rem;font-weight:900;text-decoration:none;white-space:nowrap">↓ Download</a>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></div></article>').join('');
+  return album.photos.map((p,i)=>'<article class="gallery-photo-card"><button type="button" class="gallery-photo-preview-trigger" data-gallery-photo-preview="'+i+'" aria-label="Preview '+esc(p.caption||'church photo')+'"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"><span class="gallery-photo-preview-hint">Preview</span></button><div><span>'+esc(p.caption||'Church photo')+'</span>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></article>').join('');
 }
-function bindPhotoButtons(album){document.querySelectorAll('[data-delete-gallery-photo]').forEach(b=>b.onclick=()=>deletePhoto(album,b.dataset.deleteGalleryPhoto))}
+function bindPhotoButtons(album){
+  const grid=document.getElementById('galleryPhotoGrid');if(!grid)return;
+  grid.querySelectorAll('[data-gallery-photo-preview]').forEach(b=>b.onclick=()=>openPhotoPreview(album.photos?.[Number(b.dataset.galleryPhotoPreview)],album));
+  grid.querySelectorAll('[data-delete-gallery-photo]').forEach(b=>b.onclick=()=>deletePhoto(album,b.dataset.deleteGalleryPhoto));
+}
 function renderCreateAlbum(){
   if(!isAdmin())return;
   const el=document.getElementById('gallery'),today=phDay(new Date());
