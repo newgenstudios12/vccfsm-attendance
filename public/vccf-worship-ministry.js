@@ -74,12 +74,20 @@
     if(!sb) return false;
     const ur=await sb.auth.getUser(); user=ur.data?.user || null; if(!user) return false;
     const pr=await sb.from('profiles').select('user_id,role,member_id,area_id,display_name').eq('user_id',user.id).maybeSingle();
-    if(pr.error) throw pr.error; profile=pr.data||{}; if(!profile.member_id) return false;
+    if(pr.error) throw pr.error; profile=pr.data||{};
+    const isPrivileged=['admin','pastor'].includes(norm(profile.role));
+    if(isPrivileged){
+      myMinistries=[];
+      canAccess=true;
+      canManage=true;
+      return true;
+    }
+    if(!profile.member_id) return false;
     const mr=await sb.from('member_ministries').select('member_id,ministry_id,role_title,ministries(name)').eq('member_id',profile.member_id);
     if(mr.error) throw mr.error; myMinistries=mr.data||[];
     canAccess=myMinistries.some(x=>isAllowedMinistry(ministryName(x)));
     if(!canAccess) return false;
-    canManage=['admin','pastor'].includes(norm(profile.role)) || myMinistries.some(x=>isAllowedMinistry(ministryName(x)) && MANAGER_ROLE_RE.test(String(x.role_title||'')));
+    canManage=myMinistries.some(x=>isAllowedMinistry(ministryName(x)) && MANAGER_ROLE_RE.test(String(x.role_title||'')));
     return true;
   }
 
@@ -244,7 +252,7 @@
       const nonEmpty=titles.filter(Boolean);if(nonEmpty.length>6)throw new Error('A worship line-up can contain no more than six songs.');
       if(status==='Submitted' && nonEmpty.length===0)throw new Error('Add at least one worship song before submitting.');
       const s=schedules.find(x=>x.id===scheduleId);const wl=(s?.worship_schedule_assignments||[]).find(a=>norm(a.ministry_role)==='worship leader');
-      const payload={schedule_id:scheduleId,worship_leader_member_id:wl?.member_id||profile.member_id,status,offertory_title:String(f.get('offertory_title')||'').trim()||null,offertory_artist:String(f.get('offertory_artist')||'').trim()||null,offertory_key:String(f.get('offertory_key')||'').trim()||null,offertory_reference_url:String(f.get('offertory_reference_url')||'').trim()||null,offertory_notes:String(f.get('offertory_notes')||'').trim()||null,revision_note:status==='Submitted'?null:(existing?.revision_note||null),submitted_at:status==='Submitted'?new Date().toISOString():(existing?.submitted_at||null),updated_by:user.id,updated_at:new Date().toISOString()};
+      const payload={schedule_id:scheduleId,worship_leader_member_id:wl?.member_id||profile.member_id||null,status,offertory_title:String(f.get('offertory_title')||'').trim()||null,offertory_artist:String(f.get('offertory_artist')||'').trim()||null,offertory_key:String(f.get('offertory_key')||'').trim()||null,offertory_reference_url:String(f.get('offertory_reference_url')||'').trim()||null,offertory_notes:String(f.get('offertory_notes')||'').trim()||null,revision_note:status==='Submitted'?null:(existing?.revision_note||null),submitted_at:status==='Submitted'?new Date().toISOString():(existing?.submitted_at||null),updated_by:user.id,updated_at:new Date().toISOString()};
       let lineupId=existing?.id;
       if(lineupId){const r=await sb.from('worship_lineups').update(payload).eq('id',lineupId);if(r.error)throw r.error;}
       else{payload.created_by=user.id;const r=await sb.from('worship_lineups').insert(payload).select('id').single();if(r.error)throw r.error;lineupId=r.data.id;}
