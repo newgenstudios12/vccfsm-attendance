@@ -7,9 +7,9 @@
     'worship','worship ministry','creative ministry','creative arts','creative arts ministry',
     'music','music ministry','band','band ministry'
   ]);
-  const ROLE_OPTIONS = [
+  const SERVICE_ROLE_OPTIONS = [
     'Worship Leader','Backup Singer','Keyboard','Acoustic Guitar','Electric Guitar',
-    'Bass','Drums','Media / Projection','Sound / Technical','Other'
+    'Bass','Drums','Creative Arts','Media / Projection','Sound / Technical','Other'
   ];
   const MANAGER_ROLE_RE = /(leader|head|coordinator|director)/i;
   const $ = (s, ctx=document) => ctx.querySelector(s);
@@ -21,21 +21,13 @@
   const memberName = (m) => m?.display_name || [m?.first_name,m?.last_name].filter(Boolean).join(' ') || 'Member';
 
   let sb=null, user=null, profile=null, myMinistries=[], canAccess=false, canManage=false;
-  let schedules=[], members=[];
+  let schedules=[], members=[], activeMinistryRoles=[];
 
   function addStyles(){
     if ($('#vccf-worship-ministry-css')) return;
     const s=document.createElement('style');
     s.id='vccf-worship-ministry-css';
     s.textContent=`
-      .vccf-worship-nav-group{display:grid;gap:4px;min-width:0}
-      .vccf-worship-nav-group .vccf-worship-parent{display:flex!important;align-items:center;justify-content:space-between;gap:8px;width:100%}
-      .vccf-worship-nav-group .vccf-worship-parent .wn-label{display:inline-flex;align-items:center;gap:9px;min-width:0}
-      .vccf-worship-nav-group .wn-chevron{font-size:.72rem;transition:transform .18s ease}
-      .vccf-worship-nav-group.open .wn-chevron{transform:rotate(180deg)}
-      .vccf-worship-subnav{display:none;gap:4px;margin:0 0 2px 13px;padding-left:10px;border-left:2px solid color-mix(in srgb,var(--brand) 24%,transparent)}
-      .vccf-worship-nav-group.open .vccf-worship-subnav{display:grid}
-      .vccf-worship-subnav button{font-size:.76rem!important;padding:9px 10px!important}
       .vccf-worship-view{--wm-gap:14px}
       .wm-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;margin-bottom:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 9%,var(--panel,#fff)),var(--panel,#fff));border:1px solid var(--line);border-radius:18px}
       .wm-hero h2{margin:0 0 5px;font-size:1.25rem}.wm-muted{color:var(--muted);font-size:.82rem}.wm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--wm-gap)}
@@ -52,7 +44,6 @@
       .wm-song{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:9px}.wm-song-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:900;font-size:.82rem}.wm-song-grid{display:grid;grid-template-columns:1.3fr 1fr .45fr;gap:8px}.wm-song-grid .wide{grid-column:1/-1}
       .wm-offertory{border:1px dashed color-mix(in srgb,var(--brand) 40%,var(--line));border-radius:14px;padding:13px;margin-top:12px}.wm-lineup-summary{display:grid;gap:7px;margin-top:8px}.wm-lineup-song{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:.82rem}.wm-lineup-song:first-child{border-top:0}.wm-num{width:24px;height:24px;border-radius:8px;background:color-mix(in srgb,var(--brand) 10%,transparent);display:grid;place-items:center;font-weight:900;color:var(--brand);font-size:.72rem}
       .wm-toast{position:fixed;right:18px;bottom:18px;z-index:9999;background:#16181d;color:#fff;padding:11px 14px;border-radius:12px;box-shadow:0 14px 32px rgba(0,0,0,.22);font-size:.82rem;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.wm-toast.show{opacity:1;transform:none}
-      @media(max-width:900px){.vccf-worship-nav-group .vccf-worship-parent{justify-content:center}.vccf-worship-nav-group .wn-label span:last-child,.vccf-worship-nav-group .wn-chevron{display:none}.vccf-worship-subnav{margin-left:0;padding-left:0;border-left:0}.vccf-worship-subnav button{font-size:0!important;text-align:center}.vccf-worship-subnav button:before{font-size:1rem}.vccf-worship-subnav button[data-worship-view="schedule"]:before{content:'◷'}.vccf-worship-subnav button[data-worship-view="lineup"]:before{content:'♫'}}
       @media(max-width:760px){.wm-grid{grid-template-columns:1fr}.wm-hero{flex-direction:column}.wm-form .wm-row{grid-template-columns:1fr}.wm-assignment-row{grid-template-columns:1fr 1fr}.wm-assignment-row .wm-remove-wrap{grid-column:1/-1}.wm-song-grid{grid-template-columns:1fr 1fr}.wm-song-grid .wide{grid-column:1/-1}}
       @media(max-width:520px){.wm-card{padding:13px;border-radius:15px}.wm-song-grid,.wm-assignment-row{grid-template-columns:1fr}.wm-assignment-row .wm-remove-wrap{grid-column:auto}.wm-role{grid-template-columns:1fr}.wm-hero{padding:15px}}
     `;
@@ -103,28 +94,45 @@
 
   function mountNav(){
     if(!canAccess) return;
-    const nav=$('.nav'); if(!nav || $('.vccf-worship-nav-group',nav)) return;
-    const group=document.createElement('div'); group.className='vccf-worship-nav-group'; group.dataset.worshipNav='1';
+    const nav=$('.nav'); if(!nav || $('#worshipNavGroup',nav)) return;
+    const group=document.createElement('div');
+    group.id='worshipNavGroup';
+    group.className='nav-group vccf-worship-nav-group';
+    group.dataset.worshipNav='1';
+    const musicIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>';
+    const chevron='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
     group.innerHTML=`
-      <button type="button" class="vccf-worship-parent" aria-expanded="false" title="Worship Ministry">
-        <span class="wn-label"><span aria-hidden="true">♫</span><span>Worship Ministry</span></span><span class="wn-chevron">⌄</span>
+      <button class="nav-group-toggle" type="button" aria-expanded="false" title="Worship Ministry">
+        <span class="nav-icon">${musicIcon}</span><span class="nav-label">Worship Ministry</span><span class="nav-chevron">${chevron}</span>
       </button>
-      <div class="vccf-worship-subnav">
-        <button type="button" data-worship-view="schedule" title="Schedule of Ministers">Schedule of Ministers</button>
-        <button type="button" data-worship-view="lineup" title="Worship Line-Up">Worship Line-Up</button>
-      </div>`;
-    const band=$('[data-band-fund-nav]',nav) || Array.from(nav.children).find(x=>/band fund/i.test(x.textContent||''));
-    if(band && band.nextSibling) nav.insertBefore(group,band.nextSibling); else nav.appendChild(group);
-    $('.vccf-worship-parent',group).addEventListener('click',()=>{
-      group.classList.toggle('open');$('.vccf-worship-parent',group).setAttribute('aria-expanded',group.classList.contains('open')?'true':'false');
+      <div class="nav-children"><div class="nav-children-inner">
+        <button class="nav-item nav-child" type="button" data-worship-view="schedule"><span class="nav-label">Schedule of Ministers</span></button>
+        <button class="nav-item nav-child" type="button" data-worship-view="lineup"><span class="nav-label">Worship Line-Up</span></button>
+      </div></div>`;
+    const finance=$('#financeNavGroup',nav);
+    if(finance) finance.insertAdjacentElement('afterend',group);
+    else {
+      const more=$$('.nav-section-label',nav).find(x=>norm(x.textContent)==='more');
+      if(more) nav.insertBefore(group,more); else nav.appendChild(group);
+    }
+    const toggle=$('.nav-group-toggle',group);
+    toggle.addEventListener('click',()=>{
+      const open=group.classList.toggle('open');
+      toggle.setAttribute('aria-expanded',String(open));
     });
-    $$('.vccf-worship-subnav button',group).forEach(b=>b.addEventListener('click',()=>showModule(b.dataset.worshipView)));
+    $$('[data-worship-view]',group).forEach(b=>b.addEventListener('click',()=>showModule(b.dataset.worshipView)));
   }
 
   function markNav(view){
     $$('.nav button').forEach(b=>b.classList.remove('active'));
-    const group=$('.vccf-worship-nav-group'); if(group){group.classList.add('open');$('.vccf-worship-parent',group)?.setAttribute('aria-expanded','true');}
-    $(`.vccf-worship-subnav button[data-worship-view="${view}"]`)?.classList.add('active');
+    const group=$('#worshipNavGroup');
+    if(group){
+      group.classList.add('open');
+      const toggle=$('.nav-group-toggle',group);
+      toggle?.setAttribute('aria-expanded','true');
+      toggle?.classList.add('active');
+    }
+    $(`#worshipNavGroup [data-worship-view="${view}"]`)?.classList.add('active');
   }
 
   async function showModule(view){
@@ -149,8 +157,29 @@
     if(r.error) throw r.error;members=r.data||[];return members;
   }
 
+  async function loadMinistryRoles(){
+    const r=await sb.from('ministries').select('name,is_active').eq('is_active',true).order('name');
+    if(r.error){console.warn('Unable to load ministry role options:',r.error);activeMinistryRoles=[];return activeMinistryRoles;}
+    activeMinistryRoles=(r.data||[]).map(x=>String(x.name||'').trim()).filter(Boolean);
+    return activeMinistryRoles;
+  }
+
+  function assignmentRoleOptions(){
+    const seen=new Set();
+    return [...SERVICE_ROLE_OPTIONS,...activeMinistryRoles].filter(name=>{
+      const key=norm(name);if(!key||seen.has(key))return false;seen.add(key);return true;
+    });
+  }
+
+  function assignmentRoleOptionsHtml(){
+    const service=SERVICE_ROLE_OPTIONS.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    const serviceKeys=new Set(SERVICE_ROLE_OPTIONS.map(norm));
+    const ministry=activeMinistryRoles.filter(r=>!serviceKeys.has(norm(r))).map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    return `<optgroup label="Service Roles">${service}</optgroup>${ministry?`<optgroup label="Existing Ministries">${ministry}</optgroup>`:''}`;
+  }
+
   function assignmentRows(s){
-    const a=(s.worship_schedule_assignments||[]).slice().sort((x,y)=>ROLE_OPTIONS.indexOf(x.ministry_role)-ROLE_OPTIONS.indexOf(y.ministry_role));
+    const order=assignmentRoleOptions();const a=(s.worship_schedule_assignments||[]).slice().sort((x,y)=>{const xi=order.indexOf(x.ministry_role),yi=order.indexOf(y.ministry_role);return (xi<0?999:xi)-(yi<0?999:yi)||String(x.ministry_role).localeCompare(String(y.ministry_role));});
     return a.length?a.map(x=>`<div class="wm-role"><b>${esc(x.ministry_role)}</b><span>${esc(memberName(x.members))}${x.notes?`<small class="wm-muted" style="display:block">${esc(x.notes)}</small>`:''}</span></div>`).join(''):'<div class="wm-empty" style="padding:8px 0">No ministers assigned yet.</div>';
   }
 
@@ -162,7 +191,7 @@
     const root=$('#worshipScheduleRoot');if(!root)return;
     root.innerHTML='<div class="wm-card"><div class="wm-empty">Loading ministry schedule…</div></div>';
     try{
-      await Promise.all([loadSchedules(),canManage?loadMembers():Promise.resolve([])]);
+      await Promise.all([loadSchedules(),canManage?Promise.all([loadMembers(),loadMinistryRoles()]):Promise.resolve([])]);
       const ordered=schedules.slice().sort((a,b)=>a.service_date.localeCompare(b.service_date));
       const upcoming=ordered.filter(x=>x.service_date>=todayPH());
       const recent=ordered.filter(x=>x.service_date<todayPH()).slice(-6).reverse();
@@ -197,7 +226,7 @@
     if(!canManage)return;const s=schedules.find(x=>x.id===id);if(!s)return;await loadMembers();
     const activeMembers=members.filter(m=>m.is_active!==false && norm(m.status)!=='inactive').sort((a,b)=>memberName(a).localeCompare(memberName(b)));
     const ed=$('#wmScheduleEditor');if(!ed)return;
-    ed.innerHTML=`<div class="wm-card"><div class="wm-service-head"><div><h3 style="margin:0">Manage Ministers — ${esc(datePH(s.service_date))}</h3><div class="wm-muted">Add or remove assignments for this Sunday.</div></div><button class="wm-btn secondary" id="wmCloseEditor">Close</button></div><form id="wmAddAssignment" class="wm-form"><div class="wm-assignment-row"><div><label>Role</label><select name="ministry_role">${ROLE_OPTIONS.map(r=>`<option>${esc(r)}</option>`).join('')}</select></div><div><label>Minister</label><select name="member_id" required><option value="">Select member</option>${activeMembers.map(m=>`<option value="${m.id}">${esc(memberName(m))}</option>`).join('')}</select></div><div><label>Notes</label><input name="notes" placeholder="Optional"></div><div><button class="wm-btn" type="submit">Add</button></div></div></form><div class="wm-role-list" style="margin-top:10px">${(s.worship_schedule_assignments||[]).map(a=>`<div class="wm-role" style="grid-template-columns:150px 1fr auto"><b>${esc(a.ministry_role)}</b><span>${esc(memberName(a.members))}${a.notes?`<small class="wm-muted" style="display:block">${esc(a.notes)}</small>`:''}</span><button class="wm-btn secondary" data-remove-assignment="${a.id}">Remove</button></div>`).join('')||'<div class="wm-empty">No ministers assigned yet.</div>'}</div></div>`;
+    ed.innerHTML=`<div class="wm-card"><div class="wm-service-head"><div><h3 style="margin:0">Manage Ministers — ${esc(datePH(s.service_date))}</h3><div class="wm-muted">Add or remove assignments for this Sunday.</div></div><button class="wm-btn secondary" id="wmCloseEditor">Close</button></div><form id="wmAddAssignment" class="wm-form"><div class="wm-assignment-row"><div><label>Role</label><select name="ministry_role">${assignmentRoleOptionsHtml()}</select></div><div><label>Minister</label><select name="member_id" required><option value="">Select member</option>${activeMembers.map(m=>`<option value="${m.id}">${esc(memberName(m))}</option>`).join('')}</select></div><div><label>Notes</label><input name="notes" placeholder="Optional"></div><div><button class="wm-btn" type="submit">Add</button></div></div></form><div class="wm-role-list" style="margin-top:10px">${(s.worship_schedule_assignments||[]).map(a=>`<div class="wm-role" style="grid-template-columns:150px 1fr auto"><b>${esc(a.ministry_role)}</b><span>${esc(memberName(a.members))}${a.notes?`<small class="wm-muted" style="display:block">${esc(a.notes)}</small>`:''}</span><button class="wm-btn secondary" data-remove-assignment="${a.id}">Remove</button></div>`).join('')||'<div class="wm-empty">No ministers assigned yet.</div>'}</div></div>`;
     $('#wmCloseEditor',ed).addEventListener('click',()=>ed.innerHTML='');
     $('#wmAddAssignment',ed).addEventListener('submit',async e=>{
       e.preventDefault();const f=new FormData(e.currentTarget);const btn=e.currentTarget.querySelector('button[type=submit]');btn.disabled=true;
