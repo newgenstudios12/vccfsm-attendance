@@ -1,0 +1,14 @@
+(()=>{
+'use strict';
+if(window.__VCCF_LEADER_USER_PROFILE__)return;window.__VCCF_LEADER_USER_PROFILE__=true;
+const V=()=>window.VCCF,S=()=>V()?.getState?.()||{},sb=()=>V()?.sb;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let profiles=[],memberId=null,loading=false;
+function styles(){if(document.getElementById('vccfLeaderUserProfileStyles'))return;const s=document.createElement('style');s.id='vccfLeaderUserProfileStyles';s.textContent=`
+.vccf-self-leader-about{margin-top:16px;padding-top:15px;border-top:1px solid var(--line)}.vccf-self-leader-about-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}.vccf-self-leader-about-head strong{font-size:.88rem}.vccf-self-leader-badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:rgba(215,25,32,.08);color:var(--brand);font-size:.64rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase}.vccf-self-leader-about p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.62}.vccf-self-leader-note{margin-top:8px;color:var(--muted);font-size:.7rem;font-weight:700}
+`;document.head.appendChild(s)}
+async function load(){const mid=S().profile?.member_id;if(!mid||!sb()||loading)return;memberId=mid;loading=true;try{const r=await sb().from('site_people').select('id,kind,name,description,sort_order').eq('member_id',mid).order('sort_order');if(r.error)throw r.error;profiles=r.data||[];render()}catch(e){console.warn('Leader user profile:',e)}finally{loading=false}}
+function render(){const box=document.getElementById('accountPanel');if(!box||!profiles.length)return;box.querySelectorAll('.vccf-self-leader-about').forEach(x=>x.remove());profiles.forEach(p=>{const el=document.createElement('section');el.className='vccf-self-leader-about';el.innerHTML='<div class="vccf-self-leader-about-head"><strong>About the Leader</strong><span class="vccf-self-leader-badge">'+esc(p.kind||'Leader')+'</span></div><p>'+esc(p.description||'Leader profile details will be added soon.')+'</p><div class="vccf-self-leader-note">This public leadership profile is managed by an administrator.</div>';box.appendChild(el)})}
+function init(){styles();const maybe=()=>{const mid=S().profile?.member_id;if(mid&&mid!==memberId)void load();else if(profiles.length)render()};maybe();let tries=0;const timer=setInterval(()=>{maybe();if(++tries>12||memberId)clearInterval(timer)},500);const box=document.getElementById('accountPanel');if(box)new MutationObserver(()=>{if(profiles.length&&!box.querySelector('.vccf-self-leader-about'))render()}).observe(box,{childList:true,subtree:false})}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();window.addEventListener('vccf-app-ready',()=>setTimeout(init,200));
+})();
