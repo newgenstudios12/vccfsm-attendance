@@ -16,11 +16,7 @@ if old_roles in text:
 elif 'const SERVICE_ROLE_OPTIONS' not in text:
     raise SystemExit('Role options block not found')
 
-text = text.replace(
-    '  let schedules=[], members=[];',
-    '  let schedules=[], members=[], activeMinistryRoles=[];',
-    1,
-)
+text = text.replace('  let schedules=[], members=[];', '  let schedules=[], members=[], activeMinistryRoles=[];', 1)
 
 old_nav_css = """      .vccf-worship-nav-group{display:grid;gap:4px;min-width:0}
       .vccf-worship-nav-group .vccf-worship-parent{display:flex!important;align-items:center;justify-content:space-between;gap:8px;width:100%}
@@ -32,7 +28,6 @@ old_nav_css = """      .vccf-worship-nav-group{display:grid;gap:4px;min-width:0}
       .vccf-worship-subnav button{font-size:.76rem!important;padding:9px 10px!important}
 """
 text = text.replace(old_nav_css, '', 1)
-
 old_mobile_nav_css = """      @media(max-width:900px){.vccf-worship-nav-group .vccf-worship-parent{justify-content:center}.vccf-worship-nav-group .wn-label span:last-child,.vccf-worship-nav-group .wn-chevron{display:none}.vccf-worship-subnav{margin-left:0;padding-left:0;border-left:0}.vccf-worship-subnav button{font-size:0!important;text-align:center}.vccf-worship-subnav button:before{font-size:1rem}.vccf-worship-subnav button[data-worship-view=\"schedule\"]:before{content:'◷'}.vccf-worship-subnav button[data-worship-view=\"lineup\"]:before{content:'♫'}}
 """
 text = text.replace(old_mobile_nav_css, '', 1)
@@ -120,19 +115,19 @@ if 'async function loadMinistryRoles()' not in text:
         raise SystemExit('loadMembers block not found')
     text = text.replace(load_members_block, helpers, 1)
 
-old_sort = "const a=(s.worship_schedule_assignments||[]).slice().sort((x,y)=>ROLE_OPTIONS.indexOf(x.ministry_role)-ROLE_OPTIONS.indexOf(y.ministry_role));"
-new_sort = "const order=assignmentRoleOptions();const a=(s.worship_schedule_assignments||[]).slice().sort((x,y)=>{const xi=order.indexOf(x.ministry_role),yi=order.indexOf(y.ministry_role);return (xi<0?999:xi)-(yi<0?999:yi)||String(x.ministry_role).localeCompare(String(y.ministry_role));});"
-text = text.replace(old_sort, new_sort, 1)
-
+text = text.replace(
+    "const a=(s.worship_schedule_assignments||[]).slice().sort((x,y)=>ROLE_OPTIONS.indexOf(x.ministry_role)-ROLE_OPTIONS.indexOf(y.ministry_role));",
+    "const order=assignmentRoleOptions();const a=(s.worship_schedule_assignments||[]).slice().sort((x,y)=>{const xi=order.indexOf(x.ministry_role),yi=order.indexOf(y.ministry_role);return (xi<0?999:xi)-(yi<0?999:yi)||String(x.ministry_role).localeCompare(String(y.ministry_role));});",
+    1,
+)
 text = text.replace(
     'await Promise.all([loadSchedules(),canManage?loadMembers():Promise.resolve([])]);',
     'await Promise.all([loadSchedules(),canManage?Promise.all([loadMembers(),loadMinistryRoles()]):Promise.resolve([])]);',
     1,
 )
-
 text = text.replace(
-    '<select name="ministry_role">${ROLE_OPTIONS.map(r=>`<option>${esc(r)}</option>`).join(\'\')}</select>',
-    '<select name="ministry_role">${assignmentRoleOptionsHtml()}</select>',
+    "${ROLE_OPTIONS.map(r=>`<option>${esc(r)}</option>`).join('')}",
+    "${assignmentRoleOptionsHtml()}",
     1,
 )
 
@@ -145,9 +140,5 @@ js_path.write_text(text, encoding='utf-8')
 
 index_path = Path('public/index.html')
 html = index_path.read_text(encoding='utf-8')
-html = html.replace(
-    '<script src="/vccf-worship-ministry.js?v=20260908-1"></script>',
-    '<script src="/vccf-worship-ministry.js?v=20260908-2"></script>',
-    1,
-)
+html = html.replace('<script src="/vccf-worship-ministry.js?v=20260908-1"></script>', '<script src="/vccf-worship-ministry.js?v=20260908-2"></script>', 1)
 index_path.write_text(html, encoding='utf-8')
