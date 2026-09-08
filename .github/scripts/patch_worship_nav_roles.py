@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 js_path = Path('public/vccf-worship-ministry.js')
 text = js_path.read_text(encoding='utf-8')
@@ -125,15 +126,18 @@ text = text.replace(
     'await Promise.all([loadSchedules(),canManage?Promise.all([loadMembers(),loadMinistryRoles()]):Promise.resolve([])]);',
     1,
 )
+
+# Normalize any remaining legacy identifier, then replace the role select with the dynamic grouped options.
+text = re.sub(r'\bROLE_OPTIONS\b', 'SERVICE_ROLE_OPTIONS', text)
 text = text.replace(
-    "${ROLE_OPTIONS.map(r=>`<option>${esc(r)}</option>`).join('')}",
+    "${SERVICE_ROLE_OPTIONS.map(r=>`<option>${esc(r)}</option>`).join('')}",
     "${assignmentRoleOptionsHtml()}",
     1,
 )
 
-if 'ROLE_OPTIONS' in text:
+if re.search(r'\bROLE_OPTIONS\b', text):
     raise SystemExit('Legacy ROLE_OPTIONS reference remains')
-if 'assignmentRoleOptionsHtml()' not in text:
+if '<select name="ministry_role">${assignmentRoleOptionsHtml()}</select>' not in text:
     raise SystemExit('Dynamic assignment role dropdown was not installed')
 
 js_path.write_text(text, encoding='utf-8')
