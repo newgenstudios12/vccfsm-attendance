@@ -1,4 +1,4 @@
 VCCF production deployment trigger
-Recovery deploy: restore pre-gallery-download stable source after responsiveness regression
-Restored source commit: c75bea9e70d2df9ad055fbcbb8bfbad4e9e6f7a5
-Triggered: 2026-09-07 09:19 Asia/Manila
+Recovery deploy: rollback gallery photo lightbox after responsiveness regression
+Restored source commit: c686f3a1956ada63f890c736ec52ffb4446f97ce
+Triggered: 2026-09-08 15:35 Asia/Manila
