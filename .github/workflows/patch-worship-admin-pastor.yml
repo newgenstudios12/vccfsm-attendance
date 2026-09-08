@@ -1,0 +1,62 @@
+name: Patch Worship Ministry admin pastor access
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-worship-admin-pastor.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-access:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Allow admin and pastor access without ministry membership
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          js_path = Path('public/vccf-worship-ministry.js')
+          text = js_path.read_text(encoding='utf-8')
+          old = """    if(pr.error) throw pr.error; profile=pr.data||{}; if(!profile.member_id) return false;\n    const mr=await sb.from('member_ministries').select('member_id,ministry_id,role_title,ministries(name)').eq('member_id',profile.member_id);\n    if(mr.error) throw mr.error; myMinistries=mr.data||[];\n    canAccess=myMinistries.some(x=>isAllowedMinistry(ministryName(x)));\n    if(!canAccess) return false;\n    canManage=['admin','pastor'].includes(norm(profile.role)) || myMinistries.some(x=>isAllowedMinistry(ministryName(x)) && MANAGER_ROLE_RE.test(String(x.role_title||'')));\n    return true;"""
+          new = """    if(pr.error) throw pr.error; profile=pr.data||{};\n    const isPrivileged=['admin','pastor'].includes(norm(profile.role));\n    if(isPrivileged){\n      myMinistries=[];\n      canAccess=true;\n      canManage=true;\n      return true;\n    }\n    if(!profile.member_id) return false;\n    const mr=await sb.from('member_ministries').select('member_id,ministry_id,role_title,ministries(name)').eq('member_id',profile.member_id);\n    if(mr.error) throw mr.error; myMinistries=mr.data||[];\n    canAccess=myMinistries.some(x=>isAllowedMinistry(ministryName(x)));\n    if(!canAccess) return false;\n    canManage=myMinistries.some(x=>isAllowedMinistry(ministryName(x)) && MANAGER_ROLE_RE.test(String(x.role_title||'')));\n    return true;"""
+          if old not in text:
+              if "const isPrivileged=['admin','pastor'].includes(norm(profile.role));" not in text:
+                  raise SystemExit('Expected Worship Ministry access block was not found')
+          else:
+              text = text.replace(old, new, 1)
+
+          text = text.replace(
+              "worship_leader_member_id:wl?.member_id||profile.member_id,",
+              "worship_leader_member_id:wl?.member_id||profile.member_id||null,",
+              1
+          )
+          js_path.write_text(text, encoding='utf-8')
+
+          index_path = Path('public/index.html')
+          index = index_path.read_text(encoding='utf-8')
+          index = index.replace(
+              '<script src="/vccf-worship-ministry.js?v=20260907-1"></script>',
+              '<script src="/vccf-worship-ministry.js?v=20260908-1"></script>',
+              1
+          )
+          index_path.write_text(index, encoding='utf-8')
+          PY
+
+          if git diff --quiet -- public/vccf-worship-ministry.js public/index.html; then
+            exit 0
+          fi
+          git config user.name 'VCCF Deploy Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add public/vccf-worship-ministry.js public/index.html
+          git commit -m 'Allow admins and pastors into Worship Ministry'
+          git push origin HEAD:main
