@@ -42,6 +42,33 @@ function downloadUrl(url){
   if(!url)return '#';
   return url.includes('/storage/v1/object/public/')?url+(url.includes('?')?'&':'?')+'download=':url;
 }
+function ensurePreviewStyles(){
+  if(document.getElementById('galleryPreviewStyles'))return;
+  const style=document.createElement('style');
+  style.id='galleryPreviewStyles';
+  style.textContent='.gallery-photo-preview-trigger{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in}.gallery-photo-preview-trigger img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}.gallery-photo-preview{position:fixed;inset:0;z-index:10050;display:grid;place-items:center;padding:24px;background:rgba(2,6,23,.82);backdrop-filter:blur(8px)}.gallery-photo-preview-panel{position:relative;width:min(1100px,96vw);max-height:92vh;display:grid;grid-template-rows:minmax(0,1fr) auto;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 24px 80px rgba(0,0,0,.35)}.gallery-photo-preview-image-wrap{display:grid;place-items:center;min-height:240px;overflow:auto;background:#090b10}.gallery-photo-preview-image{display:block;max-width:100%;max-height:76vh;width:auto;height:auto;object-fit:contain}.gallery-photo-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px}.gallery-photo-preview-copy{min-width:0}.gallery-photo-preview-copy strong,.gallery-photo-preview-copy span{display:block}.gallery-photo-preview-copy strong{font-size:.82rem;color:var(--text)}.gallery-photo-preview-copy span{margin-top:3px;color:var(--muted);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gallery-photo-preview-actions{display:flex;align-items:center;gap:9px;flex-shrink:0}.gallery-photo-preview-download{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 14px;border-radius:10px;background:var(--brand);color:#fff!important;text-decoration:none!important;font-size:.72rem;font-weight:900;white-space:nowrap}.gallery-photo-preview-close{position:absolute;right:12px;top:12px;z-index:2;width:38px;height:38px;border:0;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font-size:1.2rem;line-height:1;cursor:pointer}.gallery-photo-preview-open{overflow:hidden}@media(max-width:640px){.gallery-photo-preview{padding:10px}.gallery-photo-preview-panel{width:100%;max-height:96vh;border-radius:14px}.gallery-photo-preview-image{max-height:72vh}.gallery-photo-preview-footer{align-items:stretch;flex-direction:column;gap:10px}.gallery-photo-preview-actions,.gallery-photo-preview-download{width:100%}}';
+  document.head.appendChild(style);
+}
+function openPhotoPreview(album,index){
+  const photo=album.photos?.[index];if(!photo)return;
+  ensurePreviewStyles();
+  document.getElementById('galleryPhotoPreview')?.remove();
+  const modal=document.createElement('div');
+  modal.id='galleryPhotoPreview';
+  modal.className='gallery-photo-preview';
+  modal.setAttribute('role','dialog');
+  modal.setAttribute('aria-modal','true');
+  modal.setAttribute('aria-label','Gallery photo preview');
+  modal.innerHTML='<div class="gallery-photo-preview-panel"><button class="gallery-photo-preview-close" type="button" data-gallery-preview-close aria-label="Close photo preview">×</button><div class="gallery-photo-preview-image-wrap"><img class="gallery-photo-preview-image" src="'+esc(photo.image_url)+'" alt="'+esc(photo.caption||album.title)+'"></div><div class="gallery-photo-preview-footer"><div class="gallery-photo-preview-copy"><strong>'+esc(photo.caption||'Church photo')+'</strong><span>'+esc(album.title)+'</span></div><div class="gallery-photo-preview-actions"><a class="gallery-photo-preview-download" href="'+esc(downloadUrl(photo.image_url))+'" download target="_blank" rel="noopener">↓ Download</a></div></div></div>';
+  document.body.appendChild(modal);
+  document.body.classList.add('gallery-photo-preview-open');
+  const close=()=>{modal.remove();document.body.classList.remove('gallery-photo-preview-open');document.removeEventListener('keydown',onKey)};
+  const onKey=e=>{if(e.key==='Escape')close()};
+  modal.querySelector('[data-gallery-preview-close]').onclick=close;
+  modal.addEventListener('click',e=>{if(e.target===modal)close()});
+  document.addEventListener('keydown',onKey);
+  modal.querySelector('[data-gallery-preview-close]')?.focus();
+}
 function render(){
   const el=document.getElementById('gallery');if(!el)return;
   const albums=allAlbums();
@@ -69,9 +96,12 @@ function openAlbum(id){
 }
 function photoGrid(album){
   if(!album.photos?.length)return '<div class="gallery-empty card"><b>No photos in this album yet</b><span>'+(album.auto?'Photos attached to this Summary or Event will appear here automatically.':'Use Add photos to upload church photos.')+'</span></div>';
-  return album.photos.map(p=>'<article class="gallery-photo-card"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"><div><span>'+esc(p.caption||'Church photo')+'</span><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><a href="'+esc(downloadUrl(p.image_url))+'" download target="_blank" rel="noopener" style="color:var(--brand);font-size:.62rem;font-weight:900;text-decoration:none;white-space:nowrap">↓ Download</a>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></div></article>').join('');
+  return album.photos.map((p,index)=>'<article class="gallery-photo-card"><button class="gallery-photo-preview-trigger" type="button" data-gallery-photo-preview="'+index+'" aria-label="Preview '+esc(p.caption||album.title)+'"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"></button><div><span>'+esc(p.caption||'Church photo')+'</span>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></article>').join('');
 }
-function bindPhotoButtons(album){document.querySelectorAll('[data-delete-gallery-photo]').forEach(b=>b.onclick=()=>deletePhoto(album,b.dataset.deleteGalleryPhoto))}
+function bindPhotoButtons(album){
+  document.querySelectorAll('[data-gallery-photo-preview]').forEach(b=>b.onclick=()=>openPhotoPreview(album,Number(b.dataset.galleryPhotoPreview)));
+  document.querySelectorAll('[data-delete-gallery-photo]').forEach(b=>b.onclick=()=>deletePhoto(album,b.dataset.deleteGalleryPhoto));
+}
 function renderCreateAlbum(){
   if(!isAdmin())return;
   const el=document.getElementById('gallery'),today=phDay(new Date());
