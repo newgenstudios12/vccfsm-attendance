@@ -29,14 +29,14 @@
     s.id='vccf-worship-ministry-css';
     s.textContent=`
       .vccf-worship-view{--wm-gap:14px}
-      .wm-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;margin-bottom:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 9%,var(--panel,#fff)),var(--panel,#fff));border:1px solid var(--line);border-radius:18px}
+      .wm-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;margin-bottom:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 9%,var(--card,#fff)),var(--card,#fff));border:1px solid var(--line);border-radius:18px}
       .wm-hero h2{margin:0 0 5px;font-size:1.25rem}.wm-muted{color:var(--muted);font-size:.82rem}.wm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--wm-gap)}
-      .wm-card{background:var(--panel,var(--card,#fff));border:1px solid var(--line);border-radius:18px;padding:16px;min-width:0;box-shadow:0 8px 24px rgba(15,23,42,.04)}
+      .wm-card{background:var(--card,#fff);border:1px solid var(--line);border-radius:18px;padding:16px;min-width:0;box-shadow:0 8px 24px rgba(15,23,42,.04)}
       .wm-card h3{margin:0 0 10px;font-size:1rem}.wm-card h4{margin:0 0 7px;font-size:.9rem}.wm-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
       .wm-btn{border:0;border-radius:11px;padding:9px 12px;font-weight:800;font-size:.78rem;cursor:pointer;background:linear-gradient(135deg,var(--brand),#ef4939);color:#fff}
-      .wm-btn.secondary{background:var(--panel,#fff);color:var(--text);border:1px solid var(--line)}.wm-btn.danger{background:#b42318}.wm-btn:disabled{opacity:.55;cursor:not-allowed}
+      .wm-btn.secondary{background:var(--card,#fff);color:var(--text);border:1px solid var(--line)}.wm-btn.danger{background:#b42318}.wm-btn:disabled{opacity:.55;cursor:not-allowed}
       .wm-form{display:grid;gap:10px}.wm-form .wm-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wm-form label{display:block;font-size:.72rem;font-weight:800;margin-bottom:4px;color:var(--muted)}
-      .wm-form input,.wm-form select,.wm-form textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--bg);color:var(--text);outline:none}.wm-form textarea{resize:vertical}
+      .wm-form input,.wm-form select,.wm-form textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--input,var(--bg));color:var(--text);outline:none}.wm-form textarea{resize:vertical}
       .wm-schedule-list{display:grid;gap:10px}.wm-service{border:1px solid var(--line);border-radius:15px;padding:13px}.wm-service-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:9px}.wm-date{font-weight:900}.wm-role-list{display:grid;gap:6px}.wm-role{display:grid;grid-template-columns:minmax(120px,.7fr) 1fr;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:.82rem}.wm-role:first-child{border-top:0}.wm-role b{font-size:.76rem;color:var(--muted)}
       .wm-pill{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:.7rem;font-weight:850;background:color-mix(in srgb,var(--brand) 10%,transparent);color:var(--brand)}
       .wm-pill.approved{background:#e8f7ee;color:#167647}.wm-pill.submitted{background:#eef4ff;color:#175cd3}.wm-pill.revision{background:#fff3e8;color:#b54708}
@@ -44,6 +44,11 @@
       .wm-song{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:9px}.wm-song-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:900;font-size:.82rem}.wm-song-grid{display:grid;grid-template-columns:1.3fr 1fr .45fr;gap:8px}.wm-song-grid .wide{grid-column:1/-1}
       .wm-offertory{border:1px dashed color-mix(in srgb,var(--brand) 40%,var(--line));border-radius:14px;padding:13px;margin-top:12px}.wm-lineup-summary{display:grid;gap:7px;margin-top:8px}.wm-lineup-song{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:.82rem}.wm-lineup-song:first-child{border-top:0}.wm-num{width:24px;height:24px;border-radius:8px;background:color-mix(in srgb,var(--brand) 10%,transparent);display:grid;place-items:center;font-weight:900;color:var(--brand);font-size:.72rem}
       .wm-toast{position:fixed;right:18px;bottom:18px;z-index:9999;background:#16181d;color:#fff;padding:11px 14px;border-radius:12px;box-shadow:0 14px 32px rgba(0,0,0,.22);font-size:.82rem;opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}.wm-toast.show{opacity:1;transform:none}
+      :root[data-theme="dark"] .wm-hero,:root[data-theme="dark"] .wm-card{background-color:var(--card);color:var(--text)}
+      :root[data-theme="dark"] .wm-service,:root[data-theme="dark"] .wm-song,:root[data-theme="dark"] .wm-offertory{background:color-mix(in srgb,var(--card) 88%,#000);border-color:var(--line);color:var(--text)}
+      :root[data-theme="dark"] .wm-btn.secondary{background:var(--card);color:var(--text);border-color:var(--line)}
+      :root[data-theme="dark"] .wm-btn.secondary:hover{background:var(--hover);color:var(--text)}
+      :root[data-theme="dark"] .wm-form input,:root[data-theme="dark"] .wm-form select,:root[data-theme="dark"] .wm-form textarea{background:var(--input)!important;color:var(--text)!important;border-color:var(--line)!important}
       @media(max-width:760px){.wm-grid{grid-template-columns:1fr}.wm-hero{flex-direction:column}.wm-form .wm-row{grid-template-columns:1fr}.wm-assignment-row{grid-template-columns:1fr 1fr}.wm-assignment-row .wm-remove-wrap{grid-column:1/-1}.wm-song-grid{grid-template-columns:1fr 1fr}.wm-song-grid .wide{grid-column:1/-1}}
       @media(max-width:520px){.wm-card{padding:13px;border-radius:15px}.wm-song-grid,.wm-assignment-row{grid-template-columns:1fr}.wm-assignment-row .wm-remove-wrap{grid-column:auto}.wm-role{grid-template-columns:1fr}.wm-hero{padding:15px}}
     `;

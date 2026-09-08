@@ -273,7 +273,7 @@ function renderMinistries(){
   const rows=data.ministries.map(m=>{
     const count=data.ministryMembers.filter(x=>x.ministry_id===m.id).length;
     const leader=m.leader_member_id?memberName(m.leader_member_id):'Not assigned';
-    return '<tr><td><b>'+esc(m.name)+'</b><div class="cms-sub">'+esc(m.description||'')+'</div></td><td>'+esc(leader)+'</td><td>'+count+'</td><td>'+badge(m.is_active!==false?'Active':'Inactive',m.is_active!==false?'ok':'muted')+'</td><td class="cms-actions">'+(canManageChurch()?'<button class="cms-small" data-edit-ministry="'+m.id+'">Edit</button>':'')+(can?'<button class="cms-small" data-assign="'+m.id+'">Assign</button>':'')+'</td></tr>';
+    return '<tr><td><b>'+esc(m.name)+'</b><div class="cms-sub">'+esc(m.description||'')+'</div></td><td>'+esc(leader)+'</td><td>'+count+'</td><td>'+badge(m.is_active!==false?'Active':'Inactive',m.is_active!==false?'ok':'muted')+'</td><td class="cms-actions">'+(canManageChurch()?'<button class="cms-small" data-edit-ministry="'+m.id+'">Edit</button>':'')+(can?'<button class="cms-small" data-assign="'+m.id+'">Assign</button><button class="cms-small danger-text" data-delete-ministry="'+m.id+'">Delete</button>':'')+'</td></tr>';
   }).join('');
   const membership=data.ministryMembers.slice(0,100).map(mm=>'<tr><td>'+esc(memberName(mm.member_id))+'</td><td>'+esc(ministryName(mm.ministry_id))+'</td><td>'+esc(mm.role_title||'Member')+'</td><td>'+esc(mm.joined_on||'—')+'</td><td>'+(can?'<button class="cms-small danger-text" data-remove-membership="'+mm.id+'">Remove</button>':'')+'</td></tr>').join('');
   content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Ministries</h3><p>Ministry directory, leaders and participation.</p></div>'+(canManageChurch()?'<button id="addMinistry" class="btn">Add Ministry</button>':'')+'</div>'+
@@ -281,8 +281,22 @@ function renderMinistries(){
     '<section class="cms-panel card"><div class="cms-panel-head"><h3>Ministry Memberships</h3></div><div class="table-wrap"><table class="table"><thead><tr><th>Member</th><th>Ministry</th><th>Role</th><th>Joined</th><th></th></tr></thead><tbody>'+(membership||'<tr><td colspan="5">'+empty('No ministry memberships yet.')+'</td></tr>')+'</tbody></table></div></section>';
   document.getElementById('addMinistry')?.addEventListener('click',()=>ministryForm());
   content().querySelectorAll('[data-edit-ministry]').forEach(b=>b.onclick=()=>ministryForm(data.ministries.find(x=>x.id===b.dataset.editMinistry)));
+  content().querySelectorAll('[data-delete-ministry]').forEach(b=>b.onclick=()=>deleteMinistry(b.dataset.deleteMinistry));
   content().querySelectorAll('[data-assign]').forEach(b=>b.onclick=()=>membershipForm(b.dataset.assign));
   content().querySelectorAll('[data-remove-membership]').forEach(b=>b.onclick=()=>deleteRow('member_ministries',b.dataset.removeMembership,'Ministry membership'));
+}
+async function deleteMinistry(id){
+  if(!canManageChurch()) return;
+  const m=data.ministries.find(x=>x.id===id); if(!m) return;
+  const count=data.ministryMembers.filter(x=>x.ministry_id===id).length;
+  const memberNote=count?' This will also remove '+count+' member assignment'+(count===1?'':'s')+'.':'';
+  const ok=confirm('Delete ministry "'+m.name+'"?'+memberNote+' Related events, announcements, documents, leadership records, and notifications will be unlinked from this ministry. This cannot be undone.');
+  if(!ok) return;
+  const r=await sb().from('ministries').delete().eq('id',id).select('id').maybeSingle();
+  if(r.error){toast(r.error.message);return;}
+  if(!r.data){toast('Ministry could not be deleted. Check your permissions.');return;}
+  await writeAudit('delete','ministries',id,{label:'Ministry',name:m.name,removed_memberships:count});
+  loaded=false; await loadAll(true); renderActive(); toast('Ministry deleted.',true);
 }
 function ministryForm(m=null){
   modal(m?'Edit Ministry':'Add Ministry',
