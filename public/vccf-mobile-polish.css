@@ -19,6 +19,28 @@
 .notify-inbox-row b{font-size:.84rem}
 .notify-inbox-row p{margin:4px 0;color:var(--text);font-size:.78rem;line-height:1.45}
 .notify-inbox-row small{color:var(--muted);font-size:.68rem}
+
+/* Global interaction + overflow hardening. */
+html,body{max-width:100%;overflow-x:hidden}
+img,video,iframe,canvas{max-width:100%}
+button,.btn,a,[role="button"]{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button:disabled,.btn:disabled,[aria-disabled="true"]{cursor:not-allowed!important;opacity:.58}
+.main,.view,.card,.panel,.toolbar,.cms-shell,.cms-panel,.settings-grid,.member-detail-grid,.attendance-workflow{min-width:0}
+.table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.toolbar,.cms-panel-head,.cms-module-tools,.members-head,.member-detail-head,.member-detail-actions,.member-row-actions,.member-directory-toolbar,.member-qr-print-tools,.settings-actions,.attendance-actions,.attendance-records-head,.attendance-record-controls,.service-media-hero,.service-media-library-head,.media-actions{min-width:0;max-width:100%}
+.toolbar>* ,.cms-panel-head>* ,.members-head>* ,.member-detail-head>* ,.attendance-records-head>*{min-width:0}
+input,select,textarea{min-width:0;max-width:100%}
+.btn,.cms-small,.back-button,.media-btn{overflow-wrap:anywhere}
+
+/* Tablet safety: avoid action bars overlapping headings or spilling outside cards. */
+@media(max-width:900px){
+  .cms-module-tools{margin:0 0 12px!important;justify-content:flex-start;flex-wrap:wrap}
+  .toolbar,.cms-panel-head,.members-head,.member-detail-head,.member-detail-actions,.member-row-actions,.member-directory-toolbar,.member-qr-print-tools,.settings-actions,.attendance-actions,.attendance-records-head,.attendance-record-controls,.service-media-library-head,.media-actions{flex-wrap:wrap}
+  .cms-module-tools .btn,.cms-module-tools button,.member-detail-actions .btn,.member-row-actions .btn,.member-row-actions button,.settings-actions .btn,.attendance-record-controls .btn,.member-qr-print-tools .btn{max-width:100%;white-space:normal}
+  .member-qr-print-tools{margin-left:0}
+  .member-qr-print-tools select{min-width:0;flex:1 1 170px}
+}
+
 @media(max-width:620px){
   .attendance-module-tabs{
     display:grid;
@@ -116,4 +138,18 @@
   #notifications .push-only-body{
     overflow-wrap:anywhere;
   }
+
+  .btn,.cms-small,.back-button,.media-btn{min-height:44px;max-width:100%;white-space:normal!important;line-height:1.25}
+  .toolbar,.members-head,.member-detail-head,.attendance-records-head,.service-media-library-head{align-items:stretch}
+  .member-detail-actions,.member-row-actions,.member-directory-toolbar,.member-qr-print-tools,.settings-actions,.attendance-actions,.attendance-record-controls,.cms-module-tools{width:100%;max-width:100%}
+  .member-detail-actions>.btn,.settings-actions>.btn,.attendance-record-controls>.btn{flex:1 1 140px}
+  .member-row-actions>.btn,.member-row-actions>button{flex:1 1 110px}
+  .member-qr-print-tools>*{min-width:0;max-width:100%}
+  .member-qr-print-tools .btn{flex:1 1 130px}
+}
+
+@media(max-width:430px){
+  .toolbar,.member-detail-actions,.settings-actions,.attendance-record-controls,.member-qr-print-tools,.attendance-actions,.media-actions{display:grid!important;grid-template-columns:1fr!important;gap:8px;width:100%}
+  .toolbar>*,.member-detail-actions>* ,.settings-actions>* ,.attendance-record-controls>* ,.member-qr-print-tools>* ,.attendance-actions>* ,.media-actions>*{width:100%!important;max-width:100%!important;margin-left:0!important}
+  .attendance-module-tabs{grid-template-columns:1fr}
 }
