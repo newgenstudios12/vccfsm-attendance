@@ -96,3 +96,22 @@ window.addEventListener('vccf-app-ready',()=>setTimeout(load,120));
 window.addEventListener('vccf-profile-updated',()=>setTimeout(load,80));
 setTimeout(load,1000);
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_MUSIC_MINISTRY_READONLY_LOADER__)return;
+window.__VCCF_MUSIC_MINISTRY_READONLY_LOADER__=true;
+const state=()=>window.VCCF?.getState?.()||{};
+function load(){
+  if(!state().session?.user||!state().profile)return;
+  if(document.querySelector('script[data-vccf-music-ministry-readonly]'))return;
+  const s=document.createElement('script');
+  s.src='/vccf-music-ministry-member-readonly.js?v=20260912-1';
+  s.defer=true;
+  s.dataset.vccfMusicMinistryReadonly='1';
+  document.head.appendChild(s);
+}
+window.addEventListener('vccf-app-ready',()=>setTimeout(load,500));
+window.addEventListener('vccf-profile-updated',()=>setTimeout(load,350));
+setTimeout(load,1300);
+})();
