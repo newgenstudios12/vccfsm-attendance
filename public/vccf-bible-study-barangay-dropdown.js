@@ -30,6 +30,8 @@ function syncDropdown(){
     select.id='serviceStudyBarangayDropdown';
     select.setAttribute('aria-label','Barangay / Cellgroup');
     select.style.width='100%';
+    select.style.minHeight='44px';
+    select.style.fontSize='16px';
     select.style.padding='11px 12px';
     select.style.border='1px solid var(--line)';
     select.style.borderRadius='11px';
@@ -49,25 +51,36 @@ function syncDropdown(){
   input.hidden=isBible;
   if(label){
     const text=[...label.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&norm(n.textContent).includes('barangay'));
-    if(text)text.textContent=isBible?'Barangay / Cellgroup':'Barangay';
+    const wanted=isBible?'Barangay / Cellgroup':'Barangay';
+    if(text&&text.textContent!==wanted)text.textContent=wanted;
   }
   if(!isBible)return;
 
   const current=String(input.value||'').trim();
   const values=barangays(area.value||'');
+  const key=String(area.value||'')+'|'+values.map(norm).join('|');
   const exists=current&&values.some(v=>norm(v)===norm(current));
-  select.innerHTML='<option value="">Select Barangay / Cellgroup</option>'+values.map(v=>'<option value="'+v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'">'+v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</option>').join('');
+
+  if(select.dataset.optionsKey!==key){
+    select.innerHTML='<option value="">Select Barangay / Cellgroup</option>'+values.map(v=>'<option value="'+v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'">'+v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</option>').join('');
+    select.dataset.optionsKey=key;
+  }
+
   if(exists){
-    select.value=values.find(v=>norm(v)===norm(current))||'';
-    input.value=select.value;
+    const value=values.find(v=>norm(v)===norm(current))||'';
+    if(select.value!==value)select.value=value;
+    if(input.value!==value)input.value=value;
   }else if(current){
     input.value='';
     select.value='';
   }
 }
 
-function queue(){clearTimeout(timer);timer=setTimeout(syncDropdown,60)}
-new MutationObserver(queue).observe(document.documentElement,{childList:true,subtree:true});
+function queue(){clearTimeout(timer);timer=setTimeout(syncDropdown,80)}
+new MutationObserver(records=>{
+  if(records.every(r=>r.target?.id==='serviceStudyBarangayDropdown'||r.target?.closest?.('#serviceStudyBarangayDropdown')))return;
+  queue();
+}).observe(document.documentElement,{childList:true,subtree:true});
 document.addEventListener('change',e=>{if(['serviceAttendanceType','serviceStudyArea'].includes(e.target?.id))queue()},true);
 window.addEventListener('vccf-app-ready',queue);
 window.addEventListener('focus',queue);
