@@ -1,0 +1,1 @@
+Member import compatibility: current Members UI uses .vccf-clean-actions while the importer previously targeted .toolbar. Toolbar bridge patch added 2026-09-12.
