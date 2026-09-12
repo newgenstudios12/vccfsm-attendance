@@ -21,17 +21,15 @@ function activateAttendanceButton(button){
 
 function apply(){
   const sidebar=document.querySelector('.sidebar');
-  if(!sidebar)return;
-
-  if(!selfOnly())return;
+  if(!sidebar||!selfOnly())return;
 
   const buttons=[...sidebar.querySelectorAll('[data-route]')];
-  let selfButton=buttons.find(button=>button.dataset.route==='selfcheck');
-  const fullAttendance=buttons.find(button=>button.dataset.route==='attendance');
+  let selfButton=buttons.find(button=>button.dataset.vccfSelfAttendance==='1')||buttons.find(button=>button.dataset.route==='selfcheck');
+  const fullAttendance=buttons.find(button=>button.dataset.route==='attendance'&&button!==selfButton);
 
   // Guest-style accounts previously received the manager workspace because they are not
   // included in the legacy memberLike() check. Remove that route and use self check-in only.
-  if(fullAttendance&&fullAttendance!==selfButton)fullAttendance.remove();
+  if(fullAttendance)fullAttendance.remove();
   if(!selfButton)return;
 
   selfButton.dataset.route='attendance';
