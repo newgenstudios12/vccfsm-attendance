@@ -6,17 +6,19 @@ window.__VCCF_ATTENDANCE_SELF_ONLY__=true;
 const state=()=>window.VCCF?.getState?.()||{};
 const role=()=>String(state().profile?.role||'member').toLowerCase();
 const selfOnly=()=>['member','treasurer','guest'].includes(role());
+let applyTimer=0;
 
 function setAttendanceHeading(){
   const title=document.getElementById('title');
   const hint=document.querySelector('.top .hint');
-  if(title)title.textContent='Attendance';
-  if(hint)hint.textContent='Check in the member profile linked to your account.';
+  if(title&&title.textContent!=='Attendance')title.textContent='Attendance';
+  const wanted='Check in the member profile linked to your account.';
+  if(hint&&hint.textContent!==wanted)hint.textContent=wanted;
 }
 
 function activateAttendanceButton(button){
-  document.querySelectorAll('.sidebar [data-route]').forEach(node=>node.classList.remove('active'));
-  button?.classList.add('active');
+  document.querySelectorAll('.sidebar [data-route].active').forEach(node=>{if(node!==button)node.classList.remove('active')});
+  if(button&&!button.classList.contains('active'))button.classList.add('active');
 }
 
 function apply(){
@@ -24,17 +26,17 @@ function apply(){
   if(!sidebar||!selfOnly())return;
 
   const buttons=[...sidebar.querySelectorAll('[data-route]')];
-  let selfButton=buttons.find(button=>button.dataset.vccfSelfAttendance==='1')||buttons.find(button=>button.dataset.route==='selfcheck');
+  const selfButton=buttons.find(button=>button.dataset.vccfSelfAttendance==='1')||buttons.find(button=>button.dataset.route==='selfcheck');
   const fullAttendance=buttons.find(button=>button.dataset.route==='attendance'&&button!==selfButton);
 
   if(fullAttendance)fullAttendance.remove();
   if(!selfButton)return;
 
-  selfButton.dataset.route='attendance';
-  selfButton.dataset.vccfSelfAttendance='1';
+  if(selfButton.dataset.route!=='attendance')selfButton.dataset.route='attendance';
+  if(selfButton.dataset.vccfSelfAttendance!=='1')selfButton.dataset.vccfSelfAttendance='1';
   const label=selfButton.querySelector('.nav-label');
-  if(label)label.textContent='Attendance';
-  selfButton.setAttribute('aria-label','Attendance');
+  if(label&&label.textContent!=='Attendance')label.textContent='Attendance';
+  if(selfButton.getAttribute('aria-label')!=='Attendance')selfButton.setAttribute('aria-label','Attendance');
 
   if(selfButton.dataset.vccfAttendanceBound!=='1'){
     selfButton.dataset.vccfAttendanceBound='1';
@@ -55,13 +57,25 @@ function apply(){
   }
 }
 
-const observer=new MutationObserver(()=>apply());
-observer.observe(document.documentElement,{childList:true,subtree:true});
-window.addEventListener('vccf-app-ready',()=>setTimeout(apply,120));
-document.addEventListener('click',event=>{
-  if(event.target.closest?.('[data-route="attendance"],[data-route="selfcheck"]'))setTimeout(apply,80);
+function queueApply(delay=40){
+  clearTimeout(applyTimer);
+  applyTimer=setTimeout(apply,delay);
+}
+
+const observer=new MutationObserver(records=>{
+  if(!selfOnly())return;
+  const meaningful=records.some(record=>{
+    const target=record.target;
+    return !target?.closest?.('[data-vccf-self-attendance="1"]');
+  });
+  if(meaningful)queueApply();
 });
-setTimeout(apply,900);
+observer.observe(document.documentElement,{childList:true,subtree:true});
+window.addEventListener('vccf-app-ready',()=>queueApply(120));
+document.addEventListener('click',event=>{
+  if(event.target.closest?.('[data-route="attendance"],[data-route="selfcheck"]'))queueApply(80);
+});
+queueApply(900);
 })();
 
 (()=>{
