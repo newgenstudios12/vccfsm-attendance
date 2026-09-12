@@ -34,6 +34,16 @@ function install(){
     document.head.appendChild(style);
   }
 }
+function loadAdminResetHelper(){
+  if(document.querySelector('script[data-vccf-admin-password-reset-helper]'))return;
+  const script=document.createElement('script');
+  script.src='/vccf-admin-password-reset-helper.js?v=20260912-1';
+  script.defer=true;
+  script.dataset.vccfAdminPasswordResetHelper='1';
+  document.head.appendChild(script);
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 window.addEventListener('vccf-signed-out',install);
+window.addEventListener('vccf-app-ready',loadAdminResetHelper);
+setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show'))loadAdminResetHelper()},1200);
 })();
