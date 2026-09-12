@@ -31,6 +31,17 @@ function ensureMultiMinistry() {
   document.head.appendChild(script);
 }
 
+function ensureMemberImport() {
+  if (!authenticated()) return;
+  if (document.querySelector('script[data-vccf-member-import]')) return;
+  const script = document.createElement('script');
+  script.src = '/vccf-member-import.js?v=20260912-1';
+  script.defer = true;
+  script.dataset.vccfMemberImport = '1';
+  script.onerror = () => console.error('Member import module failed to load.');
+  document.head.appendChild(script);
+}
+
 function activate() {
   if (loaded) window.dispatchEvent(new CustomEvent('vccf-members-add-activate'));
 }
@@ -38,6 +49,7 @@ function activate() {
 function loadModule() {
   if (!authenticated()) return Promise.resolve(false);
   ensureMultiMinistry();
+  ensureMemberImport();
   if (loaded) { activate(); return Promise.resolve(true); }
   if (loading) return loading;
   ensureStyles();
@@ -57,6 +69,7 @@ function loadForMembersView() {
     if (!authenticated()) return;
     if (!document.getElementById('members')?.classList.contains('active')) return;
     ensureMultiMinistry();
+    ensureMemberImport();
     loadModule();
   }, 0);
 }
@@ -64,13 +77,14 @@ function loadForMembersView() {
 document.addEventListener('click', event => {
   if (event.target.closest('[data-view="members"], [data-route="members"]')) loadForMembersView();
 }, true);
-window.addEventListener('vccf-app-ready', () => { ensureMultiMinistry(); loadForMembersView(); });
+window.addEventListener('vccf-app-ready', () => { ensureMultiMinistry(); ensureMemberImport(); loadForMembersView(); });
 window.addEventListener('focus', loadForMembersView);
 window.addEventListener('popstate', loadForMembersView);
 window.addEventListener('vccf-signed-out', () => {
   document.getElementById('vccfMemberModal')?.remove();
   document.getElementById('vmmOverlay')?.remove();
+  document.getElementById('vccfMemberImportFile')?.remove();
 });
-setTimeout(ensureMultiMinistry, 900);
+setTimeout(() => { ensureMultiMinistry(); ensureMemberImport(); }, 900);
 loadForMembersView();
 })();
