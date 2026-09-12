@@ -27,8 +27,6 @@ function apply(){
   let selfButton=buttons.find(button=>button.dataset.vccfSelfAttendance==='1')||buttons.find(button=>button.dataset.route==='selfcheck');
   const fullAttendance=buttons.find(button=>button.dataset.route==='attendance'&&button!==selfButton);
 
-  // Guest-style accounts previously received the manager workspace because they are not
-  // included in the legacy memberLike() check. Remove that route and use self check-in only.
   if(fullAttendance)fullAttendance.remove();
   if(!selfButton)return;
 
@@ -41,8 +39,6 @@ function apply(){
   if(selfButton.dataset.vccfAttendanceBound!=='1'){
     selfButton.dataset.vccfAttendanceBound='1';
     selfButton.addEventListener('click',()=>{
-      // The shell's existing click handler reads dataset.route at click time. Temporarily
-      // restore selfcheck so the private router opens the safe linked-account view.
       selfButton.dataset.route='selfcheck';
       queueMicrotask(()=>{selfButton.dataset.route='attendance'});
       setTimeout(()=>{
@@ -66,4 +62,23 @@ document.addEventListener('click',event=>{
   if(event.target.closest?.('[data-route="attendance"],[data-route="selfcheck"]'))setTimeout(apply,80);
 });
 setTimeout(apply,900);
+})();
+
+(()=>{
+'use strict';
+if(window.__VCCF_AREA_LEADER_GIVING_LOADER__)return;
+window.__VCCF_AREA_LEADER_GIVING_LOADER__=true;
+const state=()=>window.VCCF?.getState?.()||{};
+function load(){
+  if(String(state().profile?.role||'').toLowerCase()!=='area_leader')return;
+  if(document.querySelector('script[data-vccf-area-leader-giving]'))return;
+  const s=document.createElement('script');
+  s.src='/vccf-area-leader-giving.js?v=20260912-1';
+  s.defer=true;
+  s.dataset.vccfAreaLeaderGiving='1';
+  document.head.appendChild(s);
+}
+window.addEventListener('vccf-app-ready',()=>setTimeout(load,120));
+window.addEventListener('vccf-profile-updated',()=>setTimeout(load,80));
+setTimeout(load,1000);
 })();
