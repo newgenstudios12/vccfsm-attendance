@@ -28,8 +28,7 @@ function paintLinkedPhoto(url){
   paint(document.getElementById('avatar'),name,url);
   paint(document.getElementById('sideAvatar'),name,url);
   paint(document.getElementById('profilePhotoPreview'),name,url);
-  const large=document.querySelector('#settings .large-avatar');
-  paint(large,name,url);
+  paint(document.querySelector('#settings .large-avatar'),name,url);
 }
 
 async function syncLinkedPhoto(){
@@ -41,11 +40,13 @@ async function syncLinkedPhoto(){
     const memberUrl=String(member.photo_url||'').trim();
     const profileUrl=String(p.profile_photo_url||'').trim();
 
-    // The linked member record is authoritative. If it has no photo yet,
-    // migrate the account photo once so existing user pictures are preserved.
+    // Linked member is the source of truth. Preserve a legacy account photo
+    // by migrating it into an empty member record once.
     if(!memberUrl&&profileUrl){
       const r=await sb.from('members').update({photo_url:profileUrl}).eq('id',member.id);
-      if(!r.error){member.photo_url=profileUrl;paintLinkedPhoto(profileUrl);}
+      if(r.error)throw r.error;
+      member.photo_url=profileUrl;
+      paintLinkedPhoto(profileUrl);
       return;
     }
 
@@ -103,5 +104,6 @@ const observer=new MutationObserver(mutations=>{
 if(document.body)observer.observe(document.body,{childList:true,subtree:true});
 else document.addEventListener('DOMContentLoaded',()=>observer.observe(document.body,{childList:true,subtree:true}),{once:true});
 
-if(document.readyState!=='loading')scheduleSync();
+// Also run once in case the app-ready event fired before this script loaded.
+setTimeout(scheduleSync,0);
 })();
