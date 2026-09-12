@@ -20,12 +20,24 @@ function ensureStyles() {
   document.head.appendChild(link);
 }
 
+function ensureMultiMinistry() {
+  if (!authenticated()) return;
+  if (document.querySelector('script[data-vccf-member-multi-ministry]')) return;
+  const script = document.createElement('script');
+  script.src = '/vccf-member-multi-ministry.js?v=20260912-1';
+  script.defer = true;
+  script.dataset.vccfMemberMultiMinistry = '1';
+  script.onerror = () => console.error('Multi-ministry member manager failed to load.');
+  document.head.appendChild(script);
+}
+
 function activate() {
   if (loaded) window.dispatchEvent(new CustomEvent('vccf-members-add-activate'));
 }
 
 function loadModule() {
   if (!authenticated()) return Promise.resolve(false);
+  ensureMultiMinistry();
   if (loaded) { activate(); return Promise.resolve(true); }
   if (loading) return loading;
   ensureStyles();
@@ -44,6 +56,7 @@ function loadForMembersView() {
   setTimeout(() => {
     if (!authenticated()) return;
     if (!document.getElementById('members')?.classList.contains('active')) return;
+    ensureMultiMinistry();
     loadModule();
   }, 0);
 }
@@ -51,11 +64,13 @@ function loadForMembersView() {
 document.addEventListener('click', event => {
   if (event.target.closest('[data-view="members"], [data-route="members"]')) loadForMembersView();
 }, true);
-window.addEventListener('vccf-app-ready', loadForMembersView);
+window.addEventListener('vccf-app-ready', () => { ensureMultiMinistry(); loadForMembersView(); });
 window.addEventListener('focus', loadForMembersView);
 window.addEventListener('popstate', loadForMembersView);
 window.addEventListener('vccf-signed-out', () => {
   document.getElementById('vccfMemberModal')?.remove();
+  document.getElementById('vmmOverlay')?.remove();
 });
+setTimeout(ensureMultiMinistry, 900);
 loadForMembersView();
 })();
