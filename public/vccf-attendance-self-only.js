@@ -99,6 +99,25 @@ setTimeout(load,1000);
 
 (()=>{
 'use strict';
+if(window.__VCCF_AREA_LEADER_BIBLE_STUDY_GIVING_LOADER__)return;
+window.__VCCF_AREA_LEADER_BIBLE_STUDY_GIVING_LOADER__=true;
+const state=()=>window.VCCF?.getState?.()||{};
+function load(){
+  if(String(state().profile?.role||'').toLowerCase()!=='area_leader')return;
+  if(document.querySelector('script[data-vccf-area-leader-bible-study-giving]'))return;
+  const s=document.createElement('script');
+  s.src='/vccf-area-leader-bible-study-giving.js?v=20260912-1';
+  s.defer=true;
+  s.dataset.vccfAreaLeaderBibleStudyGiving='1';
+  document.head.appendChild(s);
+}
+window.addEventListener('vccf-app-ready',()=>setTimeout(load,220));
+window.addEventListener('vccf-profile-updated',()=>setTimeout(load,140));
+setTimeout(load,1100);
+})();
+
+(()=>{
+'use strict';
 if(window.__VCCF_MUSIC_MINISTRY_READONLY_LOADER__)return;
 window.__VCCF_MUSIC_MINISTRY_READONLY_LOADER__=true;
 const state=()=>window.VCCF?.getState?.()||{};
