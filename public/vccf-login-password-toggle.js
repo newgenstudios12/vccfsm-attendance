@@ -63,11 +63,19 @@ function loadAttendanceSelfOnly(){
   script.dataset.vccfAttendanceSelfOnly='1';
   document.head.appendChild(script);
 }
+function loadMemberImportToolbarFix(){
+  if(document.querySelector('script[data-vccf-member-import-toolbar-fix]'))return;
+  const script=document.createElement('script');
+  script.src='/vccf-member-import-toolbar-fix.js?v=20260912-1';
+  script.defer=true;
+  script.dataset.vccfMemberImportToolbarFix='1';
+  document.head.appendChild(script);
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 window.addEventListener('vccf-signed-out',install);
-window.addEventListener('vccf-app-ready',()=>{setTimeout(maybeLoadAdminAccountManager,180);loadAttendanceSelfOnly();});
+window.addEventListener('vccf-app-ready',()=>{setTimeout(maybeLoadAdminAccountManager,180);loadAttendanceSelfOnly();loadMemberImportToolbarFix();});
 document.addEventListener('click',event=>{
   if(event.target.closest?.('[data-route="settings"],.nav button[data-view="settings"]'))setTimeout(maybeLoadAdminAccountManager,180);
 });
-setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show')){maybeLoadAdminAccountManager();loadAttendanceSelfOnly()}},1400);
+setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show')){maybeLoadAdminAccountManager();loadAttendanceSelfOnly();loadMemberImportToolbarFix()}},1400);
 })();
