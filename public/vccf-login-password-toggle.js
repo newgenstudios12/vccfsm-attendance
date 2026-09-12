@@ -71,11 +71,19 @@ function loadMemberImportToolbarFix(){
   script.dataset.vccfMemberImportToolbarFix='1';
   document.head.appendChild(script);
 }
+function loadSundayAnonymousOffering(){
+  if(document.querySelector('script[data-vccf-sunday-anonymous-offering]'))return;
+  const script=document.createElement('script');
+  script.src='/vccf-sunday-anonymous-offering.js?v=20260912-1';
+  script.defer=true;
+  script.dataset.vccfSundayAnonymousOffering='1';
+  document.head.appendChild(script);
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 window.addEventListener('vccf-signed-out',install);
-window.addEventListener('vccf-app-ready',()=>{setTimeout(maybeLoadAdminAccountManager,180);loadAttendanceSelfOnly();loadMemberImportToolbarFix();});
+window.addEventListener('vccf-app-ready',()=>{setTimeout(maybeLoadAdminAccountManager,180);loadAttendanceSelfOnly();loadMemberImportToolbarFix();loadSundayAnonymousOffering();});
 document.addEventListener('click',event=>{
   if(event.target.closest?.('[data-route="settings"],.nav button[data-view="settings"]'))setTimeout(maybeLoadAdminAccountManager,180);
 });
-setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show')){maybeLoadAdminAccountManager();loadAttendanceSelfOnly();loadMemberImportToolbarFix()}},1400);
+setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show')){maybeLoadAdminAccountManager();loadAttendanceSelfOnly();loadMemberImportToolbarFix();loadSundayAnonymousOffering()}},1400);
 })();
