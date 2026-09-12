@@ -55,11 +55,19 @@ function maybeLoadAdminAccountManager(){
   const settings=document.getElementById('settings');
   if(settings?.classList.contains('active'))loadAdminAccountManager();
 }
+function loadAttendanceSelfOnly(){
+  if(document.querySelector('script[data-vccf-attendance-self-only]'))return;
+  const script=document.createElement('script');
+  script.src='/vccf-attendance-self-only.js?v=20260912-1';
+  script.defer=true;
+  script.dataset.vccfAttendanceSelfOnly='1';
+  document.head.appendChild(script);
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 window.addEventListener('vccf-signed-out',install);
-window.addEventListener('vccf-app-ready',()=>setTimeout(maybeLoadAdminAccountManager,180));
+window.addEventListener('vccf-app-ready',()=>{setTimeout(maybeLoadAdminAccountManager,180);loadAttendanceSelfOnly();});
 document.addEventListener('click',event=>{
   if(event.target.closest?.('[data-route="settings"],.nav button[data-view="settings"]'))setTimeout(maybeLoadAdminAccountManager,180);
 });
-setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show'))maybeLoadAdminAccountManager()},1400);
+setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show')){maybeLoadAdminAccountManager();loadAttendanceSelfOnly()}},1400);
 })();
