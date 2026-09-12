@@ -4,106 +4,80 @@ if(window.__VCCF_LINKED_MEMBER_PROFILE_PHOTO__)return;
 window.__VCCF_LINKED_MEMBER_PROFILE_PHOTO__=true;
 
 const state=()=>window.VCCF?.getState?.()||{};
-const client=()=>window.VCCF?.sb||null;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const initials=v=>String(v||'VCCF').trim().split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'V';
-let syncing=false;
+const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_code||'Member';
+let activeMemberId=null;
 
-function linkedContext(){
+function linked(){
   const s=state(),p=s.profile||null;
-  if(!p?.member_id)return{s,p,member:null};
-  const member=(s.members||[]).find(m=>m.id===p.member_id)||null;
+  const member=p?.member_id?(s.members||[]).find(m=>m.id===p.member_id)||null:null;
   return{s,p,member};
 }
-
-function paint(el,name,url){
-  if(!el)return;
-  el.innerHTML=url?`<img src="${esc(url)}" alt="${esc(name)}">`:esc(initials(name));
+function photoFor(m){
+  if(!m)return'';
+  const {p}=linked();
+  if(String(m.id)===String(p?.member_id))return String(m.photo_url||p?.profile_photo_url||'').trim();
+  return String(m.photo_url||'').trim();
 }
-
-function paintLinkedPhoto(url){
-  const {s,p,member}=linkedContext();
-  if(!p||!member)return;
-  const name=member.display_name||p.display_name||s.session?.user?.email||'Profile picture';
-  paint(document.getElementById('avatar'),name,url);
-  paint(document.getElementById('sideAvatar'),name,url);
-  paint(document.getElementById('profilePhotoPreview'),name,url);
-  paint(document.querySelector('#settings .large-avatar'),name,url);
+function putPhoto(el,name,url){
+  if(!el||!url)return;
+  if(el.dataset.vccfPhotoUrl===url&&el.querySelector('img'))return;
+  el.dataset.vccfPhotoUrl=url;
+  el.innerHTML=`<img src="${esc(url)}" alt="${esc(name)}" style="width:100%;height:100%;display:block;object-fit:cover;object-position:center;border-radius:inherit">`;
 }
-
-async function syncLinkedPhoto(){
-  if(syncing)return;
-  const sb=client(),{s,p,member}=linkedContext();
-  if(!sb||!p||!member)return;
-  syncing=true;
-  try{
-    const memberUrl=String(member.photo_url||'').trim();
-    const profileUrl=String(p.profile_photo_url||'').trim();
-
-    // Linked member is the source of truth. Preserve a legacy account photo
-    // by migrating it into an empty member record once.
-    if(!memberUrl&&profileUrl){
-      const r=await sb.from('members').update({photo_url:profileUrl}).eq('id',member.id);
-      if(r.error)throw r.error;
-      member.photo_url=profileUrl;
-      paintLinkedPhoto(profileUrl);
-      return;
+function decorate(){
+  const {s,p,member}=linked();
+  if(member){
+    const url=photoFor(member),name=memberName(member)||p?.display_name||s.session?.user?.email||'Profile';
+    if(url){
+      putPhoto(document.getElementById('avatar'),name,url);
+      putPhoto(document.getElementById('sideAvatar'),name,url);
+      putPhoto(document.getElementById('profilePhotoPreview'),name,url);
+      putPhoto(document.querySelector('#settings .large-avatar'),name,url);
+      putPhoto(document.querySelector('#selfcheck .member-initial'),name,url);
     }
-
-    if(memberUrl){
-      p.profile_photo_url=memberUrl;
-      paintLinkedPhoto(memberUrl);
-      if(profileUrl!==memberUrl&&s.session?.user?.id){
-        const r=await sb.from('profiles').update({profile_photo_url:memberUrl}).eq('user_id',s.session.user.id);
-        if(r.error)console.warn('VCCF linked profile photo mirror failed:',r.error);
-      }
-    }
-  }catch(error){
-    console.warn('VCCF linked member profile photo sync failed:',error);
-  }finally{
-    syncing=false;
+  }
+  document.querySelectorAll('[data-member-id]').forEach(row=>{
+    const m=(s.members||[]).find(x=>String(x.id)===String(row.dataset.memberId));
+    const url=photoFor(m);
+    if(m&&url)putPhoto(row.querySelector('.member-initial'),memberName(m),url);
+  });
+  const card=document.querySelector('.member-profile-card');
+  if(card){
+    let m=activeMemberId?(s.members||[]).find(x=>String(x.id)===String(activeMemberId)):null;
+    if(!m){const title=(card.querySelector('h2')?.textContent||'').trim();m=(s.members||[]).find(x=>memberName(x)===title)||null;}
+    const url=photoFor(m);
+    if(m&&url)putPhoto(card.querySelector('.member-initial'),memberName(m),url);
   }
 }
-
-async function persistUploadedPhoto(event){
+function syncFromCurrentState(){
+  const {p,member}=linked();
+  if(member&&p){
+    const url=String(member.photo_url||p.profile_photo_url||'').trim();
+    if(url){member.photo_url=url;p.profile_photo_url=url;}
+  }
+  decorate();
+}
+function onPhotoUpdated(event){
   const url=String(event?.detail?.url||'').trim();
   if(!url)return;
-  const sb=client(),{s,p,member}=linkedContext();
-  if(!sb||!p||!member)return;
-  try{
-    const r=await sb.from('members').update({photo_url:url}).eq('id',member.id);
-    if(r.error)throw r.error;
-    member.photo_url=url;
-    p.profile_photo_url=url;
-    paintLinkedPhoto(url);
-    if(s.session?.user?.id){
-      const mirror=await sb.from('profiles').update({profile_photo_url:url}).eq('user_id',s.session.user.id);
-      if(mirror.error)console.warn('VCCF linked profile photo mirror failed:',mirror.error);
-    }
-  }catch(error){
-    console.error('VCCF linked member profile photo save failed:',error);
-    const msg=document.getElementById('profilePhotoMsg');
-    if(msg)msg.textContent='Picture uploaded, but the linked member photo could not be updated. Please try again.';
-  }
+  const {p,member}=linked();
+  if(p)p.profile_photo_url=url;
+  if(member)member.photo_url=url;
+  decorate();
+  setTimeout(decorate,80);
 }
+function schedule(){setTimeout(syncFromCurrentState,20);setTimeout(syncFromCurrentState,250)}
 
-function scheduleSync(){setTimeout(()=>syncLinkedPhoto(),40);setTimeout(()=>syncLinkedPhoto(),350);}
-window.addEventListener('vccf-app-ready',scheduleSync);
-window.addEventListener('vccf-profile-linked',scheduleSync);
-window.addEventListener('vccf-profile-photo-updated',persistUploadedPhoto);
-
-const observer=new MutationObserver(mutations=>{
-  if(!state().profile?.member_id)return;
-  for(const mutation of mutations){
-    if([...mutation.addedNodes].some(n=>n.nodeType===1&&(n.id==='settings'||n.querySelector?.('#profilePhotoPreview,.large-avatar')))){
-      scheduleSync();
-      break;
-    }
-  }
-});
+window.addEventListener('vccf-app-ready',schedule);
+window.addEventListener('vccf-profile-linked',schedule);
+window.addEventListener('vccf-profile-photo-updated',onPhotoUpdated);
+document.addEventListener('click',event=>{
+  const el=event.target.closest?.('[data-view-member],[data-member-id]');
+  if(el){activeMemberId=el.dataset.viewMember||el.dataset.memberId||activeMemberId;setTimeout(decorate,0);setTimeout(decorate,100)}
+},true);
+const observer=new MutationObserver(()=>setTimeout(decorate,0));
 if(document.body)observer.observe(document.body,{childList:true,subtree:true});
 else document.addEventListener('DOMContentLoaded',()=>observer.observe(document.body,{childList:true,subtree:true}),{once:true});
-
-// Also run once in case the app-ready event fired before this script loaded.
-setTimeout(scheduleSync,0);
+setTimeout(schedule,0);
 })();
