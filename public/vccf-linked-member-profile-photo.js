@@ -81,3 +81,25 @@ if(document.body)observer.observe(document.body,{childList:true,subtree:true});
 else document.addEventListener('DOMContentLoaded',()=>observer.observe(document.body,{childList:true,subtree:true}),{once:true});
 setTimeout(schedule,0);
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_MEMBER_CONTACT_MODULE_LOADER__)return;
+window.__VCCF_MEMBER_CONTACT_MODULE_LOADER__=true;
+
+function loadMemberContactModule(){
+  if(window.__VCCF_MEMBER_CONTACT_INFO__)return true;
+  if(document.querySelector('script[data-vccf-member-contact-info]'))return true;
+  const script=document.createElement('script');
+  script.src='/vccf-member-contact-info.js?v=20260913-1';
+  script.dataset.vccfMemberContactInfo='1';
+  script.async=false;
+  script.onerror=()=>console.error('Member contact information module could not be loaded.');
+  document.head.appendChild(script);
+  return true;
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadMemberContactModule,{once:true});
+else loadMemberContactModule();
+window.addEventListener('vccf-app-ready',loadMemberContactModule);
+})();
