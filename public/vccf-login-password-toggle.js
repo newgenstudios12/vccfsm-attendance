@@ -37,13 +37,29 @@ function install(){
 function loadAdminResetHelper(){
   if(document.querySelector('script[data-vccf-admin-password-reset-helper]'))return;
   const script=document.createElement('script');
-  script.src='/vccf-admin-password-reset-helper.js?v=20260912-1';
+  script.src='/vccf-admin-password-reset-helper.js?v=20260912-2';
   script.defer=true;
   script.dataset.vccfAdminPasswordResetHelper='1';
   document.head.appendChild(script);
 }
+function loadAdminAccountManager(){
+  if(document.querySelector('script[data-vccf-admin-account-manager]')){loadAdminResetHelper();return;}
+  const script=document.createElement('script');
+  script.src='/vccf-admin-account-manager.js?v=20260912-2';
+  script.defer=true;
+  script.dataset.vccfAdminAccountManager='1';
+  script.onload=()=>loadAdminResetHelper();
+  document.head.appendChild(script);
+}
+function maybeLoadAdminAccountManager(){
+  const settings=document.getElementById('settings');
+  if(settings?.classList.contains('active'))loadAdminAccountManager();
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 window.addEventListener('vccf-signed-out',install);
-window.addEventListener('vccf-app-ready',loadAdminResetHelper);
-setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show'))loadAdminResetHelper()},1200);
+window.addEventListener('vccf-app-ready',()=>setTimeout(maybeLoadAdminAccountManager,180));
+document.addEventListener('click',event=>{
+  if(event.target.closest?.('[data-route="settings"],.nav button[data-view="settings"]'))setTimeout(maybeLoadAdminAccountManager,180);
+});
+setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show'))maybeLoadAdminAccountManager()},1400);
 })();
