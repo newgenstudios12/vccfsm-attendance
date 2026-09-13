@@ -46,3 +46,5 @@ The Digital ID queries the member record when opened, after local member/photo c
 - No new security advisor findings concern the new request table or private ID trigger functions. Existing unrelated findings were left outside this change.
 
 Local browser access and the isolated layout preview were blocked by the browser environment. DOM and QR checks used controlled fixtures; they do not claim a logged-in or visual browser test against production.
+
+Members can adjust a new or current profile picture in Settings: drag or use arrow keys to position it, zoom, then select Use this photo and Save picture. The saved JPEG is 640 × 611 pixels to match the Digital ID photo frame; the circular guide previews the account avatar crop. Cancelling leaves the saved picture unchanged.
