@@ -4,7 +4,7 @@ if(window.__VCCF_LINKED_MEMBER_PROFILE_PHOTO__)return;
 window.__VCCF_LINKED_MEMBER_PROFILE_PHOTO__=true;
 
 const state=()=>window.VCCF?.getState?.()||{};
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_code||'Member';
 let activeMemberId=null;
 
@@ -112,7 +112,7 @@ function loadMemberDeleteButton(){
   if(window.__VCCF_MEMBER_DELETE_BUTTON__)return true;
   if(document.querySelector('script[data-vccf-member-delete-button]'))return true;
   const script=document.createElement('script');
-  script.src='/vccf-member-delete-button.js?v=20260913-1';
+  script.src='/vccf-member-delete-button.js?v=20260913-2';
   script.dataset.vccfMemberDeleteButton='1';
   script.async=false;
   script.onerror=()=>console.error('Member delete button module could not be loaded.');
