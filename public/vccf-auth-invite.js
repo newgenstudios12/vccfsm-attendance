@@ -23,7 +23,7 @@ handleInviteUrl();
 function loadVccfEnhancement(key,src){if(document.querySelector(`script[data-vccf-${key}]`))return;const s=document.createElement('script');s.src=src;s.dataset[`vccf${key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())}`]='1';s.defer=true;document.head.appendChild(s)}
 loadVccfEnhancement('login-password-toggle','/vccf-login-password-toggle.js?v=20260912-1');
 const ENHANCEMENTS=[
-  ['member-360','/vccf-member-360.js?v=20260913-2'],
+  ['member-360','/vccf-member-360.js?v=20260913-3'],
   ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260913-2'],
   ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
   ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],

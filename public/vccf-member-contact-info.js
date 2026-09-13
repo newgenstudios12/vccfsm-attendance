@@ -7,7 +7,7 @@ const S=()=>window.VCCF?.getState?.()||{};
 const sb=()=>window.VCCF?.sb||null;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const role=()=>String(S().profile?.role||'member').toLowerCase();
-const canEdit=member=>['admin','pastor'].includes(role())||(role()==='area_leader'&&String(member?.area_id||'')===String(S().profile?.area_id||''));
+const canEdit=member=>['admin','pastor'].includes(role())||(role()==='area_leader'&&!!S().profile?.area_id&&String(member?.area_id||'')===String(S().profile?.area_id||''));
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_code||'Member';
 const fmtBirthday=v=>v?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'long',day:'numeric'}).format(new Date(String(v)+'T12:00:00+08:00')):'Not recorded';
 let leadership=[];
