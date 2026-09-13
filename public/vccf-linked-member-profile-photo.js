@@ -123,3 +123,23 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else loadMemberDeleteButton();
 window.addEventListener('vccf-app-ready',loadMemberDeleteButton);
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_ATTENDANCE_CHECKLIST_LOADER__)return;
+window.__VCCF_ATTENDANCE_CHECKLIST_LOADER__=true;
+function loadAttendanceChecklist(){
+  if(window.__VCCF_ATTENDANCE_CHECKLIST__)return true;
+  if(document.querySelector('script[data-vccf-attendance-checklist]'))return true;
+  const script=document.createElement('script');
+  script.src='/vccf-attendance-checklist.js?v=20260913-1';
+  script.dataset.vccfAttendanceChecklist='1';
+  script.async=false;
+  script.onerror=()=>console.error('Attendance checklist module could not be loaded.');
+  document.head.appendChild(script);
+  return true;
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadAttendanceChecklist,{once:true});
+else loadAttendanceChecklist();
+window.addEventListener('vccf-app-ready',loadAttendanceChecklist);
+})();
