@@ -145,7 +145,7 @@ function load(){
   if(!['admin','area_leader'].includes(currentRole))return;
   if(document.querySelector('script[data-vccf-attendance-delete]'))return;
   const s=document.createElement('script');
-  s.src='/vccf-attendance-delete.js?v=20260913-1';
+  s.src='/vccf-attendance-delete.js?v=20260913-2';
   s.defer=true;
   s.dataset.vccfAttendanceDelete='1';
   document.head.appendChild(s);
