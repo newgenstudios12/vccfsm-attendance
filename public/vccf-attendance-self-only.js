@@ -134,3 +134,23 @@ window.addEventListener('vccf-app-ready',()=>setTimeout(load,500));
 window.addEventListener('vccf-profile-updated',()=>setTimeout(load,350));
 setTimeout(load,1300);
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_ATTENDANCE_DELETE_LOADER__)return;
+window.__VCCF_ATTENDANCE_DELETE_LOADER__=true;
+const state=()=>window.VCCF?.getState?.()||{};
+function load(){
+  const currentRole=String(state().profile?.role||'').toLowerCase();
+  if(!['admin','area_leader'].includes(currentRole))return;
+  if(document.querySelector('script[data-vccf-attendance-delete]'))return;
+  const s=document.createElement('script');
+  s.src='/vccf-attendance-delete.js?v=20260913-1';
+  s.defer=true;
+  s.dataset.vccfAttendanceDelete='1';
+  document.head.appendChild(s);
+}
+window.addEventListener('vccf-app-ready',()=>setTimeout(load,260));
+window.addEventListener('vccf-profile-updated',()=>setTimeout(load,180));
+setTimeout(load,1200);
+})();
