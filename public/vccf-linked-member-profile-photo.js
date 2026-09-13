@@ -91,7 +91,7 @@ function loadMemberContactModule(){
   if(window.__VCCF_MEMBER_CONTACT_INFO__)return true;
   if(document.querySelector('script[data-vccf-member-contact-info]'))return true;
   const script=document.createElement('script');
-  script.src='/vccf-member-contact-info.js?v=20260913-1';
+  script.src='/vccf-member-contact-info.js?v=20260913-2';
   script.dataset.vccfMemberContactInfo='1';
   script.async=false;
   script.onerror=()=>console.error('Member contact information module could not be loaded.');

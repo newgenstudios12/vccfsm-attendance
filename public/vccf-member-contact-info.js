@@ -17,7 +17,7 @@ let timer=0;
 function memberFromProfile(){
   const key=String(document.querySelector('.m360-qr-code')?.textContent||'').trim();
   if(!key)return null;
-  return (S().members||[]).find(m=>String(m.id)===key||String(m.member_code||'')===key)||null;
+  return (S().members||[]).find(m=>String(m.id)===key||String(m.member_number||'')===key||String(m.member_code||'')===key)||null;
 }
 async function hydrate(force=false){
   if(hydration&&!force)return hydration;

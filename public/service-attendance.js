@@ -17,7 +17,7 @@ const serviceLabel=type=>type==='midweek_service'?'Midweek Service':'Bible Study
 const activeMembers=()=>(state().members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive');
 
 function setStatus(id,message,kind=''){const el=document.getElementById(id);if(!el)return;el.className='attendance-status '+kind;el.textContent=message||''}
-function memberFromQr(raw){const code=String(raw||'').trim().replace(/^VCCF-MEMBER:/i,'');return activeMembers().find(m=>String(m.member_code||'')===code||String(m.id)===code)}
+function memberFromQr(raw){const code=String(raw||'').trim().replace(/^VCCF-MEMBER:/i,'');return activeMembers().find(m=>String(m.member_number||'')===code||String(m.member_code||'')===code||String(m.id)===code)}
 
 async function record(member,source,button,statusId){
   if(!member)return false;

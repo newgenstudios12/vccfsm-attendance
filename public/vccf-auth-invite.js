@@ -23,16 +23,16 @@ handleInviteUrl();
 function loadVccfEnhancement(key,src){if(document.querySelector(`script[data-vccf-${key}]`))return;const s=document.createElement('script');s.src=src;s.dataset[`vccf${key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())}`]='1';s.defer=true;document.head.appendChild(s)}
 loadVccfEnhancement('login-password-toggle','/vccf-login-password-toggle.js?v=20260912-1');
 const ENHANCEMENTS=[
-  ['member-360','/vccf-member-360.js?v=20260903-6'],
-  ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260904-1'],
+  ['member-360','/vccf-member-360.js?v=20260913-2'],
+  ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260913-2'],
   ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
   ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],
-  ['member-contact-info','/vccf-member-contact-info.js?v=20260904-1'],
+  ['member-contact-info','/vccf-member-contact-info.js?v=20260913-2'],
   ['pwa','/vccf-pwa.js?v=20260904-6'],
   ['notification-ux','/vccf-notification-ux.js?v=20260904-7'],
   ['notification-actions-leadership-photo','/vccf-notification-actions-leadership-photo.js?v=20260904-1'],
   ['visual-hierarchy','/vccf-visual-hierarchy.js?v=20260904-2'],
-  ['service-attendance-v2','/vccf-service-attendance-v2.js?v=20260904-1'],
+  ['service-attendance-v2','/vccf-service-attendance-v2.js?v=20260913-2'],
   ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260904-1'],
   ['events-gallery','/vccf-events-gallery.js?v=20260904-1'],
   ['attendance-nav-reconcile','/vccf-attendance-nav-reconcile.js?v=20260904-1'],
@@ -42,7 +42,7 @@ const ENHANCEMENTS=[
   ['bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1'],
   ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260904-1'],
   ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260904-1'],
-  ['member-address-filter','/vccf-member-address-filter.js?v=20260904-2'],
+  ['member-address-filter','/vccf-member-address-filter.js?v=20260913-2'],
   ['band-fund','/vccf-band-fund.js?v=20260904-1']
 ];
 function installBsgPreviewDedupe(){if(window.__VCCF_BSG_PREVIEW_DEDUPE__)return;window.__VCCF_BSG_PREVIEW_DEDUPE__=true;const clean=()=>{const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())};const observer=new MutationObserver(clean);observer.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('vccf-app-ready',clean);setTimeout(clean,0)}

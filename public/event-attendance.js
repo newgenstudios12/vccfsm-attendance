@@ -168,7 +168,7 @@ function setStatus(id, message, kind='') {
 
 function memberFromQr(raw) {
   const code = String(raw || '').trim().replace(/^VCCF-MEMBER:/i,'');
-  return (state().members || []).find(member => String(member.member_code || '') === code || String(member.id) === code);
+  return (state().members || []).find(member => String(member.member_number || '') === code || String(member.member_code || '') === code || String(member.id) === code);
 }
 
 async function checkIn(eventId, memberId, source, button, statusId) {
