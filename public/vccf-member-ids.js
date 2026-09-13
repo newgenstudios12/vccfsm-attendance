@@ -32,6 +32,7 @@ let draftNotes = '';
 let queueFilter = 'open';
 let feedback = '';
 let cardObserver = null;
+let exportBusy = false;
 
 function active() {
   return root?.isConnected && root.classList.contains('active') && !!state().session?.user?.id;
@@ -99,7 +100,7 @@ function renderSelf() {
   }
   const own = loadedMember.id === loadedProfile?.member_id;
   const photo = loadedMember.photo_url || (own ? loadedProfile.profile_photo_url : '') || '';
-  root.innerHTML = `<div class="id-layout"><div>${cardMarkup(loadedMember, photo)}<p class="id-live-note">Your Digital ID follows your saved member information. Your member number stays the same.</p></div><div class="id-side"><section class="id-panel"><h2>Personal details</h2><dl class="id-details">${personalDetails(loadedMember)}</dl></section>${requestMarkup(own)}${!own ? '<div data-id-feedback role="status" aria-live="polite"></div>' : ''}</div></div>`;
+  root.innerHTML = `<div class="id-layout"><div>${cardMarkup(loadedMember, photo)}<div class="id-card-actions"><button type="button" class="btn" data-download-id ${exportBusy ? 'disabled' : ''}>Download ID (PNG)</button><button type="button" class="btn secondary" data-print-id ${exportBusy ? 'disabled' : ''}>Print ID</button></div><div data-id-export-feedback role="status" aria-live="polite"></div><p class="id-live-note">Your Digital ID follows your saved member information. Your member number stays the same.</p></div><div class="id-side"><section class="id-panel"><h2>Personal details</h2><dl class="id-details">${personalDetails(loadedMember)}</dl></section>${requestMarkup(own)}${!own ? '<div data-id-feedback role="status" aria-live="polite"></div>' : ''}</div></div>`;
   const qr = root.querySelector('[data-digital-id-qr]');
   if (window.QRCode && loadedMember.member_number) {
     new window.QRCode(qr, {text:'VCCF-MEMBER:' + loadedMember.member_number, width:256, height:256, colorDark:'#111111', colorLight:'#ffffff', correctLevel:window.QRCode.CorrectLevel.H});
@@ -112,12 +113,146 @@ function renderSelf() {
     cardObserver.observe(root.querySelector('.id-card-shell'));
   }
   document.fonts?.ready.then(fitCardText);
+  root.querySelector('[data-download-id]').addEventListener('click', () => exportId(false));
+  root.querySelector('[data-print-id]').addEventListener('click', () => exportId(true));
   const form = root.querySelector('[data-id-request-form]');
   if (form) {
     form.elements.notes.addEventListener('input', event => { draftNotes = event.target.value; });
     form.addEventListener('submit', submitRequest);
   }
   root.querySelector('[data-cancel-id-request]')?.addEventListener('click', cancelRequest);
+}
+function loadIdImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const timer = setTimeout(() => { image.onload = image.onerror = null; reject(new Error('An ID image could not be loaded. Please try again.')); }, 15000);
+    if (new URL(src, location.href).origin !== location.origin) image.crossOrigin = 'anonymous';
+    image.onload = () => { clearTimeout(timer); resolve(image); };
+    image.onerror = () => { clearTimeout(timer); reject(new Error('An ID image could not be loaded for download or printing. Please try again.')); };
+    image.src = src;
+  });
+}
+// Draw the visible card directly. This keeps its measured typography and layout,
+// preserves the QR, and avoids screenshot libraries that omit gradient text.
+async function idCanvas() {
+  await document.fonts?.ready;
+  fitCardText();
+  const card = root.querySelector('.id-card');
+  const bounds = card.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) throw new Error('Open your Digital ID before downloading or printing.');
+  const box = element => {
+    const rect = element.getBoundingClientRect();
+    return {x:rect.left-bounds.left, y:rect.top-bounds.top, w:rect.width, h:rect.height};
+  };
+  const texts = Array.from(card.querySelectorAll('h2,.id-area,dt,dd,.id-card-footer p')).map(element => {
+    const style = getComputedStyle(element);
+    let value = Array.from(element.childNodes).map(node => node.nodeName === 'BR' ? '\n' : node.textContent).join('');
+    if (style.textTransform === 'uppercase') value = value.toUpperCase();
+    return {...box(element), text:value, size:parseFloat(style.fontSize), line:parseFloat(style.lineHeight) || parseFloat(style.fontSize)*1.2,
+      font:`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, color:style.color, gradient:element.classList.contains('id-card-name'),
+      fixed:!!element.closest('.id-card-footer'),
+      wrap:element.closest('.id-card-address') && element.tagName === 'DD'};
+  });
+  const photo = card.querySelector('.id-photo');
+  const photoStyle = getComputedStyle(photo);
+  const photoBox = box(photo);
+  const photoSrc = photo.querySelector('img')?.src;
+  const initials = photo.textContent;
+  const art = box(card.querySelector('.id-card-art'));
+  const logo = box(card.querySelector('.id-card-logo'));
+  const divider = box(card.querySelector('.id-card-divider'));
+  const footer = box(card.querySelector('.id-card-footer'));
+  const qrElement = card.querySelector('.id-qr');
+  const qrBox = box(qrElement);
+  const qrPadding = parseFloat(getComputedStyle(qrElement).paddingLeft);
+  const qr = qrElement.querySelector('canvas') || qrElement.querySelector('img');
+  if (!qr) throw new Error('Your QR code is unavailable. Please reload your Digital ID.');
+  const [background, artwork, brand, portrait] = await Promise.all([
+    loadIdImage('/Churchfront_login.png'), loadIdImage('/assets/vccf-id-orange-art.png'),
+    loadIdImage('/vccf-logo-black.png'), photoSrc ? loadIdImage(photoSrc) : null
+  ]);
+  const canvas = document.createElement('canvas');
+  canvas.width = 1944; canvas.height = 1230;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Your browser cannot create an ID image.');
+  ctx.scale(canvas.width/bounds.width, canvas.height/bounds.height);
+  const cover = (image, rect) => {
+    const scale = Math.max(rect.w/image.naturalWidth, rect.h/image.naturalHeight);
+    const w = rect.w/scale, h = rect.h/scale;
+    ctx.drawImage(image, (image.naturalWidth-w)/2, (image.naturalHeight-h)/2, w, h, rect.x, rect.y, rect.w, rect.h);
+  };
+  cover(background, {x:0,y:0,w:bounds.width,h:bounds.height});
+  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(0,0,bounds.width,bounds.height);
+  ctx.globalAlpha = .18; ctx.drawImage(artwork, art.x,art.y,art.w,art.h); ctx.globalAlpha = 1;
+  const brandScale = Math.min(logo.w/brand.naturalWidth,logo.h/brand.naturalHeight);
+  const brandW = brand.naturalWidth*brandScale, brandH = brand.naturalHeight*brandScale;
+  ctx.drawImage(brand,logo.x+(logo.w-brandW)/2,logo.y+(logo.h-brandH)/2,brandW,brandH);
+  ctx.fillStyle = '#111'; ctx.fillRect(photoBox.x,photoBox.y,photoBox.w,photoBox.h);
+  const border = parseFloat(photoStyle.borderLeftWidth);
+  const inset = {x:photoBox.x+border,y:photoBox.y+border,w:photoBox.w-2*border,h:photoBox.h-2*border};
+  ctx.fillStyle = '#f1f0ee';ctx.fillRect(inset.x,inset.y,inset.w,inset.h);
+  if (portrait) cover(portrait,inset);
+  else {ctx.font = `${photoStyle.fontWeight} ${photoStyle.fontSize} ${photoStyle.fontFamily}`;ctx.fillStyle='#8c1414';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(initials,inset.x+inset.w/2,inset.y+inset.h/2);}
+  ctx.fillStyle='#fff';ctx.fillRect(qrBox.x,qrBox.y,qrBox.w,qrBox.h);
+  ctx.imageSmoothingEnabled=false;ctx.drawImage(qr,qrBox.x+qrPadding,qrBox.y+qrPadding,qrBox.w-2*qrPadding,qrBox.h-2*qrPadding);ctx.imageSmoothingEnabled=true;
+  ctx.fillStyle='#191919';ctx.fillRect(divider.x,divider.y,divider.w,divider.h);
+  const band=ctx.createLinearGradient(0,0,bounds.width,0);band.addColorStop(0,'#850201');band.addColorStop(1,'#e88929');ctx.fillStyle=band;ctx.fillRect(footer.x,footer.y,footer.w,footer.h);
+  ctx.textAlign='left';ctx.textBaseline='top';
+  for (const item of texts) {
+    ctx.save();ctx.beginPath();ctx.rect(item.x,item.y,item.w,item.wrap?item.line*4:item.h);ctx.clip();ctx.font=item.font;ctx.fillStyle=item.color;
+    if(item.gradient){const gradient=ctx.createLinearGradient(item.x,0,item.x+item.w,0);gradient.addColorStop(0,'#ff712b');gradient.addColorStop(1,'#b5083b');ctx.fillStyle=gradient;}
+    let lines=item.text.split('\n');
+    if(item.wrap){
+      lines=[''];
+      for(const word of item.text.split(/\s+/)){
+        const next=(lines.at(-1)?lines.at(-1)+' ':'')+word;
+        if(ctx.measureText(next).width<=item.w){lines[lines.length-1]=next;continue;}
+        if(lines.at(-1))lines.push('');
+        for(const char of word){if(ctx.measureText(lines.at(-1)+char).width>item.w)lines.push('');lines[lines.length-1]+=char;}
+      }
+    }
+    const limit=item.wrap?4:lines.length;
+    lines.slice(0,limit).forEach((value,index)=>{
+      if(!item.fixed&&(ctx.measureText(value).width>item.w || (item.wrap&&index===3&&lines.length>4))){while(value&&ctx.measureText(value+'…').width>item.w)value=value.slice(0,-1);value+='…';}
+      const y=item.y+(item.line-item.size)/2+index*item.line;
+      if(item.fixed)ctx.fillText(value,item.x,y,item.w);else ctx.fillText(value,item.x,y);
+    });
+    ctx.restore();
+  }
+  return canvas;
+}
+async function exportId(printing) {
+  if (exportBusy || !loadedMember || !active()) return;
+  const epoch=generation, uid=state().session.user.id, memberId=loadedMember.id;
+  // Open during the click so mobile browsers do not block an asynchronous popup.
+  const win=printing?window.open('', '_blank'):null;
+  if(printing&&!win){root.querySelector('[data-id-export-feedback]').textContent='Allow pop-ups for this site, then select Print ID again.';return;}
+  if(win){win.document.write('<!doctype html><html><head><title>Preparing Digital ID</title></head><body><p>Preparing your ID…</p></body></html>');win.document.close();}
+  exportBusy=true;
+  try {
+    if(await refresh(true)!==true)throw new Error('Unable to load your latest member information. Please try again.');
+    if(generation!==epoch||loadedMember?.id!==memberId||state().session?.user?.id!==uid)throw new Error('Your member session changed. Please try again.');
+    root.querySelector('[data-id-export-feedback]').textContent='Preparing your ID…';
+    const canvas=await idCanvas();
+    if(generation!==epoch||state().session?.user?.id!==uid||loadedMember?.id!==memberId||!active())throw new Error('Your member session changed. Open the Digital ID and try again.');
+    const filename=number(loadedMember);
+    if(printing){
+      if(win.closed)throw new Error('The print window was closed. Select Print ID to try again.');
+      win.document.write(`<!doctype html><html><head><title>${esc(filename)} - Digital ID</title><style>@page{size:A4;margin:15mm}body{margin:0;font-family:Arial,sans-serif}.print-card{display:block;width:85.725mm;height:54.24mm}button{padding:12px 20px;margin:20px 0;font-size:16px}p{font-size:14px}@media print{button,p{display:none}}</style></head><body><img class="print-card" alt="Digital member ID"><button type="button">Print ID</button><p>Print at actual size (100%). You can also save as PDF from the print dialog.</p></body></html>`);
+      win.document.close();win.document.querySelector('button').onclick=()=>{win.focus();win.print();};
+      const image=win.document.querySelector('img');image.onload=()=>{win.focus();win.print();};image.src=canvas.toDataURL('image/png');
+    } else {
+      const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Unable to create your ID image.')),'image/png'));
+      if(generation!==epoch||state().session?.user?.id!==uid)throw new Error('Your member session changed. Please try again.');
+      const url=URL.createObjectURL(blob), link=document.createElement('a');link.href=url;link.download=filename+'.png';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }
+    const target=root?.querySelector('[data-id-export-feedback]');if(target)target.textContent=printing?'Your ID is ready to print.':'Your ID download is ready.';
+  } catch(error) {
+    if(win&&!win.closed)win.close();
+    if(generation===epoch){const target=root?.querySelector('[data-id-export-feedback]');if(target)target.textContent=error.message||'Unable to prepare your ID. Please try again.';}
+  } finally {
+    exportBusy=false;root?.querySelectorAll('[data-download-id],[data-print-id]').forEach(button=>{button.disabled=false;});
+  }
 }
 async function submitRequest(event) {
   event.preventDefault();
@@ -220,6 +355,7 @@ async function fetchQueue(epoch) {
 }
 async function refresh(force = false) {
   if (!active() || document.hidden) return;
+  if (exportBusy && !force) return;
   // Do not interrupt a request note or an admin review while it is being edited.
   if (!force && root.contains(document.activeElement) && document.activeElement?.closest('form')) return;
   if (inFlight?.epoch === generation) {
@@ -231,22 +367,25 @@ async function refresh(force = false) {
   const task = (async () => {
     try {
       const fresh = await (mode === 'queue' ? fetchQueue(epoch) : fetchSelf(epoch));
-      if (epoch !== generation || !active() || fresh === null) return;
+      if (epoch !== generation || !active() || fresh === null) return false;
       if (force || fresh !== signature) {
         signature = fresh;
         mode === 'queue' ? renderQueue() : renderSelf();
       }
+      return true;
     } catch (error) {
       if (epoch !== generation || !active()) return;
       if (error.clearId) { signature = ''; loadedMember = loadedProfile = null; }
       if (!signature) root.innerHTML = '<section class="id-panel"><h2>Member ID unavailable</h2><div data-id-feedback role="status"></div><button type="button" class="btn secondary" data-id-retry>Try again</button></section>';
       message(error.message || 'Unable to refresh your ID. Please try again.', true);
       root.querySelector('[data-id-retry]')?.addEventListener('click', () => refresh(true), {once:true});
+      return false;
     }
   })();
   inFlight = {epoch, promise:task};
-  await task;
+  const succeeded = await task;
   if (inFlight?.promise === task) inFlight = null;
+  return succeeded;
 }
 function mount(target, memberId = null) {
   cardObserver?.disconnect();

@@ -24,6 +24,8 @@
 .id-card-footer{position:absolute;inset:84.57% 0 0;background:linear-gradient(90deg,#850201,#e88929);color:#fff}
 .id-card-footer p{position:absolute;margin:0;text-transform:uppercase}.id-card-church{left:2.27%;top:22%;width:56%;font-size:2.8cqw;font-weight:700;line-height:1.02}.id-card-motto{left:76.66%;top:17%;width:23.2%;font-size:3.3cqw;font-weight:800;line-height:1.05}
 .id-live-note{color:var(--muted,#626b78);font-size:.875rem;line-height:1.5;margin:12px 0 0;max-width:648px}
+.id-card-actions{display:flex;gap:10px;flex-wrap:wrap;max-width:648px;margin:16px auto 0}.id-card-actions .btn{min-height:44px;flex:1;white-space:normal;cursor:pointer}.id-card-actions .btn:disabled{opacity:.6;cursor:wait}[data-id-export-feedback]{max-width:648px;margin:8px auto 0;font-size:.875rem;line-height:1.4;color:var(--text,#15171c)}
+html[data-theme=dark] .id-card-actions .btn.secondary{background:#292f38;color:#f1f3f5;border-color:#46505d}
 .id-details{display:grid;gap:0;margin:0}.id-details>div{display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.3fr);gap:14px;padding:12px 0;border-bottom:1px solid var(--line,#e5e7eb)}
 .id-details>div:last-child{border-bottom:0}.id-details dt{font-size:.875rem;color:var(--muted,#626b78)}.id-details dd{margin:0;font-size:1rem;font-weight:600;overflow-wrap:anywhere}
 .id-badge{display:inline-block;padding:5px 10px;border-radius:7px;background:var(--bg,#f2f3f5);color:var(--text,#16181d);font-size:.875rem;font-weight:700;line-height:1.4;width:max-content;max-width:100%}

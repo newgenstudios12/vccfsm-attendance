@@ -1,8 +1,12 @@
 # Member IDs and physical ID requests
 
-Members open **Digital ID** in the navigation to see their current member record, permanent number, photo, attendance QR, and personal details. Linked members can submit a **Request for physical ID**, view its status, and cancel a pending request. Admins and pastors use **Church Management → ID Requests** to prepare IDs, add a note for the member, and record pickup.
+Members open **Digital ID** in the navigation to see their current member record, permanent number, photo, attendance QR, and personal details. Members and authorized viewers can select **Download ID (PNG)** for a 1944 × 1230 pixel image or **Print ID** for a card measuring 85.725 × 54.24 mm. The print window includes a manual Print button and supports the browser’s Save as PDF option. Both actions reload the member record before capturing the card, and abort if the reload fails or the account/member changes. Images are loaded with CORS for canvas export; image failures produce an error rather than silently omitting the photo. Downloaded files represent the saved information at export time. Linked members can submit a **Request for physical ID**, view its status, and cancel a pending request. Admins and pastors use **Church Management → ID Requests** to prepare IDs, add a note for the member, and record pickup.
 
 The supplied Canva design is linked in the fulfillment queue: https://canva.link/1efsdjt75n44vin. The Digital ID reproduces its front page in the same 324 × 205 landscape format: faded church photo and orange artwork, black VCCF logo, bordered member photo and QR on the left, gradient name and area above the divider, date of birth/member number/mobile/address fields on the right, and the church name plus “ONE GOD. ONE FAMILY.” in the gradient footer. Personal fields and the QR remain live. Long names fit the available width; addresses wrap to four lines, with full values in the personal details panel. The back page contains sample school terms and a placeholder website, so it is not displayed as church policy. The Canva original was inspected without saving changes.
+
+## Linked account photos
+
+The photo-upload service now saves its verified user’s account photo to the linked member record. The guard remains an invoker function with a fixed search path; trusted server roles and administrators can save member records, while ordinary users remain limited to their own photo. Generated names and server-maintained timestamps are excluded from the photo-only comparison. Five missing member pictures were copied from existing linked account pictures; all seven linked accounts with pictures now match their member records. Transactional service-role and authenticated own-photo/non-photo/cross-member checks passed and were rolled back.
 
 ## Permanent numbers
 
@@ -30,6 +34,8 @@ The Digital ID queries the member record when opened, after local member/photo c
 - The request table uses row-level security; anonymous access is revoked. Internal trigger functions use the caller's privileges, a fixed empty search path, and no public execution grant.
 
 ## Verification
+
+- Download/print fixtures used a real canvas renderer to produce a 1944 × 1230 PNG. The exported QR decoded independently, current saved fields were captured, print dimensions and the manual Print button were verified, and failed refresh/popup-block cases were handled.
 
 - Canva front: parsed CSS field positions match the original element coordinates within 0.5 design pixels. Controlled page checks passed for all live fields, full-month birth dates, draft preservation and physical requests. The app's actual QR library generated the member code; an independent decoder read synthetic rasterizations at 280, 320, 390 and 648 pixel card widths.
 - Live database: 281 populated, distinct member numbers; both pastor account links confirmed; original 280 member identifiers and legacy codes unchanged.
