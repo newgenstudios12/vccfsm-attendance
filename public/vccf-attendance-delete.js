@@ -9,12 +9,25 @@ const role=()=>String(state().profile?.role||'member').toLowerCase();
 const allowed=()=>['admin','area_leader'].includes(role());
 const ownAreaId=()=>state().profile?.area_id||'';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const memberName=id=>{const m=(state().members||[]).find(x=>x.id===id);return m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_number||m?.member_code||id||'Member'};
+const memberName=id=>{const m=(state().members||[]).find(x=>x.id===id);return m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_number||m?.member_code||'Member'};
 const areaName=id=>(state().areas||[]).find(x=>x.id===id)?.name||'Unassigned';
 const typeLabel=t=>t==='bible_study'?'Bible Study':t==='midweek_service'?'Midweek Service':'Sunday Attendance';
 const phDay=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(v));
 const bounds=day=>({start:new Date(day+'T00:00:00+08:00').toISOString(),end:new Date(new Date(day+'T00:00:00+08:00').getTime()+86400000).toISOString()});
 let modal=null,observer=null,loading=false,inlineBusy=false,inlineTimer=0;
+
+async function hydrateMembersForRecords(records){
+  const current=state().members||[],known=new Set(current.map(m=>String(m.id)));
+  const missing=[...new Set((records||[]).map(row=>String(row?.member_id||'')).filter(id=>id&&!known.has(id)))];
+  if(!missing.length)return false;
+  const result=await sb().from('members').select('id,member_number,member_code,first_name,last_name,display_name,area_id,is_active,status,member_type,member_category,address,province,city_municipality,barangay,province_psgc_code,city_municipality_psgc_code,barangay_psgc_code,birth_date,photo_url,created_at').in('id',missing);
+  if(result.error){console.warn('Unable to refresh attendance member details:',result.error.message||result.error);return false}
+  if(!result.data?.length)return false;
+  const byId=new Map(current.map(m=>[String(m.id),m]));
+  result.data.forEach(m=>byId.set(String(m.id),m));
+  state().members=[...byId.values()];
+  return true;
+}
 
 function ensureStyles(){
   if(document.getElementById('vccfAttendanceDeleteStyles'))return;
@@ -62,6 +75,7 @@ async function loadRows(){
     if(role()==='area_leader'){const area=ownAreaId();if(!area){list.innerHTML='<div class="vccf-attendance-delete-empty">Your account has no assigned area.</div>';return}q=q.eq('area_id',area)}
     const {data,error}=await q;if(error)throw error;const rows=data||[];
     if(!rows.length){list.innerHTML='<div class="vccf-attendance-delete-empty">No '+esc(typeLabel(type))+' records found for this date.</div>';return}
+    await hydrateMembersForRecords(rows);
     list.innerHTML=rows.map(row=>`<div class="vccf-attendance-delete-row" data-attendance-delete-row="${esc(row.id)}"><div><b>${esc(memberName(row.member_id))}</b><span>${esc(areaName(row.area_id))} · ${esc(typeLabel(row.attendance_type))} · ${esc(new Date(row.checked_in_at).toLocaleString('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}))}${row.service_barangay?' · '+esc(row.service_barangay):''}</span></div><button class="btn secondary" style="color:#b91c1c" type="button" data-delete-attendance="${esc(row.id)}">Delete</button></div>`).join('');
     list.querySelectorAll('[data-delete-attendance]').forEach(button=>button.onclick=()=>deleteRow(button.dataset.deleteAttendance));
   }catch(error){list.innerHTML='<div class="vccf-attendance-delete-empty">'+esc(error.message||'Unable to load attendance.')+'</div>'}finally{loading=false}
@@ -97,7 +111,13 @@ async function decorateSundayRows(){
       const area=ownAreaId();if(!area)return;q=q.eq('area_id',area);
     }
     const {data,error}=await q;if(error)throw error;
-    const records=data||[],byMember=new Map(records.map(row=>[String(row.member_id),row]));
+    const records=data||[];
+    if(await hydrateMembersForRecords(records)){
+      document.getElementById('refreshRichAttendance')?.click();
+      queueInlineDecorate(220);
+      return;
+    }
+    const byMember=new Map(records.map(row=>[String(row.member_id),row]));
     bodyRows.forEach(row=>{
       if(row.querySelector('[data-inline-delete-attendance]'))return;
       const firstCell=row.querySelector('td:first-child'),code=firstCell?.querySelector('.hint')?.textContent?.trim()||'',member=memberFromDisplayedCode(code),record=member?byMember.get(String(member.id)):byMember.get(code);
