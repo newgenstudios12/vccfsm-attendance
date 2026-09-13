@@ -14,12 +14,14 @@ const areaName=id=>(state().areas||[]).find(x=>x.id===id)?.name||'Unassigned';
 const typeLabel=t=>t==='bible_study'?'Bible Study':t==='midweek_service'?'Midweek Service':'Sunday Attendance';
 const phDay=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(v));
 const bounds=day=>({start:new Date(day+'T00:00:00+08:00').toISOString(),end:new Date(new Date(day+'T00:00:00+08:00').getTime()+86400000).toISOString()});
-let modal=null,observer=null,loading=false;
+let modal=null,observer=null,loading=false,inlineBusy=false,inlineTimer=0;
 
 function ensureStyles(){
   if(document.getElementById('vccfAttendanceDeleteStyles'))return;
   const style=document.createElement('style');style.id='vccfAttendanceDeleteStyles';style.textContent=`
   .vccf-attendance-delete-trigger{margin-left:auto;border-color:rgba(185,28,28,.22)!important;color:#b91c1c!important}
+  .vccf-inline-attendance-delete{display:inline-flex;align-items:center;justify-content:center;margin-top:7px;padding:5px 9px;border:1px solid rgba(185,28,28,.35);border-radius:8px;background:rgba(185,28,28,.08);color:#ef4444;font-size:.68rem;font-weight:850;line-height:1.1;cursor:pointer;white-space:nowrap}
+  .vccf-inline-attendance-delete:hover{background:rgba(185,28,28,.14)}.vccf-inline-attendance-delete:disabled{opacity:.55;cursor:wait}
   .vccf-attendance-delete-modal{position:fixed;inset:0;z-index:1400;display:none;place-items:center;padding:18px;background:rgba(0,0,0,.58)}
   .vccf-attendance-delete-modal.open{display:grid}
   .vccf-attendance-delete-card{width:min(760px,100%);max-height:88vh;overflow:auto;background:var(--panel,#fff);color:var(--text,#111);border:1px solid var(--line,#ddd);border-radius:20px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
@@ -27,7 +29,7 @@ function ensureStyles(){
   .vccf-attendance-delete-close{border:0;background:transparent;color:inherit;font-size:1.6rem;line-height:1;cursor:pointer}
   .vccf-attendance-delete-filters{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:14px}.vccf-attendance-delete-filters label{display:grid;gap:5px;font-size:.72rem;font-weight:800}.vccf-attendance-delete-filters input,.vccf-attendance-delete-filters select{width:100%;padding:10px 11px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--input,var(--panel,#fff));color:var(--text,#111)}
   .vccf-attendance-delete-list{display:grid;gap:8px}.vccf-attendance-delete-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:13px}.vccf-attendance-delete-row b,.vccf-attendance-delete-row span{display:block}.vccf-attendance-delete-row span{margin-top:3px;color:var(--muted,#666);font-size:.7rem;line-height:1.4}.vccf-attendance-delete-row .btn{flex:0 0 auto}.vccf-attendance-delete-empty{padding:28px 14px;text-align:center;color:var(--muted,#666)}
-  @media(max-width:720px){.vccf-attendance-delete-trigger{margin-left:0;width:100%}.vccf-attendance-delete-filters{grid-template-columns:1fr}.vccf-attendance-delete-row{align-items:flex-start;flex-direction:column}.vccf-attendance-delete-row .btn{width:100%}}
+  @media(max-width:720px){.vccf-attendance-delete-trigger{margin-left:0;width:100%}.vccf-attendance-delete-filters{grid-template-columns:1fr}.vccf-attendance-delete-row{align-items:flex-start;flex-direction:column}.vccf-attendance-delete-row .btn{width:100%}.vccf-inline-attendance-delete{padding:6px 10px;font-size:.7rem}}
   `;document.head.appendChild(style);
 }
 
@@ -77,10 +79,55 @@ async function deleteRow(id){
   await loadRows();
 }
 
+function memberFromDisplayedCode(code){
+  const value=String(code||'').trim();
+  return (state().members||[]).find(m=>String(m.member_number||'')===value||String(m.member_code||'')===value||String(m.id)===value)||null;
+}
+function queueInlineDecorate(delay=80){clearTimeout(inlineTimer);inlineTimer=setTimeout(decorateSundayRows,delay)}
+async function decorateSundayRows(){
+  if(!allowed()||inlineBusy)return;
+  const table=document.querySelector('#richAttendanceTable table.attendance-table');
+  const bodyRows=table?[...table.querySelectorAll('tbody tr')]:[];
+  if(!bodyRows.length)return;
+  const date=document.getElementById('richAttendanceDate')?.value||phDay(new Date()),b=bounds(date);
+  inlineBusy=true;
+  try{
+    let q=sb().from('attendance').select('id,member_id,area_id').eq('attendance_type','sunday').gte('checked_in_at',b.start).lt('checked_in_at',b.end);
+    if(role()==='area_leader'){
+      const area=ownAreaId();if(!area)return;q=q.eq('area_id',area);
+    }
+    const {data,error}=await q;if(error)throw error;
+    const records=data||[],byMember=new Map(records.map(row=>[String(row.member_id),row]));
+    bodyRows.forEach(row=>{
+      if(row.querySelector('[data-inline-delete-attendance]'))return;
+      const firstCell=row.querySelector('td:first-child'),code=firstCell?.querySelector('.hint')?.textContent?.trim()||'',member=memberFromDisplayedCode(code),record=member?byMember.get(String(member.id)):byMember.get(code);
+      if(!record||!firstCell)return;
+      const target=firstCell.querySelector('.member-name > div')||firstCell;
+      const button=document.createElement('button');button.type='button';button.className='vccf-inline-attendance-delete';button.dataset.inlineDeleteAttendance=record.id;button.textContent='Delete';button.onclick=event=>{event.stopPropagation();deleteInlineSunday(record.id,record.member_id,button)};target.appendChild(button);
+    });
+  }catch(error){console.warn('Unable to add attendance delete buttons:',error?.message||error)}finally{inlineBusy=false}
+}
+async function deleteInlineSunday(id,memberId,button){
+  if(!allowed()||!id)return;
+  const name=memberName(memberId);if(!confirm('Delete Sunday attendance for '+name+'? This cannot be undone.'))return;
+  const oldText=button?.textContent;if(button){button.disabled=true;button.textContent='Deleting…'}
+  try{
+    let q=sb().from('attendance').delete().eq('id',id).eq('attendance_type','sunday');if(role()==='area_leader')q=q.eq('area_id',ownAreaId());const {data,error}=await q.select('id');
+    if(error)throw error;if(!data?.length)throw new Error('This attendance record could not be deleted. It may be outside your assigned area or already removed.');
+    if(Array.isArray(state().attendance))state().attendance=state().attendance.filter(item=>item.id!==id);
+    window.dispatchEvent(new CustomEvent('vccf-attendance-deleted',{detail:{attendanceId:id}}));
+    document.getElementById('refreshRichAttendance')?.click();
+    if(modal?.classList.contains('open'))loadRows();
+  }catch(error){alert(error.message||'Unable to delete attendance.');if(button){button.disabled=false;button.textContent=oldText||'Delete'}}
+}
+
 function installButton(){
   if(!allowed())return;const attendance=document.getElementById('attendance'),tabs=attendance?.querySelector('.attendance-module-tabs');if(!tabs||document.getElementById('vccfDeleteAttendance'))return;
   const button=document.createElement('button');button.id='vccfDeleteAttendance';button.type='button';button.className='btn secondary vccf-attendance-delete-trigger';button.textContent='Delete Attendance';button.onclick=openManager;tabs.appendChild(button);
 }
-function boot(){if(!allowed())return;ensureStyles();installButton();if(!observer){observer=new MutationObserver(()=>installButton());observer.observe(document.body,{subtree:true,childList:true})}}
-window.addEventListener('vccf-app-ready',()=>setTimeout(boot,250));window.addEventListener('vccf-profile-updated',()=>setTimeout(boot,120));if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,900),{once:true});else setTimeout(boot,900);
+function boot(){
+  if(!allowed())return;ensureStyles();installButton();queueInlineDecorate(120);
+  if(!observer){observer=new MutationObserver(()=>{installButton();queueInlineDecorate()});observer.observe(document.body,{subtree:true,childList:true})}
+}
+window.addEventListener('vccf-app-ready',()=>setTimeout(boot,250));window.addEventListener('vccf-profile-updated',()=>setTimeout(boot,120));document.addEventListener('change',event=>{if(event.target?.id==='richAttendanceDate')queueInlineDecorate(160)});document.addEventListener('click',event=>{if(event.target?.id==='refreshRichAttendance'||event.target?.id==='sundayAttendanceTab')queueInlineDecorate(220)});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,900),{once:true});else setTimeout(boot,900);
 })();
