@@ -11,6 +11,7 @@ let loading = null;
 let refreshTimer = null;
 let paintTimer = null;
 let lastRefresh = 0;
+let started = false;
 
 const memberName = member => member?.display_name || [member?.first_name, member?.last_name].filter(Boolean).join(' ') || 'Member';
 const legacyPattern = /\b[A-F0-9]{12}\b/i;
@@ -71,19 +72,22 @@ function rewriteMemberSelect(select) {
     if (!option.value) continue;
     const member = byId.get(String(option.value));
     if (!member?.member_number) continue;
-    option.textContent = `${memberName(member)} · ${member.member_number}`;
+    const expected = `${memberName(member)} · ${member.member_number}`;
+    if (option.textContent !== expected) option.textContent = expected;
   }
 }
 
 function rewriteDirectoryRows() {
   const search = document.getElementById('vccfCleanSearch');
-  if (search) search.placeholder = 'Search name, member number, or address';
+  if (search && search.placeholder !== 'Search name, member number, or address') {
+    search.placeholder = 'Search name, member number, or address';
+  }
   document.querySelectorAll('#members .vccf-clean-status[data-id]').forEach(status => {
     const member = byId.get(String(status.dataset.id || ''));
     if (!member?.member_number) return;
     const row = status.closest('tr');
     const code = row?.querySelector('.vccf-clean-member small');
-    if (code) code.textContent = member.member_number;
+    if (code && code.textContent !== member.member_number) code.textContent = member.member_number;
   });
 }
 
@@ -131,7 +135,8 @@ function schedulePaint() {
 }
 
 async function start() {
-  if (!state().session?.user || !client()) return;
+  if (started || !state().session?.user || !client()) return;
+  started = true;
   absorb(state().members || []);
   await loadNumbers(!byId.size);
   paint();
