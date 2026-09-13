@@ -2,7 +2,7 @@
 
 Members open **Digital ID** in the navigation to see their current member record, permanent number, photo, attendance QR, and personal details. Linked members can submit a **Request for physical ID**, view its status, and cancel a pending request. Admins and pastors use **Church Management → ID Requests** to prepare IDs, add a note for the member, and record pickup.
 
-The supplied Canva template is linked in the fulfillment queue: https://canva.link/1efsdjt75n44vin. Its contents were unavailable during implementation, so the digital card uses the existing VCCF branding; an exact template match still requires an accessible export of the design.
+The supplied Canva design is linked in the fulfillment queue: https://canva.link/1efsdjt75n44vin. The Digital ID reproduces its front page in the same 324 × 205 landscape format: faded church photo and orange artwork, black VCCF logo, bordered member photo and QR on the left, gradient name and area above the divider, date of birth/member number/mobile/address fields on the right, and the church name plus “ONE GOD. ONE FAMILY.” in the gradient footer. Personal fields and the QR remain live. Long names fit the available width; addresses wrap to four lines, with full values in the personal details panel. The back page contains sample school terms and a placeholder website, so it is not displayed as church policy. The Canva original was inspected without saving changes.
 
 ## Permanent numbers
 
@@ -31,6 +31,7 @@ The Digital ID queries the member record when opened, after local member/photo c
 
 ## Verification
 
+- Canva front: parsed CSS field positions match the original element coordinates within 0.5 design pixels. Controlled page checks passed for all live fields, full-month birth dates, draft preservation and physical requests. The app's actual QR library generated the member code; an independent decoder read synthetic rasterizations at 280, 320, 390 and 648 pixel card widths.
 - Live database: 281 populated, distinct member numbers; both pastor account links confirmed; original 280 member identifiers and legacy codes unchanged.
 - Transactional SQL checks passed for ownership, cross-member privacy, duplicate prevention, admin/pastor processing, cancellation, immutable numbers, server-assigned future numbers, and saved name changes. Test requests, member records, and personal edits were rolled back.
 - DOM flow checks passed for the Digital ID navigation, QR payload, request submission/cancellation, current personal information and photo updates, unlinked accounts, inactive-page polling, and admin/pastor queue progression.
@@ -38,4 +39,4 @@ The Digital ID queries the member record when opened, after local member/photo c
 - Changed JavaScript and inline scripts passed syntax checks; the source diff passed whitespace checks.
 - No new security advisor findings concern the new request table or private ID trigger functions. Existing unrelated findings were left outside this change.
 
-Local browser access was blocked by the browser environment. DOM checks used controlled data fixtures; they do not claim a logged-in browser test against production.
+Local browser access and the isolated layout preview were blocked by the browser environment. DOM and QR checks used controlled fixtures; they do not claim a logged-in or visual browser test against production.

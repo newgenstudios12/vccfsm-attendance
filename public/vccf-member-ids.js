@@ -13,6 +13,8 @@ const nextStatus = {pending:['printing','declined','cancelled'], printing:['read
 const openStatuses = ['pending', 'printing', 'ready'];
 const date = value => value ? new Intl.DateTimeFormat('en-PH', {timeZone:'Asia/Manila', month:'short', day:'numeric', year:'numeric'}).format(new Date(value)) : '—';
 const birthday = value => value ? date(String(value) + 'T12:00:00+08:00') : 'Not recorded';
+const cardBirthday = value => value ? new Intl.DateTimeFormat('en-PH', {timeZone:'Asia/Manila', month:'long', day:'numeric', year:'numeric'}).format(new Date(String(value) + 'T12:00:00+08:00')) : 'Not recorded';
+const address = member => member.address || [member.barangay, member.city_municipality, member.province].filter(Boolean).join(', ') || 'Not recorded';
 const area = member => member.areas?.name || (state().areas || []).find(item => item.id === member.area_id)?.name || 'No designated area';
 const memberFields = 'id,member_number,member_code,first_name,last_name,display_name,member_type,area_id,photo_url,birth_date,address,barangay,city_municipality,province,contact_number,email,updated_at,areas(name)';
 const requestFields = 'id,member_id,requested_by,status,request_notes,admin_notes,created_at,updated_at';
@@ -29,6 +31,7 @@ let signature = '';
 let draftNotes = '';
 let queueFilter = 'open';
 let feedback = '';
+let cardObserver = null;
 
 function active() {
   return root?.isConnected && root.classList.contains('active') && !!state().session?.user?.id;
@@ -42,29 +45,40 @@ function message(text, error = false) {
 }
 function personalDetails(member) {
   return [
+    ['Name', name(member)],
     ['Member number', number(member)],
     ['Area', area(member)],
     ['Birthday', birthday(member.birth_date)],
-    ['Address', member.address || [member.barangay, member.city_municipality, member.province].filter(Boolean).join(', ') || 'Not recorded'],
+    ['Address', address(member)],
     ['Contact number', member.contact_number || 'Not recorded'],
     ['Email', member.email || 'Not recorded']
   ].map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join('');
 }
 function cardMarkup(member, photo) {
   const initials = name(member).trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-  return `<article class="id-card" aria-label="Digital member ID">
-    <header class="id-card-brand"><img src="/vccf-logo-white.png" alt="Victorious Cross Christian Fellowship Santa Maria"><span>Santa Maria</span></header>
-    <div class="id-card-main">
-      <span class="id-card-label">MEMBER ID</span>
-      <div class="id-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(name(member))}">` : `<span aria-label="Profile picture not uploaded">${esc(initials)}</span>`}</div>
-      <h2>${esc(name(member))}</h2>
-      <p class="id-number">${esc(number(member))}</p>
-      <p class="id-type">${esc(member.member_type || 'Member')}</p>
-      <p class="id-area">${esc(area(member))}</p>
-      <div class="id-qr" data-digital-id-qr aria-label="Member attendance QR code"></div>
-    </div>
-    <footer>Victorious Cross Christian Fellowship<br>Santa Maria</footer>
-  </article>`;
+  return `<div class="id-card-shell"><article class="id-card" aria-label="Digital member ID">
+    <div class="id-card-art" aria-hidden="true"></div>
+    <img class="id-card-logo" src="/vccf-logo-black.png" alt="Victorious Cross Christian Fellowship Santa Maria">
+    <div class="id-photo">${photo ? `<img src="${esc(photo)}" alt="${esc(name(member))}">` : `<span aria-label="Profile picture not uploaded">${esc(initials)}</span>`}</div>
+    <div class="id-qr" data-digital-id-qr aria-label="Member attendance QR code"></div>
+    <h2 class="id-card-name" data-id-fit="5.556" data-id-min="2.2" title="${esc(name(member))}">${esc(name(member))}</h2>
+    <p class="id-area" data-id-fit="3.55" data-id-min="2" title="${esc(area(member))}">${esc(area(member))}</p>
+    <div class="id-card-divider" aria-hidden="true"></div>
+    <dl class="id-card-field id-card-dob"><dt>Date of birth</dt><dd data-id-fit="2.16" data-id-min="1.7">${esc(cardBirthday(member.birth_date))}</dd></dl>
+    <dl class="id-card-field id-card-number"><dt>Member number</dt><dd class="id-number">${esc(number(member))}</dd></dl>
+    <dl class="id-card-field id-card-phone"><dt>Mobile no.</dt><dd data-id-fit="2.16" data-id-min="1.7">${esc(member.contact_number || 'Not recorded')}</dd></dl>
+    <dl class="id-card-field id-card-address"><dt>Address</dt><dd title="${esc(address(member))}">${esc(address(member))}</dd></dl>
+    <footer class="id-card-footer"><p class="id-card-church">Victorious Cross Christian<br>Fellowship - Santa Maria</p><p class="id-card-motto">One God.<br>One Family.</p></footer>
+  </article></div>`;
+}
+function fitCardText() {
+  root?.querySelectorAll('[data-id-fit]').forEach(element => {
+    const maximum = Number(element.dataset.idFit);
+    const minimum = Number(element.dataset.idMin);
+    element.style.fontSize = maximum + 'cqw';
+    if (!element.clientWidth || element.scrollWidth <= element.clientWidth) return;
+    element.style.fontSize = Math.max(minimum, maximum * element.clientWidth / element.scrollWidth * .98) + 'cqw';
+  });
 }
 function requestMarkup(own) {
   if (!own) return '';
@@ -78,6 +92,7 @@ function requestMarkup(own) {
 }
 function renderSelf() {
   if (!root) return;
+  cardObserver?.disconnect();
   if (!loadedMember) {
     root.innerHTML = '<section class="id-panel"><h2>Digital ID</h2><p>Your account needs a linked member record before an ID can be shown. Ask an administrator to link your account to your member profile.</p><div data-id-feedback role="status"></div></section>';
     return;
@@ -87,10 +102,16 @@ function renderSelf() {
   root.innerHTML = `<div class="id-layout"><div>${cardMarkup(loadedMember, photo)}<p class="id-live-note">Your Digital ID follows your saved member information. Your member number stays the same.</p></div><div class="id-side"><section class="id-panel"><h2>Personal details</h2><dl class="id-details">${personalDetails(loadedMember)}</dl></section>${requestMarkup(own)}${!own ? '<div data-id-feedback role="status" aria-live="polite"></div>' : ''}</div></div>`;
   const qr = root.querySelector('[data-digital-id-qr]');
   if (window.QRCode && loadedMember.member_number) {
-    new window.QRCode(qr, {text:'VCCF-MEMBER:' + loadedMember.member_number, width:152, height:152, colorDark:'#111111', colorLight:'#ffffff', correctLevel:window.QRCode.CorrectLevel.H});
+    new window.QRCode(qr, {text:'VCCF-MEMBER:' + loadedMember.member_number, width:256, height:256, colorDark:'#111111', colorLight:'#ffffff', correctLevel:window.QRCode.CorrectLevel.H});
   } else {
     qr.textContent = 'QR unavailable. Use your member number for attendance.';
   }
+  fitCardText();
+  if (window.ResizeObserver) {
+    cardObserver = new ResizeObserver(fitCardText);
+    cardObserver.observe(root.querySelector('.id-card-shell'));
+  }
+  document.fonts?.ready.then(fitCardText);
   const form = root.querySelector('[data-id-request-form]');
   if (form) {
     form.elements.notes.addEventListener('input', event => { draftNotes = event.target.value; });
@@ -228,6 +249,7 @@ async function refresh(force = false) {
   if (inFlight?.promise === task) inFlight = null;
 }
 function mount(target, memberId = null) {
+  cardObserver?.disconnect();
   generation++;
   root = target;
   mode = 'self';
@@ -240,6 +262,7 @@ function mount(target, memberId = null) {
   void refresh(true);
 }
 function mountRequests(target) {
+  cardObserver?.disconnect();
   generation++;
   root = target;
   mode = 'queue';
@@ -259,6 +282,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) void
 // Poll only the visible ID page so changes saved on another device also appear.
 setInterval(() => { void refresh(); }, 30000);
 window.addEventListener('vccf-signed-out', () => {
+  cardObserver?.disconnect();
   generation++;
   root = null;
   selectedId = loadedMember = loadedProfile = null;
