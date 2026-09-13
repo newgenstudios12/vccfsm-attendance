@@ -28,6 +28,7 @@ const ENHANCEMENTS=[
   ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
   ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],
   ['member-contact-info','/vccf-member-contact-info.js?v=20260913-2'],
+  ['member-number-normalize','/vccf-member-number-normalize.js?v=20260913-1'],
   ['pwa','/vccf-pwa.js?v=20260904-6'],
   ['notification-ux','/vccf-notification-ux.js?v=20260904-7'],
   ['notification-actions-leadership-photo','/vccf-notification-actions-leadership-photo.js?v=20260904-1'],
