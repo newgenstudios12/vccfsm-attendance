@@ -2,6 +2,21 @@
 'use strict';
 if (window.VCCFMemberIds) return;
 
+if (!document.querySelector('link[data-vccf-id-interactions]')) {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/vccf-id-interactions.css?v=20260915-1';
+  link.dataset.vccfIdInteractions = '1';
+  document.head.appendChild(link);
+}
+if (!window.__VCCF_ID_INTERACTIONS_V1__ && !document.querySelector('script[data-vccf-id-interactions]')) {
+  const script = document.createElement('script');
+  script.src = '/vccf-id-interactions.js?v=20260915-1';
+  script.defer = true;
+  script.dataset.vccfIdInteractions = '1';
+  document.head.appendChild(script);
+}
+
 const state = () => window.VCCF?.getState?.() || {};
 const client = () => window.VCCF?.sb;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
