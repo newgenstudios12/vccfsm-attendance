@@ -143,3 +143,85 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 else loadAttendanceChecklist();
 window.addEventListener('vccf-app-ready',loadAttendanceChecklist);
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_PROFILE_PHOTO_PICKER_HARDENING__)return;
+window.__VCCF_PROFILE_PHOTO_PICKER_HARDENING__=true;
+
+function fallbackPrepare(file){
+  return new Promise((resolve,reject)=>{
+    if(!file||!String(file.type||'').startsWith('image/'))return reject(new Error('Please choose a photo.'));
+    if(file.size>12*1024*1024)return reject(new Error('Please choose a photo smaller than 12 MB.'));
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Could not read that photo. Please try another image.'));
+    reader.onload=()=>{
+      const image=new Image();
+      image.onerror=()=>reject(new Error('Could not read that photo. Please choose a JPEG, PNG, or WebP image.'));
+      image.onload=()=>{
+        try{
+          const width=640,height=611,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+          if(!ctx)throw new Error('Your browser could not prepare the photo.');
+          canvas.width=width;canvas.height=height;
+          const scale=Math.max(width/image.naturalWidth,height/image.naturalHeight);
+          const drawWidth=image.naturalWidth*scale,drawHeight=image.naturalHeight*scale;
+          ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+          ctx.drawImage(image,(width-drawWidth)/2,(height-drawHeight)/2,drawWidth,drawHeight);
+          resolve(canvas.toDataURL('image/jpeg',.84));
+        }catch(error){reject(error)}
+      };
+      image.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function hardenCropper(){
+  const cropper=window.VCCFPhotoCropper;
+  if(!cropper?.open||cropper.open.__vccfPickerHardened)return;
+  const original=cropper.open.bind(cropper);
+  const wrapped=async file=>{
+    try{return await original(file)}
+    catch(error){
+      console.warn('VCCF photo adjustment unavailable; using safe photo preparation.',error);
+      return fallbackPrepare(file);
+    }
+  };
+  wrapped.__vccfPickerHardened=true;
+  cropper.open=wrapped;
+}
+
+function addChooseButton(input){
+  if(!input||input.dataset.vccfChooseButton==='1')return;
+  input.dataset.vccfChooseButton='1';
+  input.accept='image/*';
+  input.disabled=false;
+  input.style.pointerEvents='auto';
+  input.style.touchAction='manipulation';
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='btn secondary vccf-choose-profile-photo';
+  button.textContent='Choose photo';
+  button.style.margin='0 0 8px';
+  button.style.width='fit-content';
+  button.onclick=event=>{
+    event.preventDefault();
+    if(input.disabled)return;
+    input.click();
+  };
+  input.parentElement?.insertBefore(button,input);
+}
+
+function hardenPickers(){
+  hardenCropper();
+  addChooseButton(document.getElementById('profilePhotoInput'));
+  addChooseButton(document.getElementById('v2File'));
+}
+
+const pickerObserver=new MutationObserver(()=>setTimeout(hardenPickers,0));
+if(document.body){pickerObserver.observe(document.body,{childList:true,subtree:true});hardenPickers()}
+else document.addEventListener('DOMContentLoaded',()=>{pickerObserver.observe(document.body,{childList:true,subtree:true});hardenPickers()},{once:true});
+window.addEventListener('vccf-app-ready',hardenPickers);
+window.addEventListener('vccf-profile-linked',hardenPickers);
+setTimeout(hardenPickers,0);
+})();
