@@ -146,13 +146,19 @@ window.addEventListener('vccf-app-ready',loadAttendanceChecklist);
 
 (()=>{
 'use strict';
-if(window.__VCCF_PROFILE_PHOTO_PICKER_HARDENING__)return;
-window.__VCCF_PROFILE_PHOTO_PICKER_HARDENING__=true;
+if(window.__VCCF_PROFILE_PHOTO_PICKER_STABLE__)return;
+window.__VCCF_PROFILE_PHOTO_PICKER_STABLE__=true;
 
+const adjustedPhotos=new WeakMap();
+let originalCropperOpen=null;
+
+function validatePhoto(file){
+  if(!file||!String(file.type||'').startsWith('image/'))throw new Error('Please choose a photo.');
+  if(file.size>12*1024*1024)throw new Error('Please choose a photo smaller than 12 MB.');
+}
 function fallbackPrepare(file){
   return new Promise((resolve,reject)=>{
-    if(!file||!String(file.type||'').startsWith('image/'))return reject(new Error('Please choose a photo.'));
-    if(file.size>12*1024*1024)return reject(new Error('Please choose a photo smaller than 12 MB.'));
+    try{validatePhoto(file)}catch(error){reject(error);return}
     const reader=new FileReader();
     reader.onerror=()=>reject(new Error('Could not read that photo. Please try another image.'));
     reader.onload=()=>{
@@ -175,47 +181,99 @@ function fallbackPrepare(file){
     reader.readAsDataURL(file);
   });
 }
-
-function hardenCropper(){
+function installStablePreparation(){
   const cropper=window.VCCFPhotoCropper;
-  if(!cropper?.open||cropper.open.__vccfPickerHardened)return;
-  const original=cropper.open.bind(cropper);
-  const wrapped=async file=>{
-    try{return await original(file)}
-    catch(error){
-      console.warn('VCCF photo adjustment unavailable; using safe photo preparation.',error);
-      return fallbackPrepare(file);
-    }
-  };
-  wrapped.__vccfPickerHardened=true;
-  cropper.open=wrapped;
+  if(!cropper?.open)return;
+  if(cropper.open.__vccfStablePrepare){
+    if(!originalCropperOpen&&cropper.open.__vccfOriginal)originalCropperOpen=cropper.open.__vccfOriginal;
+    return;
+  }
+  originalCropperOpen=cropper.open.bind(cropper);
+  const stable=async file=>adjustedPhotos.get(file)||await fallbackPrepare(file);
+  stable.__vccfStablePrepare=true;
+  stable.__vccfOriginal=originalCropperOpen;
+  cropper.open=stable;
 }
-
-function addChooseButton(input){
-  if(!input||input.dataset.vccfChooseButton==='1')return;
-  input.dataset.vccfChooseButton='1';
+function addNativeChooseControl(input){
+  if(!input||input.dataset.vccfNativePhotoPicker==='1')return;
+  input.dataset.vccfNativePhotoPicker='1';
   input.accept='image/*';
   input.disabled=false;
-  input.style.pointerEvents='auto';
-  input.style.touchAction='manipulation';
-  const button=document.createElement('button');
-  button.type='button';
-  button.className='btn secondary vccf-choose-profile-photo';
-  button.textContent='Choose photo';
-  button.style.margin='0 0 8px';
-  button.style.width='fit-content';
-  button.onclick=event=>{
-    event.preventDefault();
-    if(input.disabled)return;
-    input.click();
-  };
-  input.parentElement?.insertBefore(button,input);
+  input.style.display='block';
+  input.style.maxWidth='100%';
+  input.style.marginBottom='8px';
+  const label=document.createElement('label');
+  label.htmlFor=input.id;
+  label.className='btn secondary vccf-choose-profile-photo';
+  label.textContent='Choose photo';
+  label.style.display='inline-flex';
+  label.style.alignItems='center';
+  label.style.justifyContent='center';
+  label.style.margin='0 0 8px';
+  label.style.cursor='pointer';
+  input.parentElement?.insertBefore(label,input);
 }
-
+function previewSelectedFile(input,preview,msg){
+  const file=input?.files?.[0];
+  if(!file)return;
+  try{validatePhoto(file)}catch(error){input.value='';if(msg)msg.textContent=error.message;return}
+  const reader=new FileReader();
+  reader.onerror=()=>{if(msg)msg.textContent='Could not preview that photo. Please try another image.'};
+  reader.onload=()=>{
+    if(preview)preview.innerHTML='<img src="'+String(reader.result)+'" alt="Selected profile picture preview">';
+    if(msg)msg.textContent='Photo selected. You can save it now or adjust it first.';
+  };
+  reader.readAsDataURL(file);
+}
+function hardenSettingsPicker(){
+  installStablePreparation();
+  const input=document.getElementById('profilePhotoInput');
+  if(!input||input.dataset.vccfStableSettingsPicker==='1')return;
+  input.dataset.vccfStableSettingsPicker='1';
+  addNativeChooseControl(input);
+  const preview=document.getElementById('profilePhotoPreview');
+  const msg=document.getElementById('profilePhotoMsg');
+  const save=document.getElementById('saveProfilePhoto');
+  const adjust=document.getElementById('adjustCurrentProfilePhoto');
+  input.onchange=()=>{
+    const file=input.files?.[0];
+    if(!file)return;
+    previewSelectedFile(input,preview,msg);
+    if(save)save.disabled=false;
+    if(adjust){adjust.disabled=false;adjust.textContent='Adjust selected photo'}
+  };
+  if(adjust){
+    adjust.textContent='Adjust selected photo';
+    adjust.disabled=!input.files?.[0];
+    adjust.onclick=async()=>{
+      const file=input.files?.[0];
+      if(!file){if(msg)msg.textContent='Choose a photo first.';return}
+      if(!originalCropperOpen){if(msg)msg.textContent='Photo adjustment is unavailable, but you can still save the selected photo.';return}
+      adjust.disabled=true;if(save)save.disabled=true;if(msg)msg.textContent='Adjust your photo…';
+      try{
+        const image=await originalCropperOpen(file);
+        if(!image){if(msg)msg.textContent='Photo adjustment cancelled.';return}
+        adjustedPhotos.set(file,image);
+        if(preview)preview.innerHTML='<img src="'+image+'" alt="Adjusted profile picture preview">';
+        if(msg)msg.textContent='Photo adjusted. Select Save picture to apply it.';
+      }catch(error){
+        console.warn('VCCF photo adjustment failed:',error);
+        if(msg)msg.textContent='Could not open the adjustment tool. You can still save the selected photo.';
+      }finally{
+        adjust.disabled=false;if(save)save.disabled=false;
+      }
+    };
+  }
+}
+function hardenV2Picker(){
+  const input=document.getElementById('v2File');
+  if(!input)return;
+  addNativeChooseControl(input);
+}
 function hardenPickers(){
-  hardenCropper();
-  addChooseButton(document.getElementById('profilePhotoInput'));
-  addChooseButton(document.getElementById('v2File'));
+  installStablePreparation();
+  hardenSettingsPicker();
+  hardenV2Picker();
 }
 
 const pickerObserver=new MutationObserver(()=>setTimeout(hardenPickers,0));
