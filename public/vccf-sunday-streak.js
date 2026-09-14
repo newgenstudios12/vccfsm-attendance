@@ -5,6 +5,7 @@ window.__VCCF_SUNDAY_STREAK__=true;
 
 const state=()=>window.VCCF?.getState?.()||{};
 const sb=()=>window.VCCF?.sb;
+const role=()=>String(state().profile?.role||'member').toLowerCase();
 const phDay=value=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
 const dateLabel=key=>new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric'}).format(new Date(key+'T12:00:00+08:00'));
 let cachedMemberId='';
@@ -58,36 +59,62 @@ function installStyles(){
 .vccf-sunday-streak-card small{max-width:90%}
 .vccf-sunday-streak-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
 .vccf-sunday-streak-chip{display:inline-flex;align-items:center;padding:4px 7px;border-radius:999px;background:rgba(255,138,24,.12);color:#a84d00;font-size:.61rem;font-weight:900}
-:root[data-theme="dark"] .vccf-sunday-streak-card{background:linear-gradient(135deg,rgba(255,138,24,.18),var(--card))!important}
-:root[data-theme="dark"] .vccf-sunday-streak-card strong{color:#ffad55}
+.vccf-sunday-streak-standalone{position:relative;overflow:hidden;margin:16px 0;padding:20px 22px;display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:15px;align-items:center;background:linear-gradient(135deg,rgba(255,138,24,.15),var(--card));border-color:rgba(255,138,24,.38);box-shadow:var(--shadow)}
+.vccf-sunday-streak-standalone:after{content:"🔥";position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:5rem;opacity:.06;pointer-events:none}
+.vccf-sunday-streak-flame{width:54px;height:54px;border-radius:17px;display:grid;place-items:center;background:rgba(255,138,24,.14);font-size:1.8rem;border:1px solid rgba(255,138,24,.2)}
+.vccf-sunday-streak-copy{min-width:0;position:relative;z-index:1}.vccf-sunday-streak-kicker{display:block;color:var(--brand);font-size:.66rem;font-weight:950;letter-spacing:.1em;text-transform:uppercase}.vccf-sunday-streak-standalone h3{margin:5px 0 3px;font-size:1.4rem;line-height:1.1}.vccf-sunday-streak-standalone h3 strong{font-size:inherit;color:#c65a00}.vccf-sunday-streak-standalone p{margin:0;color:var(--muted);font-size:.73rem;line-height:1.45}.vccf-sunday-streak-best{text-align:right;position:relative;z-index:1}.vccf-sunday-streak-best span,.vccf-sunday-streak-best strong{display:block}.vccf-sunday-streak-best span{font-size:.62rem;color:var(--muted);font-weight:850;text-transform:uppercase;letter-spacing:.05em}.vccf-sunday-streak-best strong{margin-top:3px;font-size:1.15rem;color:#c65a00}.vccf-sunday-streak-encourage{display:block;margin-top:6px;font-size:.7rem;font-weight:850;color:#a84d00}.vccf-sunday-streak-standalone .vccf-sunday-streak-meta{position:relative;z-index:1}
+:root[data-theme="dark"] .vccf-sunday-streak-card,:root[data-theme="dark"] .vccf-sunday-streak-standalone{background:linear-gradient(135deg,rgba(255,138,24,.18),var(--card))!important}
+:root[data-theme="dark"] .vccf-sunday-streak-card strong,:root[data-theme="dark"] .vccf-sunday-streak-standalone h3 strong,:root[data-theme="dark"] .vccf-sunday-streak-best strong{color:#ffad55}
 :root[data-theme="dark"] .vccf-sunday-streak-chip{color:#ffc27e;background:rgba(255,138,24,.16)}
-@media(max-width:760px){.sunday-stat-grid{grid-template-columns:1fr 1fr!important}}
-@media(max-width:480px){.sunday-stat-grid{grid-template-columns:1fr!important}}
+:root[data-theme="dark"] .vccf-sunday-streak-encourage{color:#ffc27e}
+@media(max-width:760px){.sunday-stat-grid{grid-template-columns:1fr 1fr!important}.vccf-sunday-streak-standalone{grid-template-columns:50px minmax(0,1fr);padding:18px}.vccf-sunday-streak-flame{width:50px;height:50px;border-radius:15px}.vccf-sunday-streak-best{grid-column:2;text-align:left;display:flex;align-items:baseline;gap:7px}.vccf-sunday-streak-best span,.vccf-sunday-streak-best strong{display:inline}.vccf-sunday-streak-standalone h3{font-size:1.25rem}}
+@media(max-width:480px){.sunday-stat-grid{grid-template-columns:1fr!important}.vccf-sunday-streak-standalone{grid-template-columns:46px minmax(0,1fr);gap:12px}.vccf-sunday-streak-flame{width:46px;height:46px;font-size:1.55rem}.vccf-sunday-streak-standalone h3{font-size:1.16rem}}
 `;
   document.head.appendChild(style);
 }
-function cardHtml(stats){
+function compactCardHtml(stats){
   const count=Number(stats?.current)||0,best=Number(stats?.longest)||0;
   const unit=count===1?'Sunday':'Sundays';
   const last=stats?.last?'Last attended: '+dateLabel(stats.last):'No Sunday attendance yet';
   const badge=stats?.milestone?'<span class="vccf-sunday-streak-chip">🏆 '+stats.milestone+'</span>':'';
   return '<span>🔥 Sunday Streak</span><strong>'+count+' '+unit+'</strong><small>Best streak: '+best+' · '+last+'</small>'+(badge?'<div class="vccf-sunday-streak-meta">'+badge+'</div>':'');
 }
-function render(){
-  const profile=state().profile||{},memberId=profile.member_id;
-  const old=document.querySelector('[data-vccf-sunday-streak="1"]');
-  if(!state().session?.user||!memberId){old?.remove();return}
+function memberCardHtml(stats){
+  const count=Number(stats?.current)||0,best=Number(stats?.longest)||0;
+  const unit=count===1?'Sunday':'Sundays';
+  const bestUnit=best===1?'Sunday':'Sundays';
+  const last=stats?.last?'Last attended '+dateLabel(stats.last):'No Sunday attendance recorded yet';
+  const encouragement=count>0?'Keep showing up!':'Your streak starts when your Sunday attendance is recorded.';
+  const badge=stats?.milestone?'<div class="vccf-sunday-streak-meta"><span class="vccf-sunday-streak-chip">🏆 '+stats.milestone+'</span></div>':'';
+  return '<div class="vccf-sunday-streak-flame" aria-hidden="true">🔥</div><div class="vccf-sunday-streak-copy"><span class="vccf-sunday-streak-kicker">Sunday Attendance</span><h3><strong>'+count+' '+unit+'</strong> streak</h3><p>'+last+'</p><span class="vccf-sunday-streak-encourage">'+encouragement+'</span>'+badge+'</div><div class="vccf-sunday-streak-best"><span>Personal best</span><strong>'+best+' '+bestUnit+'</strong></div>';
+}
+function renderMemberStandalone(stats){
+  const dashboard=document.getElementById('dashboard'),welcome=dashboard?.querySelector('.welcome-banner');
+  if(!dashboard||!welcome)return false;
+  document.querySelector('[data-vccf-sunday-streak="compact"]')?.remove();
+  let card=document.querySelector('[data-vccf-sunday-streak="member"]');
+  if(!card){card=document.createElement('section');card.className='card vccf-sunday-streak-standalone';card.dataset.vccfSundayStreak='member'}
+  card.innerHTML=memberCardHtml(stats);
+  if(card.previousElementSibling!==welcome)welcome.after(card);
+  return true;
+}
+function renderCompact(stats){
+  document.querySelector('[data-vccf-sunday-streak="member"]')?.remove();
   const grid=document.querySelector('#dashboard .sunday-stat-grid');
-  if(!grid||!cachedStats||cachedMemberId!==memberId)return;
-  let card=old;
-  if(!card){
-    card=document.createElement('div');
-    card.className='summary-metric vccf-sunday-streak-card';
-    card.dataset.vccfSundayStreak='1';
-  }
-  card.innerHTML=cardHtml(cachedStats);
+  if(!grid)return false;
+  let card=document.querySelector('[data-vccf-sunday-streak="compact"]');
+  if(!card){card=document.createElement('div');card.className='summary-metric vccf-sunday-streak-card';card.dataset.vccfSundayStreak='compact'}
+  card.innerHTML=compactCardHtml(stats);
   const first=grid.firstElementChild;
   if(card.parentElement!==grid){if(first)first.after(card);else grid.appendChild(card)}
+  return true;
+}
+function removeCards(){document.querySelectorAll('[data-vccf-sunday-streak]').forEach(node=>node.remove())}
+function render(){
+  const profile=state().profile||{},memberId=profile.member_id;
+  if(!state().session?.user||!memberId){removeCards();return}
+  if(!cachedStats||cachedMemberId!==memberId)return;
+  if(role()==='member')renderMemberStandalone(cachedStats);else renderCompact(cachedStats);
 }
 function queueRender(delay=30){clearTimeout(renderTimer);renderTimer=setTimeout(render,delay)}
 async function refresh(force=false){
@@ -106,7 +133,7 @@ async function refresh(force=false){
     console.warn('VCCF Sunday Streak:',error);
     cachedMemberId=memberId;
     cachedStats=null;
-    document.querySelector('[data-vccf-sunday-streak="1"]')?.remove();
+    removeCards();
   }finally{loading=false}
 }
 function queueRefresh(delay=80,force=true){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>refresh(force),delay)}
@@ -114,11 +141,11 @@ function boot(){
   installStyles();
   const dashboard=document.getElementById('dashboard');
   if(dashboard)new MutationObserver(records=>{
-    const relevant=records.some(record=>!record.target?.closest?.('[data-vccf-sunday-streak="1"]'));
+    const relevant=records.some(record=>!record.target?.closest?.('[data-vccf-sunday-streak]'));
     if(relevant)queueRender(20);
   }).observe(dashboard,{childList:true,subtree:true});
   window.addEventListener('vccf-app-ready',()=>queueRefresh(180,true));
-  window.addEventListener('vccf-signed-out',()=>{cachedMemberId='';cachedStats=null;document.querySelector('[data-vccf-sunday-streak="1"]')?.remove()});
+  window.addEventListener('vccf-signed-out',()=>{cachedMemberId='';cachedStats=null;removeCards()});
   document.addEventListener('click',event=>{if(event.target.closest?.('[data-route="dashboard"],[data-view="dashboard"]'))queueRefresh(120,true)});
   queueRefresh(650,true);
 }
