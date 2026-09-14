@@ -10,6 +10,7 @@ const canManage=()=>['admin','pastor'].includes(role());
 let loading=false,lastDate='';
 
 const translationMeta={
+  MBBTAG:{label:'MBB',name:'Magandang Balita Biblia (2012)',publisher:'Philippine Bible Society',note:'MBB text must come from a licensed/authorized source. VCCF Connect is prepared for Bible Brain / Faith Comes By Hearing API delivery once the project API key is configured.'},
   NIV:{label:'NIV',name:'New International Version',publisher:'Biblica',note:'NIV is copyrighted by Biblica. Paste only verse text VCCF is permitted to display and distribute.'},
   ESV:{label:'ESV',name:'English Standard Version',publisher:'Crossway',note:'ESV is copyrighted by Crossway. Paste only verse text VCCF is permitted to display and distribute.'},
   RTPV05:{label:'RTPV',name:'Magandang Balita Bible (Revised)',publisher:'Philippine Bible Society',note:'RTPV05 / Magandang Balita Bible is published by the Philippine Bible Society. Paste only text VCCF is authorized to use.'},
@@ -64,7 +65,7 @@ function ensureManager(){
   if(!canManage())return null;
   let modal=document.getElementById('vccfVerseManager');if(modal)return modal;
   modal=document.createElement('div');modal.id='vccfVerseManager';modal.className='vccf-verse-modal';modal.hidden=true;
-  modal.innerHTML=`<div class="vccf-verse-dialog" role="dialog" aria-modal="true" aria-labelledby="vccfVerseManagerTitle"><div class="vccf-verse-dialog-head"><div><h2 id="vccfVerseManagerTitle">Daily Verse Manager</h2><p>Admin/Pastor can schedule a verse and translation for any date. Unsheduled dates continue using the KJV fallback rotation.</p></div><button class="vccf-verse-close" type="button" aria-label="Close">×</button></div><div class="vccf-verse-dialog-body"><form id="vccfVerseForm" class="vccf-verse-form-grid"><div class="vccf-verse-field"><label for="vccfVerseDate">Date</label><input id="vccfVerseDate" type="date" required></div><div class="vccf-verse-field"><label for="vccfVerseTranslation">Translation</label><select id="vccfVerseTranslation"><option value="NIV">NIV — New International Version</option><option value="ESV">ESV — English Standard Version</option><option value="RTPV05">RTPV — Magandang Balita Bible (Revised)</option><option value="KJV">KJV — fallback / public domain</option></select></div><div class="vccf-verse-field full"><label for="vccfVerseReference">Bible reference</label><input id="vccfVerseReference" type="text" placeholder="e.g. John 3:16" required></div><div class="vccf-verse-field full"><label for="vccfVerseText">Verse text</label><textarea id="vccfVerseText" placeholder="Paste the exact verse text from the selected translation…" required></textarea></div><div id="vccfVerseRights" class="vccf-verse-rights"></div><label class="vccf-verse-switch"><input id="vccfVersePush" type="checkbox" checked><span><strong>Send as a daily push notification</strong><span>The scheduled verse is prepared at 7:00 AM Philippine time and uses the existing VCCF notification inbox/push system.</span></span></label><div id="vccfVerseStatus" class="vccf-verse-save-status"></div><div class="vccf-verse-form-actions"><button id="vccfVerseRemove" class="btn secondary" type="button" hidden>Remove scheduled verse</button><button class="btn" type="submit">Save Daily Verse</button></div></form><section class="vccf-verse-upcoming"><h3>Upcoming scheduled verses</h3><div id="vccfVerseList" class="vccf-verse-list"><div class="vccf-verse-empty">Loading…</div></div></section></div></div>`;
+  modal.innerHTML=`<div class="vccf-verse-dialog" role="dialog" aria-modal="true" aria-labelledby="vccfVerseManagerTitle"><div class="vccf-verse-dialog-head"><div><h2 id="vccfVerseManagerTitle">Daily Verse Manager</h2><p>Admin/Pastor can schedule a verse and translation for any date. MBB Tagalog is the preferred scheduled translation; unscheduled dates continue using the KJV fallback until licensed MBB API delivery is configured.</p></div><button class="vccf-verse-close" type="button" aria-label="Close">×</button></div><div class="vccf-verse-dialog-body"><form id="vccfVerseForm" class="vccf-verse-form-grid"><div class="vccf-verse-field"><label for="vccfVerseDate">Date</label><input id="vccfVerseDate" type="date" required></div><div class="vccf-verse-field"><label for="vccfVerseTranslation">Translation</label><select id="vccfVerseTranslation"><option value="MBBTAG">MBB — Magandang Balita Biblia (2012)</option><option value="RTPV05">RTPV — Magandang Balita Bible (Revised)</option><option value="NIV">NIV — New International Version</option><option value="ESV">ESV — English Standard Version</option><option value="KJV">KJV — fallback / public domain</option></select></div><div class="vccf-verse-field full"><label for="vccfVerseReference">Bible reference</label><input id="vccfVerseReference" type="text" placeholder="e.g. Juan 3:16" required></div><div class="vccf-verse-field full"><label for="vccfVerseText">Verse text</label><textarea id="vccfVerseText" placeholder="Paste the exact verse text from the selected authorized source…" required></textarea></div><div id="vccfVerseRights" class="vccf-verse-rights"></div><label class="vccf-verse-switch"><input id="vccfVersePush" type="checkbox" checked><span><strong>Send as a daily push notification</strong><span>The scheduled verse is prepared at 7:00 AM Philippine time and uses the existing VCCF notification inbox/push system.</span></span></label><div id="vccfVerseStatus" class="vccf-verse-save-status"></div><div class="vccf-verse-form-actions"><button id="vccfVerseRemove" class="btn secondary" type="button" hidden>Remove scheduled verse</button><button class="btn" type="submit">Save Daily Verse</button></div></form><section class="vccf-verse-upcoming"><h3>Upcoming scheduled verses</h3><div id="vccfVerseList" class="vccf-verse-list"><div class="vccf-verse-empty">Loading…</div></div></section></div></div>`;
   document.body.appendChild(modal);
   const close=()=>{modal.hidden=true;document.body.style.removeProperty('overflow');};
   modal.querySelector('.vccf-verse-close')?.addEventListener('click',close);
@@ -80,8 +81,8 @@ function ensureManager(){
 
 function updateRights(){
   const modal=document.getElementById('vccfVerseManager');if(!modal)return;
-  const code=modal.querySelector('#vccfVerseTranslation')?.value||'NIV';const m=metaFor(code);
-  const rights=modal.querySelector('#vccfVerseRights');if(rights)rights.innerHTML=`<strong>${esc(m.name)}</strong> · ${esc(m.publisher)}<br>${esc(m.note)} VCCF Connect does not download or auto-convert copyrighted Bible text.`;
+  const code=modal.querySelector('#vccfVerseTranslation')?.value||'MBBTAG';const m=metaFor(code);
+  const rights=modal.querySelector('#vccfVerseRights');if(rights)rights.innerHTML=`<strong>${esc(m.name)}</strong> · ${esc(m.publisher)}<br>${esc(m.note)} VCCF Connect does not scrape or auto-convert copyrighted Bible text.`;
 }
 
 async function loadManagerDate(date){
@@ -91,7 +92,7 @@ async function loadManagerDate(date){
   if(error){if(status){status.textContent=error.message;status.style.color='#b42318';}return;}
   modal.querySelector('#vccfVerseReference').value=data?.reference||'';
   modal.querySelector('#vccfVerseText').value=data?.verse_text||'';
-  modal.querySelector('#vccfVerseTranslation').value=data?.translation||'NIV';
+  modal.querySelector('#vccfVerseTranslation').value=data?.translation||'MBBTAG';
   modal.querySelector('#vccfVersePush').checked=data?.push_enabled!==false;
   if(remove)remove.hidden=!data;
   if(status){status.textContent=data?'Scheduled verse loaded.':'No custom verse is scheduled for this date. KJV fallback will be used.';status.style.color='var(--muted)';}
@@ -127,7 +128,8 @@ async function saveManagerVerse(event){
   if(!date||!reference||!verse_text){if(status){status.textContent='Date, Bible reference, and verse text are required.';status.style.color='#b42318';}return;}
   if(status){status.textContent='Saving…';status.style.color='var(--muted)';}
   const uid=window.VCCF?.getState?.()?.session?.user?.id||null;
-  const {error}=await client.from('daily_bible_verse_selections').upsert({verse_date:date,reference,verse_text,translation,push_enabled,created_by:uid,updated_by:uid,updated_at:new Date().toISOString()},{onConflict:'verse_date'});
+  const sourceMeta=translation==='MBBTAG'?{source_provider:'Authorized source / Bible Brain ready',source_version_id:'TGLPBS',source_license_url:'https://www.faithcomesbyhearing.com/bible-brain/license'}:{source_provider:null,source_version_id:null,source_license_url:null};
+  const {error}=await client.from('daily_bible_verse_selections').upsert({verse_date:date,reference,verse_text,translation,push_enabled,created_by:uid,updated_by:uid,updated_at:new Date().toISOString(),...sourceMeta},{onConflict:'verse_date'});
   if(error){if(status){status.textContent=error.message;status.style.color='#b42318';}return;}
   if(status){status.textContent=`Saved for ${niceDate(date)}${push_enabled?' · push enabled at 7:00 AM PHT':' · push disabled'}.`;status.style.color='#167647';}
   const remove=modal.querySelector('#vccfVerseRemove');if(remove)remove.hidden=false;
