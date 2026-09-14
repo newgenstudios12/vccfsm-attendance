@@ -5,6 +5,7 @@ window.__VCCF_ID_INTERACTIONS_V1__ = true;
 
 let expandedShell = null;
 let closeButton = null;
+let floatingButton = null;
 
 function closeExpanded() {
   if (expandedShell?.isConnected) expandedShell.classList.remove('id-card-expanded');
@@ -28,6 +29,57 @@ function openExpanded(shell) {
   document.body.appendChild(closeButton);
   closeButton.addEventListener('click', closeExpanded, {once:true});
   requestAnimationFrame(() => closeButton?.focus());
+}
+
+function isSignedIn() {
+  return !!window.VCCF?.getState?.()?.session?.user?.id;
+}
+
+function updateFloatingButton() {
+  if (!floatingButton?.isConnected) return;
+  const signedIn = isSignedIn();
+  const appVisible = document.getElementById('app')?.classList.contains('show');
+  floatingButton.hidden = !(signedIn && appVisible);
+  const onId = document.getElementById('memberid')?.classList.contains('active');
+  floatingButton.classList.toggle('is-current', !!onId);
+  floatingButton.setAttribute('aria-current', onId ? 'page' : 'false');
+  floatingButton.title = onId ? 'Digital ID is open' : 'Open Digital ID';
+}
+
+function openDigitalId() {
+  const nav = document.querySelector('[data-route="memberid"]');
+  if (nav) {
+    nav.click();
+    setTimeout(updateFloatingButton, 80);
+    return;
+  }
+  const target = document.getElementById('memberid');
+  if (target && window.VCCFMemberIds?.mount) {
+    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+    target.classList.add('active');
+    window.VCCFMemberIds.mount(target);
+    setTimeout(updateFloatingButton, 80);
+  }
+}
+
+function ensureFloatingButton() {
+  if (floatingButton?.isConnected) {
+    updateFloatingButton();
+    return floatingButton;
+  }
+  floatingButton = document.getElementById('vccfFloatingDigitalId');
+  if (!floatingButton) {
+    floatingButton = document.createElement('button');
+    floatingButton.id = 'vccfFloatingDigitalId';
+    floatingButton.type = 'button';
+    floatingButton.className = 'vccf-floating-digital-id';
+    floatingButton.setAttribute('aria-label','Open Digital ID');
+    floatingButton.innerHTML = '<span class="vccf-floating-id-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="2.1"/><path d="M5.5 16c.7-1.7 1.6-2.5 2.5-2.5s1.8.8 2.5 2.5M13 9h5M13 12h5M13 15h3.5"/></svg></span><span class="vccf-floating-id-label">Digital ID</span>';
+    floatingButton.addEventListener('click', openDigitalId);
+    document.body.appendChild(floatingButton);
+  }
+  updateFloatingButton();
+  return floatingButton;
 }
 
 async function copyText(text) {
@@ -126,23 +178,30 @@ function enhanceRequestProgress(root) {
 }
 
 function enhance() {
+  ensureFloatingButton();
   const root = document.getElementById('memberIdView') || document.querySelector('.view.active [data-member-id-root]') || document.querySelector('.view.active .id-layout')?.closest('.view');
   if (!root) {
     if (expandedShell && !expandedShell.isConnected) closeExpanded();
+    updateFloatingButton();
     return;
   }
   enhanceActions(root);
   enhanceRequestProgress(root);
   if (expandedShell && !expandedShell.isConnected) closeExpanded();
+  updateFloatingButton();
 }
 
 const observer = new MutationObserver(() => requestAnimationFrame(enhance));
 observer.observe(document.documentElement,{childList:true,subtree:true});
+document.addEventListener('click',event => {
+  if (event.target.closest?.('[data-route],.nav-item,.nav-child')) setTimeout(updateFloatingButton,80);
+},true);
 document.addEventListener('keydown',event => { if(event.key === 'Escape' && expandedShell){event.preventDefault();closeExpanded();} });
-window.addEventListener('vccf-signed-out',closeExpanded);
+window.addEventListener('vccf-signed-out',() => { closeExpanded(); updateFloatingButton(); });
 window.addEventListener('vccf-id-template-updated',() => setTimeout(enhance,100));
 window.addEventListener('vccf-profile-photo-updated',() => setTimeout(enhance,100));
 window.addEventListener('vccf-app-ready',() => setTimeout(enhance,250));
+window.addEventListener('focus',updateFloatingButton);
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',() => setTimeout(enhance,500),{once:true});
 else setTimeout(enhance,500);
 })();
