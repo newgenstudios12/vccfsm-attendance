@@ -72,3 +72,4 @@ window.VCCFNotifications={open:openNotifications,refresh:()=>load(true),updateBa
 })();
 
 (()=>{if(document.querySelector('script[data-vccf-notifications-v2]'))return;const s=document.createElement('script');s.src='/vccf-notifications-v2.js?v=20260904-3';s.dataset.vccfNotificationsV2='1';s.defer=true;document.head.appendChild(s)})();
+(()=>{if(document.querySelector('script[data-vccf-notification-actions]'))return;const s=document.createElement('script');s.src='/vccf-notification-actions-leadership-photo.js?v=20260914-1';s.dataset.vccfNotificationActions='1';s.defer=true;document.head.appendChild(s)})();
