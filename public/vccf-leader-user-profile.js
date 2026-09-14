@@ -33,7 +33,14 @@ window.addEventListener('vccf-app-ready',loadSundayStreak);
 'use strict';
 if(window.__VCCF_EVENTS_GALLERY_LOADER__)return;
 window.__VCCF_EVENTS_GALLERY_LOADER__=true;
+function releaseStaleMount(){
+  const host=document.getElementById('cmsContent');
+  if(host?.dataset.vccfEventGallery==='1'&&!host.querySelector('.vccf-events-shell'))delete host.dataset.vccfEventGallery;
+}
+const remountObserver=new MutationObserver(releaseStaleMount);
+remountObserver.observe(document.documentElement,{childList:true,subtree:true});
 function loadEventsGallery(){
+  releaseStaleMount();
   if(document.querySelector('script[data-vccf-events-gallery]'))return;
   const script=document.createElement('script');
   script.src='/vccf-events-gallery.js?v=20260914-1';
