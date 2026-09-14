@@ -7,14 +7,15 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const todayPH=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const role=()=>String(window.VCCF?.getState?.()?.profile?.role||'').toLowerCase();
 const canManage=()=>['admin','pastor'].includes(role());
+const MBB_BRIDGE='https://hvnlstaecjqhjtiojutd.supabase.co/functions/v1/vccf-daily-verse-mbb';
 let loading=false,lastDate='';
 
 const translationMeta={
-  MBBTAG:{label:'MBB',name:'Magandang Balita Biblia (2012)',publisher:'Philippine Bible Society',note:'MBB text must come from a licensed/authorized source. VCCF Connect is prepared for Bible Brain / Faith Comes By Hearing API delivery once the project API key is configured.'},
+  MBBTAG:{label:'MBB',name:'Magandang Balita Biblia (2012)',publisher:'Philippine Bible Society',note:'MBB is streamed from Bible Brain / Faith Comes By Hearing when the project API key is configured. VCCF Connect does not bulk-store the API-sourced Bible text.'},
   NIV:{label:'NIV',name:'New International Version',publisher:'Biblica',note:'NIV is copyrighted by Biblica. Paste only verse text VCCF is permitted to display and distribute.'},
   ESV:{label:'ESV',name:'English Standard Version',publisher:'Crossway',note:'ESV is copyrighted by Crossway. Paste only verse text VCCF is permitted to display and distribute.'},
   RTPV05:{label:'RTPV',name:'Magandang Balita Bible (Revised)',publisher:'Philippine Bible Society',note:'RTPV05 / Magandang Balita Bible is published by the Philippine Bible Society. Paste only text VCCF is authorized to use.'},
-  KJV:{label:'KJV',name:'King James Version',publisher:'Public-domain fallback',note:'KJV remains the automatic fallback when no custom verse is scheduled.'}
+  KJV:{label:'KJV',name:'King James Version',publisher:'Public-domain fallback',note:'KJV remains the automatic fallback if the authorized MBB source is unavailable.'}
 };
 
 function styles(){
@@ -26,6 +27,7 @@ function styles(){
 .vccf-daily-verse-icon{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,var(--brand) 11%,var(--card));font-size:1rem}.vccf-daily-verse-date{font-size:.72rem;color:var(--muted);font-weight:700}
 .vccf-daily-verse-text{margin:0;max-width:980px;font-family:'Plus Jakarta Sans',Manrope,system-ui,sans-serif;font-size:clamp(1.08rem,2vw,1.42rem);font-weight:700;line-height:1.6;color:var(--text)}
 .vccf-daily-verse-reference{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px;font-size:.82rem}.vccf-daily-verse-reference strong{font-size:.9rem;color:var(--text)}.vccf-daily-verse-translation{padding:4px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:.65rem;font-weight:900}.vccf-daily-verse-publisher{font-size:.68rem;color:var(--muted)}
+.vccf-daily-verse-rights{margin-top:9px;font-size:.65rem;line-height:1.45;color:var(--muted)}
 .vccf-daily-verse-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid color-mix(in srgb,var(--line) 75%,transparent)}.vccf-daily-verse-note{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:.72rem;line-height:1.45}.vccf-daily-verse-actions{display:flex;gap:8px;flex-wrap:wrap}.vccf-daily-verse-copy,.vccf-daily-verse-manage{min-height:36px;padding:8px 12px;font-size:.72rem}.vccf-daily-verse-status{font-size:.72rem;color:var(--muted)}
 .vccf-verse-modal{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:18px;background:rgba(15,23,42,.58);backdrop-filter:blur(4px)}.vccf-verse-modal[hidden]{display:none!important}.vccf-verse-dialog{width:min(760px,100%);max-height:min(88vh,860px);overflow:auto;border:1px solid var(--line);border-radius:22px;background:var(--card);color:var(--text);box-shadow:0 24px 70px rgba(15,23,42,.28)}
 .vccf-verse-dialog-head{position:sticky;top:0;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 14px;background:var(--card);border-bottom:1px solid var(--line)}.vccf-verse-dialog-head h2{margin:0;font-size:1.15rem}.vccf-verse-dialog-head p{margin:5px 0 0;color:var(--muted);font-size:.76rem;line-height:1.45}.vccf-verse-close{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;width:36px;height:36px;font-weight:900;cursor:pointer}
@@ -39,33 +41,21 @@ function styles(){
 function ensureCard(){
   styles();const dashboard=document.getElementById('dashboard');if(!dashboard)return null;
   let card=document.getElementById('vccfDailyVerseCard');
-  if(!card){
-    card=document.createElement('section');card.id='vccfDailyVerseCard';card.className='card vccf-daily-verse';card.setAttribute('aria-live','polite');
-    const anchor=dashboard.querySelector('.stats')||dashboard.firstElementChild;dashboard.insertBefore(card,anchor||null);
-  }
+  if(!card){card=document.createElement('section');card.id='vccfDailyVerseCard';card.className='card vccf-daily-verse';card.setAttribute('aria-live','polite');const anchor=dashboard.querySelector('.stats')||dashboard.firstElementChild;dashboard.insertBefore(card,anchor||null);}
   return card;
 }
-
-function niceDate(value){
-  const d=new Date(`${value}T12:00:00+08:00`);
-  return new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(d);
-}
-
+function niceDate(value){const d=new Date(`${value}T12:00:00+08:00`);return new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(d);}
 function metaFor(code){return translationMeta[code]||{label:code||'Bible',name:code||'',publisher:'',note:''};}
 
 async function copyVerse(text,button){
-  try{
-    if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(text);
-    else{const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
-    const old=button.textContent;button.textContent='Copied';setTimeout(()=>{if(button.isConnected)button.textContent=old},1400);
-  }catch(_){button.textContent='Copy failed';setTimeout(()=>{if(button.isConnected)button.textContent='Copy verse'},1400);}
+  try{if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(text);else{const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}const old=button.textContent;button.textContent='Copied';setTimeout(()=>{if(button.isConnected)button.textContent=old},1400);}catch(_){button.textContent='Copy failed';setTimeout(()=>{if(button.isConnected)button.textContent='Copy verse'},1400);}
 }
 
 function ensureManager(){
   if(!canManage())return null;
   let modal=document.getElementById('vccfVerseManager');if(modal)return modal;
   modal=document.createElement('div');modal.id='vccfVerseManager';modal.className='vccf-verse-modal';modal.hidden=true;
-  modal.innerHTML=`<div class="vccf-verse-dialog" role="dialog" aria-modal="true" aria-labelledby="vccfVerseManagerTitle"><div class="vccf-verse-dialog-head"><div><h2 id="vccfVerseManagerTitle">Daily Verse Manager</h2><p>Admin/Pastor can schedule a verse and translation for any date. MBB Tagalog is the preferred scheduled translation; unscheduled dates continue using the KJV fallback until licensed MBB API delivery is configured.</p></div><button class="vccf-verse-close" type="button" aria-label="Close">×</button></div><div class="vccf-verse-dialog-body"><form id="vccfVerseForm" class="vccf-verse-form-grid"><div class="vccf-verse-field"><label for="vccfVerseDate">Date</label><input id="vccfVerseDate" type="date" required></div><div class="vccf-verse-field"><label for="vccfVerseTranslation">Translation</label><select id="vccfVerseTranslation"><option value="MBBTAG">MBB — Magandang Balita Biblia (2012)</option><option value="RTPV05">RTPV — Magandang Balita Bible (Revised)</option><option value="NIV">NIV — New International Version</option><option value="ESV">ESV — English Standard Version</option><option value="KJV">KJV — fallback / public domain</option></select></div><div class="vccf-verse-field full"><label for="vccfVerseReference">Bible reference</label><input id="vccfVerseReference" type="text" placeholder="e.g. Juan 3:16" required></div><div class="vccf-verse-field full"><label for="vccfVerseText">Verse text</label><textarea id="vccfVerseText" placeholder="Paste the exact verse text from the selected authorized source…" required></textarea></div><div id="vccfVerseRights" class="vccf-verse-rights"></div><label class="vccf-verse-switch"><input id="vccfVersePush" type="checkbox" checked><span><strong>Send as a daily push notification</strong><span>The scheduled verse is prepared at 7:00 AM Philippine time and uses the existing VCCF notification inbox/push system.</span></span></label><div id="vccfVerseStatus" class="vccf-verse-save-status"></div><div class="vccf-verse-form-actions"><button id="vccfVerseRemove" class="btn secondary" type="button" hidden>Remove scheduled verse</button><button class="btn" type="submit">Save Daily Verse</button></div></form><section class="vccf-verse-upcoming"><h3>Upcoming scheduled verses</h3><div id="vccfVerseList" class="vccf-verse-list"><div class="vccf-verse-empty">Loading…</div></div></section></div></div>`;
+  modal.innerHTML=`<div class="vccf-verse-dialog" role="dialog" aria-modal="true" aria-labelledby="vccfVerseManagerTitle"><div class="vccf-verse-dialog-head"><div><h2 id="vccfVerseManagerTitle">Daily Verse Manager</h2><p>Admin/Pastor can schedule a verse and translation for any date. MBB is streamed from the authorized Bible Brain source when configured; KJV remains the fallback.</p></div><button class="vccf-verse-close" type="button" aria-label="Close">×</button></div><div class="vccf-verse-dialog-body"><form id="vccfVerseForm" class="vccf-verse-form-grid"><div class="vccf-verse-field"><label for="vccfVerseDate">Date</label><input id="vccfVerseDate" type="date" required></div><div class="vccf-verse-field"><label for="vccfVerseTranslation">Translation</label><select id="vccfVerseTranslation"><option value="MBBTAG">MBB — Magandang Balita Biblia (2012)</option><option value="RTPV05">RTPV — Magandang Balita Bible (Revised)</option><option value="NIV">NIV — New International Version</option><option value="ESV">ESV — English Standard Version</option><option value="KJV">KJV — fallback / public domain</option></select></div><div class="vccf-verse-field full"><label for="vccfVerseReference">Bible reference</label><input id="vccfVerseReference" type="text" placeholder="e.g. John 3:16" required></div><div class="vccf-verse-field full"><label for="vccfVerseText">Fallback / authorized verse text</label><textarea id="vccfVerseText" placeholder="For MBB, live text is streamed through Bible Brain. Enter only text VCCF is authorized to store here." required></textarea></div><div id="vccfVerseRights" class="vccf-verse-rights"></div><label class="vccf-verse-switch"><input id="vccfVersePush" type="checkbox" checked><span><strong>Send as a daily push notification</strong><span>Prepared at 7:00 AM Philippine time. API-sourced MBB uses a reference/link notification and is read live inside VCCF Connect.</span></span></label><div id="vccfVerseStatus" class="vccf-verse-save-status"></div><div class="vccf-verse-form-actions"><button id="vccfVerseRemove" class="btn secondary" type="button" hidden>Remove scheduled verse</button><button class="btn" type="submit">Save Daily Verse</button></div></form><section class="vccf-verse-upcoming"><h3>Upcoming scheduled verses</h3><div id="vccfVerseList" class="vccf-verse-list"><div class="vccf-verse-empty">Loading…</div></div></section></div></div>`;
   document.body.appendChild(modal);
   const close=()=>{modal.hidden=true;document.body.style.removeProperty('overflow');};
   modal.querySelector('.vccf-verse-close')?.addEventListener('click',close);
@@ -75,101 +65,54 @@ function ensureManager(){
   modal.querySelector('#vccfVerseDate')?.addEventListener('change',e=>void loadManagerDate(e.currentTarget.value));
   modal.querySelector('#vccfVerseForm')?.addEventListener('submit',saveManagerVerse);
   modal.querySelector('#vccfVerseRemove')?.addEventListener('click',removeManagerVerse);
-  updateRights();
-  return modal;
+  updateRights();return modal;
 }
-
-function updateRights(){
-  const modal=document.getElementById('vccfVerseManager');if(!modal)return;
-  const code=modal.querySelector('#vccfVerseTranslation')?.value||'MBBTAG';const m=metaFor(code);
-  const rights=modal.querySelector('#vccfVerseRights');if(rights)rights.innerHTML=`<strong>${esc(m.name)}</strong> · ${esc(m.publisher)}<br>${esc(m.note)} VCCF Connect does not scrape or auto-convert copyrighted Bible text.`;
-}
+function updateRights(){const modal=document.getElementById('vccfVerseManager');if(!modal)return;const code=modal.querySelector('#vccfVerseTranslation')?.value||'MBBTAG';const m=metaFor(code);const rights=modal.querySelector('#vccfVerseRights');if(rights)rights.innerHTML=`<strong>${esc(m.name)}</strong> · ${esc(m.publisher)}<br>${esc(m.note)}`;}
 
 async function loadManagerDate(date){
   const modal=ensureManager(),client=window.VCCF?.sb;if(!modal||!client||!date)return;
   const status=modal.querySelector('#vccfVerseStatus'),remove=modal.querySelector('#vccfVerseRemove');if(status){status.textContent='Loading scheduled verse…';status.style.color='var(--muted)';}
   const {data,error}=await client.from('daily_bible_verse_selections').select('verse_date,reference,verse_text,translation,push_enabled').eq('verse_date',date).maybeSingle();
   if(error){if(status){status.textContent=error.message;status.style.color='#b42318';}return;}
-  modal.querySelector('#vccfVerseReference').value=data?.reference||'';
-  modal.querySelector('#vccfVerseText').value=data?.verse_text||'';
-  modal.querySelector('#vccfVerseTranslation').value=data?.translation||'MBBTAG';
-  modal.querySelector('#vccfVersePush').checked=data?.push_enabled!==false;
-  if(remove)remove.hidden=!data;
-  if(status){status.textContent=data?'Scheduled verse loaded.':'No custom verse is scheduled for this date. KJV fallback will be used.';status.style.color='var(--muted)';}
-  updateRights();
+  modal.querySelector('#vccfVerseReference').value=data?.reference||'';modal.querySelector('#vccfVerseText').value=data?.verse_text||'';modal.querySelector('#vccfVerseTranslation').value=data?.translation||'MBBTAG';modal.querySelector('#vccfVersePush').checked=data?.push_enabled!==false;if(remove)remove.hidden=!data;if(status){status.textContent=data?'Scheduled verse loaded.':'No custom verse is scheduled for this date. The automatic fallback/reference rotation will be used.';status.style.color='var(--muted)';}updateRights();
 }
-
 async function loadUpcoming(){
-  const modal=ensureManager(),client=window.VCCF?.sb;if(!modal||!client)return;
-  const list=modal.querySelector('#vccfVerseList');if(!list)return;
+  const modal=ensureManager(),client=window.VCCF?.sb;if(!modal||!client)return;const list=modal.querySelector('#vccfVerseList');if(!list)return;
   const {data,error}=await client.from('daily_bible_verse_selections').select('verse_date,reference,translation,push_enabled').gte('verse_date',todayPH()).order('verse_date',{ascending:true}).limit(12);
-  if(error){list.innerHTML=`<div class="vccf-verse-empty">${esc(error.message)}</div>`;return;}
-  if(!data?.length){list.innerHTML='<div class="vccf-verse-empty">No upcoming custom verses yet. The KJV fallback rotation will continue automatically.</div>';return;}
+  if(error){list.innerHTML=`<div class="vccf-verse-empty">${esc(error.message)}</div>`;return;}if(!data?.length){list.innerHTML='<div class="vccf-verse-empty">No upcoming custom verses yet. The automatic Daily Verse rotation will continue.</div>';return;}
   list.innerHTML=data.map(v=>{const m=metaFor(v.translation);return `<button type="button" class="vccf-verse-list-item" data-date="${esc(v.verse_date)}"><span class="vccf-verse-list-main"><strong>${esc(v.reference)}</strong><span>${esc(niceDate(v.verse_date))} · ${esc(m.label)}${v.push_enabled?' · Push on':' · Push off'}</span></span><span aria-hidden="true">›</span></button>`;}).join('');
   list.querySelectorAll('[data-date]').forEach(b=>b.addEventListener('click',()=>{const d=b.dataset.date;modal.querySelector('#vccfVerseDate').value=d;void loadManagerDate(d);modal.querySelector('#vccfVerseDate').scrollIntoView({behavior:'smooth',block:'center'});}));
 }
-
-async function openManager(){
-  const modal=ensureManager();if(!modal)return;
-  modal.hidden=false;document.body.style.overflow='hidden';
-  const date=modal.querySelector('#vccfVerseDate');date.value=date.value||todayPH();
-  await Promise.all([loadManagerDate(date.value),loadUpcoming()]);
-}
-
+async function openManager(){const modal=ensureManager();if(!modal)return;modal.hidden=false;document.body.style.overflow='hidden';const date=modal.querySelector('#vccfVerseDate');date.value=date.value||todayPH();await Promise.all([loadManagerDate(date.value),loadUpcoming()]);}
 async function saveManagerVerse(event){
-  event.preventDefault();
-  const modal=ensureManager(),client=window.VCCF?.sb;if(!modal||!client||!canManage())return;
-  const date=modal.querySelector('#vccfVerseDate').value;
-  const reference=modal.querySelector('#vccfVerseReference').value.trim();
-  const verse_text=modal.querySelector('#vccfVerseText').value.trim();
-  const translation=modal.querySelector('#vccfVerseTranslation').value;
-  const push_enabled=modal.querySelector('#vccfVersePush').checked;
-  const status=modal.querySelector('#vccfVerseStatus');
-  if(!date||!reference||!verse_text){if(status){status.textContent='Date, Bible reference, and verse text are required.';status.style.color='#b42318';}return;}
-  if(status){status.textContent='Saving…';status.style.color='var(--muted)';}
-  const uid=window.VCCF?.getState?.()?.session?.user?.id||null;
-  const sourceMeta=translation==='MBBTAG'?{source_provider:'Authorized source / Bible Brain ready',source_version_id:'TGLPBS',source_license_url:'https://www.faithcomesbyhearing.com/bible-brain/license'}:{source_provider:null,source_version_id:null,source_license_url:null};
+  event.preventDefault();const modal=ensureManager(),client=window.VCCF?.sb;if(!modal||!client||!canManage())return;
+  const date=modal.querySelector('#vccfVerseDate').value,reference=modal.querySelector('#vccfVerseReference').value.trim(),verse_text=modal.querySelector('#vccfVerseText').value.trim(),translation=modal.querySelector('#vccfVerseTranslation').value,push_enabled=modal.querySelector('#vccfVersePush').checked,status=modal.querySelector('#vccfVerseStatus');
+  if(!date||!reference||!verse_text){if(status){status.textContent='Date, Bible reference, and fallback/authorized verse text are required.';status.style.color='#b42318';}return;}if(status){status.textContent='Saving…';status.style.color='var(--muted)';}
+  const uid=window.VCCF?.getState?.()?.session?.user?.id||null;const sourceMeta=translation==='MBBTAG'?{source_provider:'Bible Brain / Faith Comes By Hearing',source_version_id:'TGLPBS',source_license_url:'https://www.faithcomesbyhearing.com/bible-brain/license'}:{source_provider:null,source_version_id:null,source_license_url:null};
   const {error}=await client.from('daily_bible_verse_selections').upsert({verse_date:date,reference,verse_text,translation,push_enabled,created_by:uid,updated_by:uid,updated_at:new Date().toISOString(),...sourceMeta},{onConflict:'verse_date'});
-  if(error){if(status){status.textContent=error.message;status.style.color='#b42318';}return;}
-  if(status){status.textContent=`Saved for ${niceDate(date)}${push_enabled?' · push enabled at 7:00 AM PHT':' · push disabled'}.`;status.style.color='#167647';}
-  const remove=modal.querySelector('#vccfVerseRemove');if(remove)remove.hidden=false;
-  await loadUpcoming();if(date===todayPH())await render(true);
+  if(error){if(status){status.textContent=error.message;status.style.color='#b42318';}return;}if(status){status.textContent=`Saved for ${niceDate(date)}${push_enabled?' · push enabled at 7:00 AM PHT':' · push disabled'}.`;status.style.color='#167647';}const remove=modal.querySelector('#vccfVerseRemove');if(remove)remove.hidden=false;await loadUpcoming();if(date===todayPH())await render(true);
 }
+async function removeManagerVerse(){const modal=ensureManager(),client=window.VCCF?.sb;if(!modal||!client||!canManage())return;const date=modal.querySelector('#vccfVerseDate').value;if(!date)return;if(!window.confirm(`Remove the custom Daily Verse for ${niceDate(date)}? The automatic fallback will be used instead.`))return;const status=modal.querySelector('#vccfVerseStatus');if(status){status.textContent='Removing…';status.style.color='var(--muted)';}const {error}=await client.from('daily_bible_verse_selections').delete().eq('verse_date',date);if(error){if(status){status.textContent=error.message;status.style.color='#b42318';}return;}await loadManagerDate(date);await loadUpcoming();if(date===todayPH())await render(true);}
 
-async function removeManagerVerse(){
-  const modal=ensureManager(),client=window.VCCF?.sb;if(!modal||!client||!canManage())return;
-  const date=modal.querySelector('#vccfVerseDate').value;if(!date)return;
-  if(!window.confirm(`Remove the custom Daily Verse for ${niceDate(date)}? The KJV fallback will be used instead.`))return;
-  const status=modal.querySelector('#vccfVerseStatus');if(status){status.textContent='Removing…';status.style.color='var(--muted)';}
-  const {error}=await client.from('daily_bible_verse_selections').delete().eq('verse_date',date);
-  if(error){if(status){status.textContent=error.message;status.style.color='#b42318';}return;}
-  await loadManagerDate(date);await loadUpcoming();if(date===todayPH())await render(true);
+async function loadDailyVerse(client,date){
+  try{
+    const response=await fetch(MBB_BRIDGE,{method:'GET',headers:{accept:'application/json'},cache:'no-store'});
+    if(response.ok){const streamed=await response.json();if(streamed?.reference&&streamed?.verse_text)return streamed;}
+  }catch(error){console.warn('[VCCF daily verse] MBB bridge unavailable; using database fallback.',error);}
+  const {data,error}=await client.rpc('vccf_daily_bible_verse',{p_date:date});if(error)throw error;return Array.isArray(data)?data[0]:data;
 }
 
 async function render(force=false){
-  const card=ensureCard();if(!card)return;
-  const date=todayPH();if(loading||(!force&&lastDate===date&&card.dataset.loaded==='1'))return;
-  const client=window.VCCF?.sb;if(!client){card.innerHTML='<div class="vccf-daily-verse-status">Loading Today’s Word…</div>';return;}
+  const card=ensureCard();if(!card)return;const date=todayPH();if(loading||(!force&&lastDate===date&&card.dataset.loaded==='1'))return;const client=window.VCCF?.sb;if(!client){card.innerHTML='<div class="vccf-daily-verse-status">Loading Today’s Word…</div>';return;}
   loading=true;card.innerHTML='<div class="vccf-daily-verse-status">Loading Today’s Word…</div>';
   try{
-    const {data,error}=await client.rpc('vccf_daily_bible_verse',{p_date:date});if(error)throw error;
-    const verse=Array.isArray(data)?data[0]:data;if(!verse)throw new Error('No daily verse available.');
-    const m=metaFor(verse.translation||'KJV');
-    const quote=`${verse.verse_text} — ${verse.reference} (${m.label})`;
-    const manage=canManage()?'<button class="btn secondary vccf-daily-verse-manage" type="button">Manage Daily Verse</button>':'';
-    card.innerHTML=`<div class="vccf-daily-verse-head"><div class="vccf-daily-verse-kicker"><span class="vccf-daily-verse-icon" aria-hidden="true">✦</span><span>Today’s Word</span></div><div class="vccf-daily-verse-date">${esc(niceDate(verse.verse_date||date))}</div></div><blockquote class="vccf-daily-verse-text">${esc(verse.verse_text)}</blockquote><div class="vccf-daily-verse-reference"><strong>${esc(verse.reference)}</strong><span class="vccf-daily-verse-translation">${esc(m.label)}</span><span class="vccf-daily-verse-publisher">${esc(m.publisher)}</span></div><div class="vccf-daily-verse-foot"><div class="vccf-daily-verse-note"><span aria-hidden="true">🔔</span><span>Changes daily · Daily verse notification at 7:00 AM Philippine time on registered devices.</span></div><div class="vccf-daily-verse-actions">${manage}<button class="btn secondary vccf-daily-verse-copy" type="button">Copy verse</button></div></div>`;
-    card.dataset.loaded='1';lastDate=date;
-    card.querySelector('.vccf-daily-verse-copy')?.addEventListener('click',e=>copyVerse(quote,e.currentTarget));
-    card.querySelector('.vccf-daily-verse-manage')?.addEventListener('click',()=>void openManager());
-  }catch(error){card.innerHTML='<div class="vccf-daily-verse-head"><div class="vccf-daily-verse-kicker"><span class="vccf-daily-verse-icon" aria-hidden="true">✦</span><span>Today’s Word</span></div></div><div class="vccf-daily-verse-status">Today’s Word is unavailable right now.</div>';console.warn('[VCCF daily verse]',error);}
-  finally{loading=false;}
+    const verse=await loadDailyVerse(client,date);if(!verse)throw new Error('No daily verse available.');const m=metaFor(verse.translation||'KJV');const quote=`${verse.verse_text} — ${verse.reference} (${m.label})`;const manage=canManage()?'<button class="btn secondary vccf-daily-verse-manage" type="button">Manage Daily Verse</button>':'';const mbb=String(verse.translation||'')==='MBBTAG';const source=mbb?'Philippine Bible Society · via Bible Brain':m.publisher;const rights=mbb?'<div class="vccf-daily-verse-rights">Tagalog Bible Text © 2012 Philippine Bible Society · streamed from Bible Brain / Faith Comes By Hearing.</div>':'';
+    card.innerHTML=`<div class="vccf-daily-verse-head"><div class="vccf-daily-verse-kicker"><span class="vccf-daily-verse-icon" aria-hidden="true">✦</span><span>Today’s Word</span></div><div class="vccf-daily-verse-date">${esc(niceDate(verse.verse_date||date))}</div></div><blockquote class="vccf-daily-verse-text">${esc(verse.verse_text)}</blockquote><div class="vccf-daily-verse-reference"><strong>${esc(verse.reference)}</strong><span class="vccf-daily-verse-translation">${esc(m.label)}</span><span class="vccf-daily-verse-publisher">${esc(source)}</span></div>${rights}<div class="vccf-daily-verse-foot"><div class="vccf-daily-verse-note"><span aria-hidden="true">🔔</span><span>Changes daily · Automatic notification at 7:00 AM Philippine time. API-sourced MBB is read live in VCCF Connect.</span></div><div class="vccf-daily-verse-actions">${manage}<button class="btn secondary vccf-daily-verse-copy" type="button">Copy verse</button></div></div>`;
+    card.dataset.loaded='1';lastDate=date;card.querySelector('.vccf-daily-verse-copy')?.addEventListener('click',e=>copyVerse(quote,e.currentTarget));card.querySelector('.vccf-daily-verse-manage')?.addEventListener('click',()=>void openManager());
+  }catch(error){card.innerHTML='<div class="vccf-daily-verse-head"><div class="vccf-daily-verse-kicker"><span class="vccf-daily-verse-icon" aria-hidden="true">✦</span><span>Today’s Word</span></div></div><div class="vccf-daily-verse-status">Today’s Word is unavailable right now.</div>';console.warn('[VCCF daily verse]',error);}finally{loading=false;}
 }
 
 function init(){if(!document.getElementById('dashboard'))return;void render(true);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
-window.addEventListener('vccf-authenticated',()=>setTimeout(()=>void render(true),120));
-window.addEventListener('vccf-app-ready',()=>setTimeout(()=>void render(true),160));
-window.addEventListener('focus',()=>void render(false));
-new MutationObserver(()=>{if(!document.getElementById('vccfDailyVerseCard')&&document.getElementById('dashboard'))void render(false);}).observe(document.body,{childList:true,subtree:true});
-window.VCCFDailyVerse={refresh:()=>render(true),manage:()=>openManager()};
+window.addEventListener('vccf-authenticated',()=>setTimeout(()=>void render(true),120));window.addEventListener('vccf-app-ready',()=>setTimeout(()=>void render(true),160));window.addEventListener('focus',()=>void render(false));new MutationObserver(()=>{if(!document.getElementById('vccfDailyVerseCard')&&document.getElementById('dashboard'))void render(false);}).observe(document.body,{childList:true,subtree:true});window.VCCFDailyVerse={refresh:()=>render(true),manage:()=>openManager()};
 })();
