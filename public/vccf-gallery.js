@@ -11,6 +11,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const phDay=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(v));
 const labelDate=v=>v?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long',day:'numeric',year:'numeric'}).format(new Date(v+'T12:00:00+08:00')):'Undated';
 let data={albums:[],photos:[],summaries:[],summaryPhotos:[],events:[],eventPhotos:[]};
+let lightboxState=null;
 
 function allAlbums(){
   const manual=(data.albums||[]).map(a=>({...a,auto:false,album_kind:'manual',photos:(data.photos||[]).filter(p=>p.album_id===a.id).sort((x,y)=>(x.sort_order||0)-(y.sort_order||0))}));
@@ -43,6 +44,7 @@ function downloadUrl(url){
   return url.includes('/storage/v1/object/public/')?url+(url.includes('?')?'&':'?')+'download=':url;
 }
 function render(){
+  closePhotoPreview();
   const el=document.getElementById('gallery');if(!el)return;
   const albums=allAlbums();
   el.innerHTML='<section class="gallery-hero card"><div><span class="gallery-kicker">VCCF SANTA MARIA</span><h2>Gallery</h2><p>Photos uploaded to posted Sunday Summaries, Event Summaries, and church Events appear here automatically. Profile and member avatar pictures remain separate.</p></div>'+(isAdmin()?'<button id="newGalleryAlbum" class="btn" type="button">+ New album</button>':'')+'</section><div class="gallery-section-head"><div><b>'+albums.length+' album'+(albums.length===1?'':'s')+'</b><span>Sunday albums are named by worship date; event albums use the event name.</span></div></div><div class="gallery-album-grid">'+(albums.length?albums.map(albumCard).join(''):'<div class="gallery-empty card"><b>No albums yet</b><span>Uploaded Summary or Event photos will automatically create albums here.</span></div>')+'</div>';
@@ -57,6 +59,7 @@ function albumCard(a){
   return '<button class="gallery-album-card card" type="button" data-gallery-album="'+esc(a.id)+'"><div class="gallery-album-cover">'+(image?'<img src="'+esc(image)+'" alt="'+esc(a.title)+'" loading="lazy">':'<div class="gallery-album-placeholder"><span>VCCF</span></div>')+(badgeText?'<span class="gallery-auto-badge '+esc(a.album_kind)+'">'+esc(badgeText)+'</span>':'')+'</div><div class="gallery-album-copy"><span>'+esc(labelDate(a.album_date))+'</span><h3>'+esc(a.title)+'</h3><p>'+count+' photo'+(count===1?'':'s')+'</p></div></button>';
 }
 function openAlbum(id){
+  closePhotoPreview();
   const album=allAlbums().find(a=>String(a.id)===String(id));if(!album){render();return}
   const el=document.getElementById('gallery');
   const badgeText=autoBadge(album),detailKicker=album.album_kind==='sunday_summary'?'POSTED SUNDAY SUMMARY':album.album_kind==='event_summary'?'POSTED EVENT SUMMARY':album.album_kind==='event'?'CHURCH EVENT':'CHURCH ALBUM';
@@ -69,10 +72,68 @@ function openAlbum(id){
 }
 function photoGrid(album){
   if(!album.photos?.length)return '<div class="gallery-empty card"><b>No photos in this album yet</b><span>'+(album.auto?'Photos attached to this Summary or Event will appear here automatically.':'Use Add photos to upload church photos.')+'</span></div>';
-  return album.photos.map(p=>'<article class="gallery-photo-card"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"><div><span>'+esc(p.caption||'Church photo')+'</span><div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><a href="'+esc(downloadUrl(p.image_url))+'" download target="_blank" rel="noopener" style="color:var(--brand);font-size:.62rem;font-weight:900;text-decoration:none;white-space:nowrap">↓ Download</a>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></div></article>').join('');
+  return album.photos.map((p,index)=>'<article class="gallery-photo-card"><button class="gallery-photo-preview" type="button" data-preview-gallery-photo="'+index+'" aria-label="Preview '+esc(p.caption||album.title)+' in full screen"><img src="'+esc(p.image_url)+'" alt="'+esc(p.caption||album.title)+'" loading="lazy"><span class="gallery-photo-preview-hint" aria-hidden="true">⛶ Preview</span></button><div><span>'+esc(p.caption||'Church photo')+'</span>'+(!album.auto&&isAdmin()?'<button type="button" data-delete-gallery-photo="'+esc(p.id)+'">Remove</button>':'')+'</div></article>').join('');
 }
-function bindPhotoButtons(album){document.querySelectorAll('[data-delete-gallery-photo]').forEach(b=>b.onclick=()=>deletePhoto(album,b.dataset.deleteGalleryPhoto))}
+function bindPhotoButtons(album){
+  document.querySelectorAll('[data-preview-gallery-photo]').forEach(b=>b.onclick=()=>openPhotoPreview(album,Number(b.dataset.previewGalleryPhoto)||0));
+  document.querySelectorAll('[data-delete-gallery-photo]').forEach(b=>b.onclick=()=>deletePhoto(album,b.dataset.deleteGalleryPhoto));
+}
+function ensurePhotoPreview(){
+  let overlay=document.getElementById('galleryPhotoPreview');
+  if(overlay)return overlay;
+  overlay=document.createElement('div');
+  overlay.id='galleryPhotoPreview';
+  overlay.className='gallery-lightbox';
+  overlay.setAttribute('aria-hidden','true');
+  overlay.innerHTML='<div class="gallery-lightbox-shell" role="dialog" aria-modal="true" aria-label="Gallery photo preview"><div class="gallery-lightbox-topbar"><div class="gallery-lightbox-title"><strong id="galleryLightboxAlbum"></strong><span id="galleryLightboxCount"></span></div><div class="gallery-lightbox-actions"><a id="galleryLightboxDownload" class="gallery-lightbox-download" href="#" download target="_blank" rel="noopener">↓ Download</a><button id="galleryLightboxClose" class="gallery-lightbox-close" type="button" aria-label="Close full screen preview">✕</button></div></div><div class="gallery-lightbox-stage"><button id="galleryLightboxPrev" class="gallery-lightbox-nav prev" type="button" aria-label="Previous photo">‹</button><img id="galleryLightboxImage" alt=""><button id="galleryLightboxNext" class="gallery-lightbox-nav next" type="button" aria-label="Next photo">›</button></div><div class="gallery-lightbox-caption"><span id="galleryLightboxCaption"></span></div></div>';
+  document.body.appendChild(overlay);
+  document.getElementById('galleryLightboxClose').onclick=closePhotoPreview;
+  document.getElementById('galleryLightboxPrev').onclick=()=>movePhotoPreview(-1);
+  document.getElementById('galleryLightboxNext').onclick=()=>movePhotoPreview(1);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)closePhotoPreview()});
+  return overlay;
+}
+function openPhotoPreview(album,index){
+  if(!album?.photos?.length)return;
+  const safeIndex=Math.max(0,Math.min(Number(index)||0,album.photos.length-1));
+  lightboxState={album,index:safeIndex};
+  const overlay=ensurePhotoPreview();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden','false');
+  document.body.classList.add('gallery-lightbox-open');
+  updatePhotoPreview();
+  setTimeout(()=>document.getElementById('galleryLightboxClose')?.focus(),0);
+}
+function updatePhotoPreview(){
+  if(!lightboxState)return;
+  const {album,index}=lightboxState,photo=album.photos[index];if(!photo)return;
+  const image=document.getElementById('galleryLightboxImage');
+  image.src=photo.image_url||'';
+  image.alt=photo.caption||album.title||'Church photo';
+  document.getElementById('galleryLightboxAlbum').textContent=album.title||'Gallery';
+  document.getElementById('galleryLightboxCount').textContent=(index+1)+' / '+album.photos.length;
+  document.getElementById('galleryLightboxCaption').textContent=photo.caption||'Church photo';
+  const download=document.getElementById('galleryLightboxDownload');
+  download.href=downloadUrl(photo.image_url);
+  download.setAttribute('download','');
+  const multi=album.photos.length>1;
+  document.getElementById('galleryLightboxPrev').hidden=!multi;
+  document.getElementById('galleryLightboxNext').hidden=!multi;
+}
+function movePhotoPreview(step){
+  if(!lightboxState?.album?.photos?.length)return;
+  const length=lightboxState.album.photos.length;
+  lightboxState.index=(lightboxState.index+step+length)%length;
+  updatePhotoPreview();
+}
+function closePhotoPreview(){
+  const overlay=document.getElementById('galleryPhotoPreview');
+  if(overlay){overlay.classList.remove('open');overlay.setAttribute('aria-hidden','true')}
+  document.body.classList.remove('gallery-lightbox-open');
+  lightboxState=null;
+}
 function renderCreateAlbum(){
+  closePhotoPreview();
   if(!isAdmin())return;
   const el=document.getElementById('gallery'),today=phDay(new Date());
   el.innerHTML='<div class="gallery-detail-head"><button id="cancelNewAlbum" class="back-button" type="button">← Back to gallery</button></div><section class="gallery-form-card card"><span class="gallery-kicker">ADMIN</span><h2>Create album</h2><form id="galleryAlbumForm" class="gallery-form"><label>Album title<input name="title" required placeholder="e.g. Family Day 2026"></label><label>Album date<input name="album_date" type="date" value="'+today+'"></label><label>Description<textarea name="description" rows="4" placeholder="Optional album description"></textarea></label><div><button class="btn" type="submit">Create album</button></div><span id="galleryFormMessage" class="gallery-message"></span></form></section>';
@@ -87,6 +148,7 @@ function renderCreateAlbum(){
   };
 }
 function renderEditAlbum(album){
+  closePhotoPreview();
   if(!isAdmin()||album.auto)return;
   const el=document.getElementById('gallery');
   el.innerHTML='<div class="gallery-detail-head"><button id="cancelEditAlbum" class="back-button" type="button">← Back to album</button></div><section class="gallery-form-card card"><span class="gallery-kicker">ADMIN</span><h2>Edit album</h2><form id="galleryEditAlbumForm" class="gallery-form"><label>Album title<input name="title" required value="'+esc(album.title)+'"></label><label>Album date<input name="album_date" type="date" value="'+esc(album.album_date||'')+'"></label><label>Description<textarea name="description" rows="4">'+esc(album.description||'')+'</textarea></label><div><button class="btn" type="submit">Save album</button></div><span id="galleryFormMessage" class="gallery-message"></span></form></section>';
@@ -140,10 +202,18 @@ async function deleteAlbum(album){
   await load();render();
 }
 async function mount(){
+  closePhotoPreview();
   const el=document.getElementById('gallery');if(!el)return;
   el.innerHTML='<div class="gallery-loading card">Loading gallery…</div>';
   try{await load();render()}catch(error){console.error('VCCF Gallery',error);el.innerHTML='<div class="notice">Gallery could not be loaded. '+esc(error.message||'Please refresh and try again.')+'</div>'}
 }
+function onGalleryKeydown(e){
+  if(!lightboxState)return;
+  if(e.key==='Escape'){e.preventDefault();closePhotoPreview()}
+  else if(e.key==='ArrowLeft'){e.preventDefault();movePhotoPreview(-1)}
+  else if(e.key==='ArrowRight'){e.preventDefault();movePhotoPreview(1)}
+}
+document.addEventListener('keydown',onGalleryKeydown);
 window.VCCFGallery={mount};
 window.addEventListener('vccf-sunday-summary-posted',()=>{if(document.getElementById('gallery')?.classList.contains('active'))mount()});
 window.addEventListener('vccf-gallery-source-updated',()=>{if(document.getElementById('gallery')?.classList.contains('active'))mount()});
