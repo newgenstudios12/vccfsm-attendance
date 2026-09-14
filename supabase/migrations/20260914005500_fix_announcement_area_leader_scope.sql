@@ -88,6 +88,3 @@ with check (
       and church_announcements.audience = 'Ministry'
   )
 );
-
--- This function is trigger-only; it should not be callable through the API.
-revoke execute on function public.enforce_announcement_scope() from public, anon, authenticated;
