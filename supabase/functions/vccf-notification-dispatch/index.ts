@@ -43,64 +43,133 @@ async function caller(req: Request, cronSecret: string): Promise<Caller | null> 
   return { kind: 'user', user: u.data.user, profile: p.data };
 }
 
-async function targetSubscriptions(a: any) {
-  const sr = await service.from('push_subscriptions').select('id,user_id,endpoint,p256dh,auth_key').eq('enabled', true);
-  if (sr.error) throw sr.error;
-  const subs = sr.data || [];
-  if (!subs.length) return [];
-
-  const userIds = [...new Set(subs.map((x: any) => x.user_id))];
-  let allowed = new Set<string>();
-
-  if (a.audience === 'User' && a.target_user_id) {
-    allowed = new Set([String(a.target_user_id)]);
-  } else {
-    const pr = await service.from('profiles').select('user_id,role,member_id,area_id').in('user_id', userIds);
-    if (pr.error) throw pr.error;
-    const profiles = pr.data || [];
-
-    if (a.audience === 'All') {
-      allowed = new Set(userIds);
-    } else if (a.audience === 'Leaders') {
-      allowed = new Set(profiles.filter((p: any) => ['admin', 'pastor', 'area_leader', 'ministry_leader'].includes(String(p.role))).map((p: any) => p.user_id));
-    } else if (a.audience === 'Area') {
-      allowed = new Set(profiles.filter((p: any) => p.area_id && p.area_id === a.area_id).map((p: any) => p.user_id));
-    } else if (a.audience === 'Ministry') {
-      const memberIds = profiles.map((p: any) => p.member_id).filter(Boolean);
-      if (memberIds.length) {
-        const [mm, lead] = await Promise.all([
-          service.from('member_ministries').select('member_id,ministry_id').eq('ministry_id', a.ministry_id).in('member_id', memberIds),
-          service.from('church_leadership').select('member_id,ministry_id,is_active').eq('ministry_id', a.ministry_id).eq('is_active', true).in('member_id', memberIds),
-        ]);
-        if (mm.error) throw mm.error;
-        if (lead.error) throw lead.error;
-        const mids = new Set([...(mm.data || []).map((x: any) => x.member_id), ...(lead.data || []).map((x: any) => x.member_id)]);
-        allowed = new Set(profiles.filter((p: any) => p.member_id && mids.has(p.member_id)).map((p: any) => p.user_id));
-      }
-    }
+async function allProfiles() {
+  const rows: any[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const r = await service.from('profiles')
+      .select('user_id,role,member_id,area_id')
+      .not('user_id', 'is', null)
+      .range(from, from + pageSize - 1);
+    if (r.error) throw r.error;
+    rows.push(...(r.data || []));
+    if ((r.data || []).length < pageSize) break;
   }
+  return rows;
+}
 
-  return subs.filter((s: any) => allowed.has(s.user_id));
+async function allEnabledSubscriptions() {
+  const rows: any[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const r = await service.from('push_subscriptions')
+      .select('id,user_id,endpoint,p256dh,auth_key')
+      .eq('enabled', true)
+      .range(from, from + pageSize - 1);
+    if (r.error) throw r.error;
+    rows.push(...(r.data || []));
+    if ((r.data || []).length < pageSize) break;
+  }
+  return rows;
+}
+
+async function targetUserIds(a: any) {
+  if (a.audience === 'User' && a.target_user_id) return [String(a.target_user_id)];
+
+  const profiles = await allProfiles();
+  if (a.audience === 'All') {
+    return [...new Set(profiles.map((p: any) => String(p.user_id)).filter(Boolean))];
+  }
+  if (a.audience === 'Leaders') {
+    return [...new Set(profiles
+      .filter((p: any) => ['admin', 'pastor', 'area_leader', 'ministry_leader'].includes(String(p.role)))
+      .map((p: any) => String(p.user_id)).filter(Boolean))];
+  }
+  if (a.audience === 'Area') {
+    return [...new Set(profiles
+      .filter((p: any) => p.area_id && p.area_id === a.area_id)
+      .map((p: any) => String(p.user_id)).filter(Boolean))];
+  }
+  if (a.audience === 'Ministry') {
+    const memberIds = profiles.map((p: any) => p.member_id).filter(Boolean);
+    if (!memberIds.length || !a.ministry_id) return [];
+    const [mm, lead] = await Promise.all([
+      service.from('member_ministries').select('member_id,ministry_id').eq('ministry_id', a.ministry_id).in('member_id', memberIds),
+      service.from('church_leadership').select('member_id,ministry_id,is_active').eq('ministry_id', a.ministry_id).eq('is_active', true).in('member_id', memberIds),
+    ]);
+    if (mm.error) throw mm.error;
+    if (lead.error) throw lead.error;
+    const mids = new Set([...(mm.data || []).map((x: any) => x.member_id), ...(lead.data || []).map((x: any) => x.member_id)]);
+    return [...new Set(profiles
+      .filter((p: any) => p.member_id && mids.has(p.member_id))
+      .map((p: any) => String(p.user_id)).filter(Boolean))];
+  }
+  return [];
+}
+
+async function targetSubscriptions(userIds: string[]) {
+  if (!userIds.length) return [];
+  const allowed = new Set(userIds);
+  const subs = await allEnabledSubscriptions();
+  return subs.filter((s: any) => allowed.has(String(s.user_id)));
+}
+
+function notificationKind(table: string, a: any) {
+  const source = String(a.source_type || '').toLowerCase();
+  const url = String(a.push_url || '').toLowerCase();
+  const title = String(a.title || '').toLowerCase();
+  if (table === 'church_announcements') return 'announcement';
+  if (source === 'sermon') return 'sermon';
+  if (source === 'church_event') return 'event';
+  if (source === 'worship_assignment') return 'worship';
+  if (url.includes('daily-verse') || title.startsWith("today's word")) return 'verse';
+  return 'push';
+}
+
+async function saveInboxRows(table: string, a: any, userIds: string[]) {
+  if (!userIds.length) return 0;
+  const rows = userIds.map(user_id => ({
+    user_id,
+    title: a.title || 'VCCF Connect',
+    body: a.body || 'New notification',
+    kind: notificationKind(table, a),
+    is_read: false,
+    action_url: a.push_url || '/',
+    source_type: a.source_type || table,
+    source_id: a.source_id || a.id || null,
+    source_key: a.source_key || null,
+  }));
+  const chunkSize = 500;
+  let savedCount = 0;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const saved = await service.from('vccf_notifications').insert(chunk);
+    if (saved.error) {
+      console.error('inbox insert failed', saved.error.message);
+      continue;
+    }
+    savedCount += chunk.length;
+  }
+  return savedCount;
 }
 
 async function sendRow(table: string, a: any, privateKey: string) {
-  const subs = await targetSubscriptions(a);
+  const recipientIds = await targetUserIds(a);
+  const subs = await targetSubscriptions(recipientIds);
   webpush.setVapidDetails('mailto:newgenstudios12@gmail.com', VAPID_PUBLIC, privateKey);
   const payload = JSON.stringify({
     title: a.title || 'VCCF Connect',
     body: a.body || 'New notification',
     url: a.push_url || '/',
     tag: `${table}-${a.id}`,
-    data: { source_table: table, id: a.id },
+    data: { source_table: table, id: a.id, source_type: a.source_type || null, source_id: a.source_id || null },
   });
 
   let sent = 0, failed = 0, removed = 0;
-  const deliveredUsers = new Set<string>();
   await Promise.all(subs.map(async (s: any) => {
     try {
       await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload, { TTL: 86400 });
       sent++;
-      deliveredUsers.add(s.user_id);
     } catch (error: any) {
       failed++;
       const status = Number(error?.statusCode || 0);
@@ -113,24 +182,9 @@ async function sendRow(table: string, a: any, privateKey: string) {
     }
   }));
 
-  const inboxUsers = a.audience === 'User' && a.target_user_id
-    ? new Set<string>([String(a.target_user_id)])
-    : deliveredUsers;
-
-  if (inboxUsers.size) {
-    const inboxRows = [...inboxUsers].map(user_id => ({
-      user_id,
-      title: a.title || 'VCCF Connect',
-      body: a.body || 'New notification',
-      kind: table === 'church_announcements' ? 'announcement' : (a.source_type === 'worship_assignment' ? 'worship' : 'push'),
-      is_read: false,
-    }));
-    const saved = await service.from('vccf_notifications').insert(inboxRows);
-    if (saved.error) console.error('inbox insert failed', saved.error.message);
-  }
-
+  const inbox = await saveInboxRows(table, a, recipientIds);
   await service.from(table).update({ last_push_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', a.id);
-  return { source: table, id: a.id, sent, failed, removed, inbox: inboxUsers.size };
+  return { source: table, id: a.id, recipients: recipientIds.length, sent, failed, removed, inbox };
 }
 
 async function senderName(senderId: string) {
@@ -161,7 +215,17 @@ async function sendChat(messageId: string, privateKey: string, who: Caller) {
   const title = `New message from ${name}`;
   const url = `/?chat=${encodeURIComponent(message.conversation_id)}`;
 
-  const inboxRows = recipients.map(user_id => ({ user_id, title, body: preview, kind: 'chat', is_read: false }));
+  const inboxRows = recipients.map(user_id => ({
+    user_id,
+    title,
+    body: preview,
+    kind: 'chat',
+    is_read: false,
+    action_url: url,
+    source_type: 'message',
+    source_id: message.id,
+    source_key: 'new_message',
+  }));
   const inbox = await service.from('vccf_notifications').insert(inboxRows);
   if (inbox.error) console.error('chat inbox insert failed', inbox.error.message);
 
