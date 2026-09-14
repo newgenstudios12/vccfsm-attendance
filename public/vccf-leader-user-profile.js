@@ -12,3 +12,19 @@ function render(){const box=document.getElementById('accountPanel');if(!box||!pr
 function init(){styles();const maybe=()=>{const mid=S().profile?.member_id;if(mid&&mid!==memberId)void load();else if(profiles.length)render()};maybe();let tries=0;const timer=setInterval(()=>{maybe();if(++tries>12||memberId)clearInterval(timer)},500);const box=document.getElementById('accountPanel');if(box)new MutationObserver(()=>{if(profiles.length&&!box.querySelector('.vccf-self-leader-about'))render()}).observe(box,{childList:true,subtree:false})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();window.addEventListener('vccf-app-ready',()=>setTimeout(init,200));
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_SUNDAY_STREAK_LOADER__)return;
+window.__VCCF_SUNDAY_STREAK_LOADER__=true;
+function loadSundayStreak(){
+  if(document.querySelector('script[data-vccf-sunday-streak]'))return;
+  const script=document.createElement('script');
+  script.src='/vccf-sunday-streak.js?v=20260914-1';
+  script.defer=true;
+  script.dataset.vccfSundayStreak='1';
+  document.head.appendChild(script);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadSundayStreak,{once:true});else loadSundayStreak();
+window.addEventListener('vccf-app-ready',loadSundayStreak);
+})();
