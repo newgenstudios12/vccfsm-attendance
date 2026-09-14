@@ -103,3 +103,11 @@ function mount(container=document.getElementById('serviceAttendancePanel')){root
 async function unmount(){await stopScanner();if(root)root.innerHTML='';root=null}
 window.VCCFServiceAttendance={mount,unmount,refresh:renderRecords};
 })();
+
+(()=>{
+  const load=(src,key,next)=>{if(document.querySelector(`script[data-${key}]`)){next?.();return}const s=document.createElement('script');s.src=src;s.async=false;s.setAttribute(`data-${key}`,'1');s.onload=()=>next?.();document.head.appendChild(s)};
+  load('/vccf-service-attendance-v2.js?v=20260914-1','vccf-service-attendance-v2',()=>
+    load('/vccf-bible-study-barangay-dropdown.js?v=20260914-1','vccf-bible-study-dropdown',()=>
+      load('/vccf-bible-study-barangay-base.js?v=20260914-1','vccf-bible-study-base',()=>
+        load('/vccf-extra-attendance-checklists.js?v=20260914-1','vccf-extra-attendance-checklists'))));
+})();
