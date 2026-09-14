@@ -28,3 +28,24 @@ function loadSundayStreak(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadSundayStreak,{once:true});else loadSundayStreak();
 window.addEventListener('vccf-app-ready',loadSundayStreak);
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_EVENTS_GALLERY_LOADER__)return;
+window.__VCCF_EVENTS_GALLERY_LOADER__=true;
+function loadEventsGallery(){
+  if(document.querySelector('script[data-vccf-events-gallery]'))return;
+  const script=document.createElement('script');
+  script.src='/vccf-events-gallery.js?v=20260914-1';
+  script.async=false;
+  script.dataset.vccfEventsGallery='1';
+  script.onerror=()=>{
+    window.__VCCF_EVENTS_GALLERY_LOADER__=false;
+    script.remove();
+    console.error('Unable to load Events gallery module.');
+  };
+  document.head.appendChild(script);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadEventsGallery,{once:true});else loadEventsGallery();
+window.addEventListener('vccf-app-ready',loadEventsGallery);
+})();
