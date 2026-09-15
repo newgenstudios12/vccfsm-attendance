@@ -153,3 +153,32 @@ input,select,textarea{min-width:0;max-width:100%}
   .toolbar>*,.member-detail-actions>* ,.settings-actions>* ,.attendance-record-controls>* ,.member-qr-print-tools>* ,.attendance-actions>* ,.media-actions>*{width:100%!important;max-width:100%!important;margin-left:0!important}
   .attendance-module-tabs{grid-template-columns:1fr}
 }
+
+/* Mobile shell width fix: the sidebar is off-canvas below 900px, so the content
+   must not keep the legacy 64/78px sidebar reservation from the base stylesheet. */
+@media(max-width:900px){
+  .layout{
+    display:block!important;
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .main{
+    margin-left:0!important;
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .main>.top,
+  .main>.view,
+  .main>.view.active{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+}
+
+@media(max-width:620px){
+  .main{
+    padding-left:12px!important;
+    padding-right:12px!important;
+  }
+}
