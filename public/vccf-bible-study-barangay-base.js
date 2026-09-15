@@ -110,14 +110,14 @@ function standard(root){
     const loading=root.querySelector('.giving-loading');
     if(!loading)return false;
     let bar=document.getElementById('vccfGivingSectionTabs');
-    if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfGivingSectionTabs');root.insertBefore(bar,loading)}
+    if(!bar){bar=createBar('vccfGivingSectionTabs');root.insertBefore(bar,loading)}
     paint(bar);
     pending(bar,'vccfBibleGivingPending','Loading Bible Study Tithes & Offerings…',activeTab==='bible');
     setVisible(loading,activeTab!=='bible');
     return true;
   }
   let bar=document.getElementById('vccfGivingSectionTabs');
-  if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}
+  if(!bar){bar=createBar('vccfGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}
   paint(bar);
   [root.querySelector('.sunday-giving'),root.querySelector('#givingStats'),root.querySelector('.giving-ledger'),root.querySelector('.giving-privacy-note')].filter(Boolean).forEach(n=>setVisible(n,activeTab==='sunday'));
   const add=root.querySelector('#addGivingRecord');setVisible(add,activeTab==='sunday');
@@ -132,13 +132,13 @@ function area(root){
     const loading=[...root.querySelectorAll('.card')].find(x=>String(x.textContent||'').toLowerCase().includes('loading area giving'));
     if(!loading)return false;
     let bar=document.getElementById('vccfAreaGivingSectionTabs');
-    if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfAreaGivingSectionTabs');root.insertBefore(bar,loading)}paint(bar);
+    if(!bar){bar=createBar('vccfAreaGivingSectionTabs');root.insertBefore(bar,loading)}paint(bar);
     pending(bar,'vccfAreaBibleGivingPending','Loading Bible Study Tithes & Offerings for your area…',activeTab==='bible');
     setVisible(loading,activeTab!=='bible');
     return true;
   }
   let bar=document.getElementById('vccfAreaGivingSectionTabs');
-  if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfAreaGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}paint(bar);
+  if(!bar){bar=createBar('vccfAreaGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}paint(bar);
   const form=wrap.querySelector('.alg-form-card'),ledger=wrap.querySelector('.alg-ledger'),bible=document.getElementById('areaLeaderBibleStudyGiving'),clean=document.getElementById('vccfAreaSundayLedger');
   setVisible(form,activeTab==='sunday');
   if(ledger)setVisible(ledger,activeTab==='sunday'||!clean);
@@ -160,8 +160,8 @@ window.addEventListener('vccf-app-ready',apply);window.addEventListener('pagesho
    initial screen load. */
 (()=>{
 'use strict';
-if(window.__VCCF_GIVING_TABS_LOADER_V6__)return;
-window.__VCCF_GIVING_TABS_LOADER_V6__=true;
+if(window.__VCCF_GIVING_TABS_LOADER_V7__)return;
+window.__VCCF_GIVING_TABS_LOADER_V7__=true;
 let attempts=0,started=false,watcher=null;
 function ready(){
   const root=document.getElementById('giving');if(!root)return false;
@@ -175,12 +175,11 @@ function load(force=false){
   if(old&&!force)return;
   if(old)old.remove();
   const s=document.createElement('script');
-  s.src='/vccf-giving-tabs.js?v=20260915-5';
+  s.src='/vccf-giving-tabs.js?v=20260916-1';
   s.async=true;
   s.dataset.vccfGivingTabs='1';
   s.onload=()=>{
     attempts=0;
-    document.querySelectorAll('.vccf-giving-tabs[data-vccf-early-bar="1"]').forEach(x=>x.remove());
     let wakeAttempts=0;
     const wake=()=>{
       window.dispatchEvent(new Event('focus'));
