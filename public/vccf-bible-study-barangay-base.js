@@ -51,3 +51,15 @@ window.addEventListener('vccf-app-ready',queue);
 window.addEventListener('focus',queue);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',queue,{once:true});else queue();
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_GIVING_TABS_LOADER__)return;
+window.__VCCF_GIVING_TABS_LOADER__=true;
+if(document.querySelector('script[data-vccf-giving-tabs]'))return;
+const s=document.createElement('script');
+s.src='/vccf-giving-tabs.js?v=20260915-1';
+s.defer=true;
+s.dataset.vccfGivingTabs='1';
+document.head.appendChild(s);
+})();
