@@ -42,6 +42,46 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Link",
+          "value": "</vccf-giving-tabs.js?v=20260916-1>; rel=preload; as=script, </vccf-bible-study-giving.js?v=20260916-1>; rel=preload; as=script"
+        }
+      ]
+    },
+    {
+      "source": "/app",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</vccf-giving-tabs.js?v=20260916-1>; rel=preload; as=script, </vccf-bible-study-giving.js?v=20260916-1>; rel=preload; as=script"
+        }
+      ]
+    },
+    {
+      "source": "/login",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</vccf-giving-tabs.js?v=20260916-1>; rel=preload; as=script, </vccf-bible-study-giving.js?v=20260916-1>; rel=preload; as=script"
+        }
+      ]
+    },
+    {
+      "source": "/vccf-giving-tabs.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    },
+    {
+      "source": "/vccf-bible-study-giving.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
         }
       ]
     },
