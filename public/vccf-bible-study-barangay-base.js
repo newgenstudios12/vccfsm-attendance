@@ -56,10 +56,14 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
    The finance data can continue loading below without blocking navigation. */
 (()=>{
 'use strict';
-if(window.__VCCF_GIVING_TABS_EARLY__)return;
-window.__VCCF_GIVING_TABS_EARLY__=true;
-let activeTab='sunday',queued=false;
-try{activeTab=sessionStorage.getItem('vccf-giving-subtab')==='bible'?'bible':'sunday'}catch(_){ }
+if(window.__VCCF_GIVING_TABS_EARLY_V2__)return;
+window.__VCCF_GIVING_TABS_EARLY_V2__=true;
+let activeTab='sunday',queued=false,moduleRetry=0;
+const appState=()=>window.VCCF?.getState?.()||{};
+const role=()=>String(appState().profile?.role||'').toLowerCase();
+
+function syncTab(){try{activeTab=sessionStorage.getItem('vccf-giving-subtab')==='bible'?'bible':'sunday'}catch(_){activeTab=activeTab==='bible'?'bible':'sunday'}}
+syncTab();
 
 function styles(){
   if(document.getElementById('vccfGivingTabsEarlyStyle'))return;
@@ -68,55 +72,86 @@ function styles(){
 .vccf-giving-tab{border:0;background:transparent;color:var(--muted);padding:10px 14px;border-radius:10px;font:inherit;font-size:.78rem;font-weight:900;white-space:nowrap;cursor:pointer;min-height:42px}
 .vccf-giving-tab.active{background:var(--card);color:var(--brand);box-shadow:0 1px 4px rgba(15,23,42,.08)}
 .vccf-giving-tab-placeholder{padding:18px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:.8rem;text-align:center;background:var(--card-soft,var(--card));margin:0 0 16px}
+.vccf-giving-managed-hidden{display:none!important}
 @media(max-width:700px){.vccf-giving-tabs{display:grid;grid-template-columns:1fr 1fr}.vccf-giving-tab{white-space:normal;line-height:1.25;padding:10px 8px}}
 `;document.head.appendChild(s);
 }
+function setVisible(node,show){if(!node)return;node.hidden=!show;node.classList.toggle('vccf-giving-managed-hidden',!show)}
 function remember(tab){activeTab=tab==='bible'?'bible':'sunday';try{sessionStorage.setItem('vccf-giving-subtab',activeTab)}catch(_){ }apply()}
 function createBar(id){
-  const bar=document.createElement('div');bar.id=id;bar.className='vccf-giving-tabs';bar.setAttribute('role','tablist');bar.setAttribute('aria-label','Tithes and Offerings sections');
+  const bar=document.createElement('div');bar.id=id;bar.className='vccf-giving-tabs';bar.dataset.vccfEarlyBar='1';bar.setAttribute('role','tablist');bar.setAttribute('aria-label','Tithes and Offerings sections');
   bar.innerHTML='<button type="button" class="vccf-giving-tab" data-vccf-giving-tab="sunday" role="tab">Sunday Tithes &amp; Offerings</button><button type="button" class="vccf-giving-tab" data-vccf-giving-tab="bible" role="tab">Bible Study Tithes &amp; Offerings</button>';
   bar.querySelectorAll('[data-vccf-giving-tab]').forEach(b=>b.addEventListener('click',()=>remember(b.dataset.vccfGivingTab)));
   return bar;
 }
 function paint(bar){bar?.querySelectorAll('[data-vccf-giving-tab]').forEach(b=>{const on=b.dataset.vccfGivingTab===activeTab;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1})}
-function pending(bar,id,text,show){let p=document.getElementById(id);if(show&&!p){p=document.createElement('div');p.id=id;p.className='vccf-giving-tab-placeholder';p.textContent=text;bar.insertAdjacentElement('afterend',p)}else if(!show)p?.remove()}
+function pending(bar,id,text,show){if(!bar)return;let p=document.getElementById(id);if(show&&!p){p=document.createElement('div');p.id=id;p.className='vccf-giving-tab-placeholder';p.textContent=text;bar.insertAdjacentElement('afterend',p)}else if(!show)p?.remove()}
+
+function ensureBibleModule(root,isArea=false){
+  if(activeTab!=='bible'||!root)return;
+  if(root.querySelector('.giving-loading'))return;
+  const loadingArea=[...root.querySelectorAll('.card')].some(x=>String(x.textContent||'').toLowerCase().includes('loading area giving'));
+  if(loadingArea)return;
+  const area=isArea||role()==='area_leader';
+  const guard=area?'__VCCF_AREA_LEADER_BIBLE_STUDY_GIVING__':'__VCCF_BIBLE_STUDY_GIVING__';
+  const attr=area?'data-vccf-area-bible-giving':'data-vccf-bible-giving';
+  if(window[guard]||document.querySelector('script['+attr+']'))return;
+  const s=document.createElement('script');
+  s.src=area?'/vccf-area-leader-bible-study-giving.js?v=20260915-2':'/vccf-bible-study-giving.js?v=20260915-2';
+  s.async=true;s.setAttribute(attr,'1');
+  s.onload=()=>{moduleRetry=0;if(area)setTimeout(()=>window.dispatchEvent(new CustomEvent('vccf-profile-updated')),20);schedule()};
+  s.onerror=()=>{s.remove();if(++moduleRetry<3)setTimeout(()=>ensureBibleModule(root,area),300)};
+  document.head.appendChild(s);
+}
+
 function standard(root){
   const hero=root.querySelector('.giving-hero');
   if(!hero){
     const loading=root.querySelector('.giving-loading');
     if(!loading)return false;
     let bar=document.getElementById('vccfGivingSectionTabs');
-    if(!bar){bar=createBar('vccfGivingSectionTabs');root.insertBefore(bar,loading)}
+    if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfGivingSectionTabs');root.insertBefore(bar,loading)}
     paint(bar);
     pending(bar,'vccfBibleGivingPending','Loading Bible Study Tithes & Offerings…',activeTab==='bible');
-    loading.hidden=activeTab==='bible';
+    setVisible(loading,activeTab!=='bible');
     return true;
   }
-  let bar=document.getElementById('vccfGivingSectionTabs');if(!bar){bar=createBar('vccfGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}paint(bar);
-  [root.querySelector('.sunday-giving'),root.querySelector('#givingStats'),root.querySelector('.giving-ledger'),root.querySelector('.giving-privacy-note')].filter(Boolean).forEach(n=>n.hidden=activeTab!=='sunday');
-  const add=root.querySelector('#addGivingRecord');if(add)add.hidden=activeTab!=='sunday';
-  const bible=root.querySelector('#bibleStudyGivingFinance');if(bible)bible.hidden=activeTab!=='bible';
-  pending(bar,'vccfBibleGivingPending','Loading Bible Study Tithes & Offerings…',activeTab==='bible'&&!bible);return true;
+  let bar=document.getElementById('vccfGivingSectionTabs');
+  if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}
+  paint(bar);
+  [root.querySelector('.sunday-giving'),root.querySelector('#givingStats'),root.querySelector('.giving-ledger'),root.querySelector('.giving-privacy-note')].filter(Boolean).forEach(n=>setVisible(n,activeTab==='sunday'));
+  const add=root.querySelector('#addGivingRecord');setVisible(add,activeTab==='sunday');
+  const bible=root.querySelector('#bibleStudyGivingFinance');setVisible(bible,activeTab==='bible');
+  pending(bar,'vccfBibleGivingPending','Loading Bible Study Tithes & Offerings…',activeTab==='bible'&&!bible);
+  ensureBibleModule(root,false);
+  return true;
 }
 function area(root){
   const wrap=root.querySelector('.alg-wrap'),hero=wrap?.querySelector('.alg-hero');
   if(!wrap||!hero){
-    const loading=root.querySelector('.card');
-    if(!loading||!String(loading.textContent||'').toLowerCase().includes('loading area giving'))return false;
+    const loading=[...root.querySelectorAll('.card')].find(x=>String(x.textContent||'').toLowerCase().includes('loading area giving'));
+    if(!loading)return false;
     let bar=document.getElementById('vccfAreaGivingSectionTabs');
-    if(!bar){bar=createBar('vccfAreaGivingSectionTabs');root.insertBefore(bar,loading)}paint(bar);
+    if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfAreaGivingSectionTabs');root.insertBefore(bar,loading)}paint(bar);
     pending(bar,'vccfAreaBibleGivingPending','Loading Bible Study Tithes & Offerings for your area…',activeTab==='bible');
-    loading.hidden=activeTab==='bible';
+    setVisible(loading,activeTab!=='bible');
     return true;
   }
-  let bar=document.getElementById('vccfAreaGivingSectionTabs');if(!bar){bar=createBar('vccfAreaGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}paint(bar);
+  let bar=document.getElementById('vccfAreaGivingSectionTabs');
+  if(!bar&&!window.__VCCF_GIVING_TABS__){bar=createBar('vccfAreaGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}paint(bar);
   const form=wrap.querySelector('.alg-form-card'),ledger=wrap.querySelector('.alg-ledger'),bible=document.getElementById('areaLeaderBibleStudyGiving'),clean=document.getElementById('vccfAreaSundayLedger');
-  if(form)form.hidden=activeTab!=='sunday';if(ledger)ledger.hidden=activeTab!=='sunday'&&!!clean;if(clean)clean.hidden=activeTab!=='sunday';if(bible)bible.hidden=activeTab!=='bible';
-  pending(bar,'vccfAreaBibleGivingPending','Loading Bible Study Tithes & Offerings for your area…',activeTab==='bible'&&!bible);return true;
+  setVisible(form,activeTab==='sunday');
+  if(ledger)setVisible(ledger,activeTab==='sunday'||!clean);
+  setVisible(clean,activeTab==='sunday');
+  setVisible(bible,activeTab==='bible');
+  pending(bar,'vccfAreaBibleGivingPending','Loading Bible Study Tithes & Offerings for your area…',activeTab==='bible'&&!bible);
+  ensureBibleModule(root,true);
+  return true;
 }
-function apply(){styles();const root=document.getElementById('giving');if(!root)return;standard(root)||area(root)}
+function apply(){styles();syncTab();const root=document.getElementById('giving');if(!root)return;standard(root)||area(root)}
 function schedule(){if(queued)return;queued=true;queueMicrotask(()=>{queued=false;apply()})}
 new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
+document.addEventListener('click',e=>{if(e.target.closest?.('[data-vccf-giving-tab]'))setTimeout(apply,0)},false);
 window.addEventListener('vccf-app-ready',apply);window.addEventListener('pageshow',apply);window.addEventListener('focus',apply);apply();
 })();
 
@@ -125,20 +160,28 @@ window.addEventListener('vccf-app-ready',apply);window.addEventListener('pagesho
    initial screen load. */
 (()=>{
 'use strict';
-if(window.__VCCF_GIVING_TABS_LOADER_V4__)return;
-window.__VCCF_GIVING_TABS_LOADER_V4__=true;
+if(window.__VCCF_GIVING_TABS_LOADER_V5__)return;
+window.__VCCF_GIVING_TABS_LOADER_V5__=true;
 let attempts=0,started=false,watcher=null;
-function ready(){return Boolean(document.querySelector('#giving .giving-hero,#giving .alg-wrap'))}
+function ready(){
+  const root=document.getElementById('giving');if(!root)return false;
+  if(root.querySelector('.giving-loading'))return false;
+  if([...root.querySelectorAll('.card')].some(x=>String(x.textContent||'').toLowerCase().includes('loading area giving')))return false;
+  return Boolean(root.querySelector('.giving-hero,.alg-wrap'));
+}
 function load(force=false){
   if(window.__VCCF_GIVING_TABS__)return;
   let old=document.querySelector('script[data-vccf-giving-tabs]');
   if(old&&!force)return;
   if(old)old.remove();
   const s=document.createElement('script');
-  s.src='/vccf-giving-tabs.js?v=20260915-4';
+  s.src='/vccf-giving-tabs.js?v=20260915-5';
   s.async=true;
   s.dataset.vccfGivingTabs='1';
-  s.onload=()=>{attempts=0};
+  s.onload=()=>{
+    attempts=0;
+    document.querySelectorAll('.vccf-giving-tabs[data-vccf-early-bar="1"]').forEach(x=>x.remove());
+  };
   s.onerror=()=>{if(++attempts<3)setTimeout(()=>load(true),350)};
   document.head.appendChild(s);
 }
@@ -147,9 +190,9 @@ function start(){
   if(!ready())return;
   started=true;
   watcher?.disconnect();
-  setTimeout(()=>load(false),80);
+  setTimeout(()=>load(false),120);
 }
 watcher=new MutationObserver(start);watcher.observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('vccf-app-ready',start);window.addEventListener('pageshow',start);window.addEventListener('focus',start);start();
-setTimeout(()=>{if(!started){started=true;watcher?.disconnect();load(false)}},2500);
+setTimeout(()=>{if(!started&&ready()){started=true;watcher?.disconnect();load(false)}},2500);
 })();
