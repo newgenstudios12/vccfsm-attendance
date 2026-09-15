@@ -24,7 +24,8 @@ function loadPack(){
   loadStyle('/vccf-ux-5-9-11.css?v=20260915-2','vccfUxPack');
   return loadScript('/vccf-member-360.js?v=20260915-1','vccfUxMember360')
     .then(()=>loadScript('/vccf-events-gallery.js?v=20260915-1','vccfUxEventsGallery'))
-    .then(()=>loadScript('/vccf-event-attendance-gallery.js?v=20260915-1','vccfUxEventAttendanceGallery'));
+    .then(()=>loadScript('/vccf-event-attendance-gallery.js?v=20260915-1','vccfUxEventAttendanceGallery'))
+    .then(()=>loadScript('/vccf-member-profile-visuals.js?v=20260915-1','vccfMemberProfileVisuals'));
 }
 
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_number||m?.member_code||'Member';
@@ -62,7 +63,6 @@ function openEventGallery(id){
   navigate('gallery');
   let tries=0;const timer=setInterval(()=>{tries++;const card=document.querySelector(`[data-gallery-album="event:${CSS.escape(String(id))}"]`);if(card){clearInterval(timer);card.click();return}if(tries>=30)clearInterval(timer)},100);
 }
-
 function workflowBanner(){
   const hero=document.querySelector('.vccf-events-hero');
   if(!hero||hero.querySelector('.vccf-event-workflow'))return;
@@ -70,7 +70,6 @@ function workflowBanner(){
   flow.innerHTML='<span><b>1</b> Event</span><i>→</i><span><b>2</b> Attendance</span><i>→</i><span><b>3</b> Photos & Gallery</span>';
   hero.appendChild(flow);
 }
-
 async function enhanceEventCards(){
   const grid=document.querySelector('.vccf-events-grid');if(!grid)return;
   workflowBanner();await refreshPhotoEventIds();
@@ -83,7 +82,6 @@ async function enhanceEventCards(){
     const body=card.querySelector('.vccf-event-body');if(body){const state=document.createElement('div');state.className='vccf-event-flow-state';state.innerHTML=photoEventIds.has(String(id))?'<span>✓ Attendance ready</span><span>✓ Gallery linked</span>':'<span>Attendance ready</span><span>Add photos from Attendance to create the Gallery album</span>';body.appendChild(state)}
   });
 }
-
 async function enhanceAttendanceCards(){
   const gallery=document.querySelector('.event-attendance-gallery');if(!gallery)return;
   await refreshPhotoEventIds();
@@ -95,16 +93,6 @@ async function enhanceAttendanceCards(){
     if(photoEventIds.has(String(id))){const b=document.createElement('button');b.type='button';b.className='cms-small vccf-event-gallery-action';b.textContent='Open gallery';b.onclick=e=>{e.stopPropagation();openEventGallery(id)};actions.appendChild(b)}
     else{const note=document.createElement('span');note.className='vccf-event-photo-hint';note.textContent='Upload event photos here to create its Gallery album automatically.';card.querySelector('.event-attendance-card-copy')?.appendChild(note)}
   });
-}
-
-function phTodayParts(){const parts={};new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).forEach(x=>{if(x.type!=='literal')parts[x.type]=x.value});return{year:Number(parts.year),month:Number(parts.month),day:Number(parts.day)}}
-function sundayCountToDay(year,month,day){let n=0;for(let d=1;d<=day;d++)if(new Date(Date.UTC(year,month-1,d)).getUTCDay()===0)n++;return n}
-async function enhanceMember360Monthly(){
-  const grid=document.querySelector('#members .m360-summary-grid');if(!grid||!lastMemberId)return;
-  const attendance=[...grid.querySelectorAll('.m360-summary')].find(x=>x.querySelector('h3')?.textContent?.trim()==='Attendance');if(!attendance)return;
-  const now=phTodayParts(),key=`${lastMemberId}:${now.year}-${String(now.month).padStart(2,'0')}`;if(attendance.dataset.monthPerformance===key)return;attendance.dataset.monthPerformance=key;
-  const mm=String(now.month).padStart(2,'0'),nextMonth=now.month===12?1:now.month+1,nextYear=now.month===12?now.year+1:now.year,start=`${now.year}-${mm}-01T00:00:00+08:00`,end=`${nextYear}-${String(nextMonth).padStart(2,'0')}-01T00:00:00+08:00`;
-  try{const {data,error}=await db().from('attendance').select('checked_in_at,attendance_type').eq('member_id',lastMemberId).gte('checked_in_at',start).lt('checked_in_at',end).order('checked_in_at');if(error)throw error;const present=new Set((data||[]).filter(x=>(x.attendance_type||'sunday')==='sunday').map(x=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(x.checked_in_at)))).size,elapsed=sundayCountToDay(now.year,now.month,now.day),rate=elapsed?Math.round(present/elapsed*100):0,monthName=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long'}).format(new Date(Date.UTC(now.year,now.month-1,1)));attendance.innerHTML=`<h3>Sunday Attendance · ${esc(monthName)}</h3><strong>${present} / ${elapsed} present</strong><div class="hint">${elapsed?rate+'% of Sundays so far this month':'No Sunday has occurred yet this month.'}</div>`}catch(e){attendance.dataset.monthPerformance='';console.warn('Member 360 monthly attendance:',e)}
 }
 
 async function loadCurrentMemberEvents(){
@@ -125,7 +113,7 @@ function rememberMember(e){
 }
 document.addEventListener('click',e=>{rememberMember(e);if(e.target.closest?.('.m360-tabs [data-m360="events"]'))setTimeout(()=>void loadCurrentMemberEvents(),30)},true);
 
-let queued=false;function enhance(){if(queued)return;queued=true;requestAnimationFrame(async()=>{queued=false;if(fastPreviewActive)renderFastMemberPreview();workflowBanner();await Promise.all([enhanceEventCards(),enhanceAttendanceCards(),enhanceMember360Monthly()])})}
+let queued=false;function enhance(){if(queued)return;queued=true;requestAnimationFrame(async()=>{queued=false;if(fastPreviewActive)renderFastMemberPreview();workflowBanner();await Promise.all([enhanceEventCards(),enhanceAttendanceCards()])})}
 new MutationObserver(enhance).observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('vccf-app-ready',enhance);
 window.addEventListener('vccf-event-photos-updated',async()=>{await refreshPhotoEventIds(true);enhance()});
