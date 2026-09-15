@@ -6,6 +6,8 @@ window.__VCCF_ID_INTERACTIONS_V1__ = true;
 let expandedShell = null;
 let closeButton = null;
 let floatingButton = null;
+let quickPanel = null;
+let quickLoading = false;
 
 function closeExpanded() {
   if (expandedShell?.isConnected) expandedShell.classList.remove('id-card-expanded');
@@ -35,31 +37,66 @@ function isSignedIn() {
   return !!window.VCCF?.getState?.()?.session?.user?.id;
 }
 
+function quickOpen() {
+  return !!quickPanel?.classList.contains('open');
+}
+
 function updateFloatingButton() {
   if (!floatingButton?.isConnected) return;
   const signedIn = isSignedIn();
   const appVisible = document.getElementById('app')?.classList.contains('show');
   floatingButton.hidden = !(signedIn && appVisible);
-  const onId = document.getElementById('memberid')?.classList.contains('active');
-  floatingButton.classList.toggle('is-current', !!onId);
-  floatingButton.setAttribute('aria-current', onId ? 'page' : 'false');
-  floatingButton.title = onId ? 'Digital ID is open' : 'Open Digital ID';
+  const open = quickOpen();
+  floatingButton.classList.toggle('is-current', open);
+  floatingButton.setAttribute('aria-expanded', String(open));
+  floatingButton.setAttribute('aria-label', open ? 'Hide Digital ID' : 'Show Digital ID');
+  floatingButton.title = open ? 'Hide Digital ID' : 'Show Digital ID';
+  const label = floatingButton.querySelector('.vccf-floating-id-label');
+  if (label) label.textContent = open ? 'Hide ID' : 'Digital ID';
 }
 
-function openDigitalId() {
-  const nav = document.querySelector('[data-route="memberid"]');
-  if (nav) {
-    nav.click();
-    setTimeout(updateFloatingButton, 80);
-    return;
+function ensureQuickPanel() {
+  if (quickPanel?.isConnected) return quickPanel;
+  quickPanel = document.getElementById('vccfQuickDigitalId');
+  if (!quickPanel) {
+    quickPanel = document.createElement('div');
+    quickPanel.id = 'vccfQuickDigitalId';
+    quickPanel.className = 'vccf-quick-id-panel';
+    quickPanel.setAttribute('role','dialog');
+    quickPanel.setAttribute('aria-label','Digital ID quick view');
+    quickPanel.setAttribute('aria-hidden','true');
+    quickPanel.innerHTML = '<div class="vccf-quick-id-card" data-quick-id-card></div>';
+    document.body.appendChild(quickPanel);
   }
-  const target = document.getElementById('memberid');
-  if (target && window.VCCFMemberIds?.mount) {
-    document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-    target.classList.add('active');
-    window.VCCFMemberIds.mount(target);
-    setTimeout(updateFloatingButton, 80);
+  return quickPanel;
+}
+
+function closeQuickId() {
+  if (!quickPanel?.isConnected) return;
+  quickPanel.classList.remove('open');
+  quickPanel.setAttribute('aria-hidden','true');
+  updateFloatingButton();
+}
+
+async function openQuickId() {
+  const panel = ensureQuickPanel();
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden','false');
+  updateFloatingButton();
+  if (quickLoading) return;
+  const card = panel.querySelector('[data-quick-id-card]');
+  if (!card) return;
+  quickLoading = true;
+  try {
+    await window.VCCFMemberIds?.mountCardOnly?.(card);
+  } finally {
+    quickLoading = false;
   }
+}
+
+function toggleQuickId() {
+  if (quickOpen()) closeQuickId();
+  else void openQuickId();
 }
 
 function ensureFloatingButton() {
@@ -73,11 +110,14 @@ function ensureFloatingButton() {
     floatingButton.id = 'vccfFloatingDigitalId';
     floatingButton.type = 'button';
     floatingButton.className = 'vccf-floating-digital-id';
-    floatingButton.setAttribute('aria-label','Open Digital ID');
+    floatingButton.setAttribute('aria-controls','vccfQuickDigitalId');
+    floatingButton.setAttribute('aria-expanded','false');
+    floatingButton.setAttribute('aria-label','Show Digital ID');
     floatingButton.innerHTML = '<span class="vccf-floating-id-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="2.1"/><path d="M5.5 16c.7-1.7 1.6-2.5 2.5-2.5s1.8.8 2.5 2.5M13 9h5M13 12h5M13 15h3.5"/></svg></span><span class="vccf-floating-id-label">Digital ID</span>';
-    floatingButton.addEventListener('click', openDigitalId);
+    floatingButton.addEventListener('click', toggleQuickId);
     document.body.appendChild(floatingButton);
   }
+  ensureQuickPanel();
   updateFloatingButton();
   return floatingButton;
 }
@@ -193,13 +233,16 @@ function enhance() {
 
 const observer = new MutationObserver(() => requestAnimationFrame(enhance));
 observer.observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('click',event => {
-  if (event.target.closest?.('[data-route],.nav-item,.nav-child')) setTimeout(updateFloatingButton,80);
-},true);
-document.addEventListener('keydown',event => { if(event.key === 'Escape' && expandedShell){event.preventDefault();closeExpanded();} });
-window.addEventListener('vccf-signed-out',() => { closeExpanded(); updateFloatingButton(); });
-window.addEventListener('vccf-id-template-updated',() => setTimeout(enhance,100));
-window.addEventListener('vccf-profile-photo-updated',() => setTimeout(enhance,100));
+document.addEventListener('keydown',event => {
+  if (event.key !== 'Escape') return;
+  if (expandedShell) { event.preventDefault(); closeExpanded(); return; }
+  if (quickOpen()) { event.preventDefault(); closeQuickId(); }
+});
+window.addEventListener('vccf-signed-out',() => { closeExpanded(); closeQuickId(); updateFloatingButton(); });
+window.addEventListener('vccf-id-template-updated',() => { if (quickOpen()) void openQuickId(); setTimeout(enhance,100); });
+window.addEventListener('vccf-profile-photo-updated',() => { if (quickOpen()) void openQuickId(); setTimeout(enhance,100); });
+window.addEventListener('vccf-member-updated',() => { if (quickOpen()) void openQuickId(); });
+window.addEventListener('vccf-member-contact-updated',() => { if (quickOpen()) void openQuickId(); });
 window.addEventListener('vccf-app-ready',() => setTimeout(enhance,250));
 window.addEventListener('focus',updateFloatingButton);
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',() => setTimeout(enhance,500),{once:true});
