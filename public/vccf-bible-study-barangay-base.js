@@ -160,8 +160,8 @@ window.addEventListener('vccf-app-ready',apply);window.addEventListener('pagesho
    initial screen load. */
 (()=>{
 'use strict';
-if(window.__VCCF_GIVING_TABS_LOADER_V5__)return;
-window.__VCCF_GIVING_TABS_LOADER_V5__=true;
+if(window.__VCCF_GIVING_TABS_LOADER_V6__)return;
+window.__VCCF_GIVING_TABS_LOADER_V6__=true;
 let attempts=0,started=false,watcher=null;
 function ready(){
   const root=document.getElementById('giving');if(!root)return false;
@@ -181,6 +181,12 @@ function load(force=false){
   s.onload=()=>{
     attempts=0;
     document.querySelectorAll('.vccf-giving-tabs[data-vccf-early-bar="1"]').forEach(x=>x.remove());
+    let wakeAttempts=0;
+    const wake=()=>{
+      window.dispatchEvent(new Event('focus'));
+      if(!document.querySelector('#vccfGivingSectionTabs,#vccfAreaGivingSectionTabs')&&wakeAttempts++<6)setTimeout(wake,120);
+    };
+    setTimeout(wake,0);
   };
   s.onerror=()=>{if(++attempts<3)setTimeout(()=>load(true),350)};
   document.head.appendChild(s);
