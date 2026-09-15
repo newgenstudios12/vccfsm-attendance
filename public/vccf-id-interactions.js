@@ -3,6 +3,14 @@
 if (window.__VCCF_ID_INTERACTIONS_V1__) return;
 window.__VCCF_ID_INTERACTIONS_V1__ = true;
 
+if (!document.querySelector('script[data-vccf-ux-5-9-11-loader]')) {
+  const ux = document.createElement('script');
+  ux.src = '/vccf-ux-5-9-11.js?v=20260915-1';
+  ux.defer = true;
+  ux.dataset.vccfUx5911Loader = '1';
+  document.head.appendChild(ux);
+}
+
 let expandedShell = null;
 let closeButton = null;
 let floatingButton = null;
