@@ -52,9 +52,8 @@ window.addEventListener('focus',queue);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',queue,{once:true});else queue();
 })();
 
-/* Paint the giving sub-tabs synchronously as soon as the giving DOM exists. The
-   heavier finance reconciler still loads below and can correct totals/ledger
-   data in the background without holding up the navigation UI. */
+/* Paint the giving sub-tabs as soon as the giving view enters its loading state.
+   The finance data can continue loading below without blocking navigation. */
 (()=>{
 'use strict';
 if(window.__VCCF_GIVING_TABS_EARLY__)return;
@@ -82,7 +81,17 @@ function createBar(id){
 function paint(bar){bar?.querySelectorAll('[data-vccf-giving-tab]').forEach(b=>{const on=b.dataset.vccfGivingTab===activeTab;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1})}
 function pending(bar,id,text,show){let p=document.getElementById(id);if(show&&!p){p=document.createElement('div');p.id=id;p.className='vccf-giving-tab-placeholder';p.textContent=text;bar.insertAdjacentElement('afterend',p)}else if(!show)p?.remove()}
 function standard(root){
-  const hero=root.querySelector('.giving-hero');if(!hero)return false;
+  const hero=root.querySelector('.giving-hero');
+  if(!hero){
+    const loading=root.querySelector('.giving-loading');
+    if(!loading)return false;
+    let bar=document.getElementById('vccfGivingSectionTabs');
+    if(!bar){bar=createBar('vccfGivingSectionTabs');root.insertBefore(bar,loading)}
+    paint(bar);
+    pending(bar,'vccfBibleGivingPending','Loading Bible Study Tithes & Offerings…',activeTab==='bible');
+    loading.hidden=activeTab==='bible';
+    return true;
+  }
   let bar=document.getElementById('vccfGivingSectionTabs');if(!bar){bar=createBar('vccfGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}paint(bar);
   [root.querySelector('.sunday-giving'),root.querySelector('#givingStats'),root.querySelector('.giving-ledger'),root.querySelector('.giving-privacy-note')].filter(Boolean).forEach(n=>n.hidden=activeTab!=='sunday');
   const add=root.querySelector('#addGivingRecord');if(add)add.hidden=activeTab!=='sunday';
@@ -90,7 +99,16 @@ function standard(root){
   pending(bar,'vccfBibleGivingPending','Loading Bible Study Tithes & Offerings…',activeTab==='bible'&&!bible);return true;
 }
 function area(root){
-  const wrap=root.querySelector('.alg-wrap'),hero=wrap?.querySelector('.alg-hero');if(!wrap||!hero)return false;
+  const wrap=root.querySelector('.alg-wrap'),hero=wrap?.querySelector('.alg-hero');
+  if(!wrap||!hero){
+    const loading=root.querySelector('.card');
+    if(!loading||!String(loading.textContent||'').toLowerCase().includes('loading area giving'))return false;
+    let bar=document.getElementById('vccfAreaGivingSectionTabs');
+    if(!bar){bar=createBar('vccfAreaGivingSectionTabs');root.insertBefore(bar,loading)}paint(bar);
+    pending(bar,'vccfAreaBibleGivingPending','Loading Bible Study Tithes & Offerings for your area…',activeTab==='bible');
+    loading.hidden=activeTab==='bible';
+    return true;
+  }
   let bar=document.getElementById('vccfAreaGivingSectionTabs');if(!bar){bar=createBar('vccfAreaGivingSectionTabs');hero.insertAdjacentElement('afterend',bar)}paint(bar);
   const form=wrap.querySelector('.alg-form-card'),ledger=wrap.querySelector('.alg-ledger'),bible=document.getElementById('areaLeaderBibleStudyGiving'),clean=document.getElementById('vccfAreaSundayLedger');
   if(form)form.hidden=activeTab!=='sunday';if(ledger)ledger.hidden=activeTab!=='sunday'&&!!clean;if(clean)clean.hidden=activeTab!=='sunday';if(bible)bible.hidden=activeTab!=='bible';
@@ -102,27 +120,36 @@ new MutationObserver(schedule).observe(document.documentElement,{childList:true,
 window.addEventListener('vccf-app-ready',apply);window.addEventListener('pageshow',apply);window.addEventListener('focus',apply);apply();
 })();
 
+/* Load the heavier finance reconciler only after the main giving view has
+   finished its own first fetch, so duplicate queries do not compete with the
+   initial screen load. */
 (()=>{
 'use strict';
-if(window.__VCCF_GIVING_TABS_LOADER_V3__)return;
-window.__VCCF_GIVING_TABS_LOADER_V3__=true;
-let attempts=0;
+if(window.__VCCF_GIVING_TABS_LOADER_V4__)return;
+window.__VCCF_GIVING_TABS_LOADER_V4__=true;
+let attempts=0,started=false,watcher=null;
+function ready(){return Boolean(document.querySelector('#giving .giving-hero,#giving .alg-wrap'))}
 function load(force=false){
   if(window.__VCCF_GIVING_TABS__)return;
   let old=document.querySelector('script[data-vccf-giving-tabs]');
   if(old&&!force)return;
   if(old)old.remove();
   const s=document.createElement('script');
-  s.src='/vccf-giving-tabs.js?v=20260915-3';
+  s.src='/vccf-giving-tabs.js?v=20260915-4';
   s.async=true;
   s.dataset.vccfGivingTabs='1';
   s.onload=()=>{attempts=0};
   s.onerror=()=>{if(++attempts<3)setTimeout(()=>load(true),350)};
   document.head.appendChild(s);
 }
-load(false);
-window.addEventListener('vccf-app-ready',()=>load(false));
-window.addEventListener('pageshow',()=>load(false));
-window.addEventListener('focus',()=>load(false));
-setTimeout(()=>{if(!window.__VCCF_GIVING_TABS__)load(true)},650);
+function start(){
+  if(started||window.__VCCF_GIVING_TABS__)return;
+  if(!ready())return;
+  started=true;
+  watcher?.disconnect();
+  setTimeout(()=>load(false),80);
+}
+watcher=new MutationObserver(start);watcher.observe(document.documentElement,{childList:true,subtree:true});
+window.addEventListener('vccf-app-ready',start);window.addEventListener('pageshow',start);window.addEventListener('focus',start);start();
+setTimeout(()=>{if(!started){started=true;watcher?.disconnect();load(false)}},2500);
 })();
