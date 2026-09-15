@@ -6,7 +6,7 @@ window.__VCCF_MEMBER_PROFILE_VISUALS__=true;
 if(!document.querySelector('link[data-vccf-member-profile-visuals]')){
   const link=document.createElement('link');
   link.rel='stylesheet';
-  link.href='/vccf-member-profile-visuals.css?v=20260915-1';
+  link.href='/vccf-member-profile-visuals.css?v=20260915-2';
   link.dataset.vccfMemberProfileVisuals='1';
   document.head.appendChild(link);
 }
@@ -17,8 +17,10 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_number||m?.member_code||'Member';
 let activeMemberId=null;
 let queued=false;
+let actionSheet=null;
 const cache=new Map();
 
+function mobile(){return window.matchMedia('(max-width:700px)').matches}
 function todayPH(){
   const p={};
   new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).forEach(x=>{if(x.type!=='literal')p[x.type]=x.value});
@@ -55,36 +57,71 @@ async function loadStats(memberId){
   if(error)throw error;
   const stats=statsFromRows(data||[]);cache.set(cacheKey,{at:Date.now(),data:stats});return stats;
 }
-function renderLoading(anchor){
+function renderLoading(body){
   let panel=document.getElementById('m360AttendanceVisual');if(panel)return panel;
   panel=document.createElement('section');panel.id='m360AttendanceVisual';panel.className='m360-attendance-visual';panel.innerHTML='<div class="m360-visual-loading">Preparing Sunday attendance statistics…</div>';
-  anchor.insertAdjacentElement('afterend',panel);return panel;
+  body.prepend(panel);return panel;
 }
 function renderStats(panel,stats){
-  const recent=stats.recent.map(x=>`<div class="m360-sunday-cell ${x.present?'present':'absent'}" title="${esc(dateLabel(x.date))}: ${x.present?'Present':'Absent'}"><div class="m360-sunday-dot">${x.present?'✓':'—'}</div><label>${esc(dateLabel(x.date))}</label><small>${x.present?'P':'A'}</small></div>`).join('');
+  const recent=stats.recent.map(x=>`<div class="m360-sunday-cell ${x.present?'present':'absent'}" title="${esc(dateLabel(x.date))}: ${x.present?'Present':'Absent / no check-in'}"><div class="m360-sunday-dot">${x.present?'✓':'—'}</div><label>${esc(dateLabel(x.date))}</label><small>${x.present?'P':'A'}</small></div>`).join('');
   const trend=stats.months.map(x=>`<div class="m360-trend-col" title="${esc(x.label)}: ${x.present}/${x.total} present (${x.rate}%)"><div class="m360-trend-track"><div class="m360-trend-fill" style="height:${Math.max(3,x.rate)}%"></div></div><b>${x.rate}%</b><span>${esc(x.label)}</span></div>`).join('');
-  panel.innerHTML=`<div class="m360-attendance-head"><div><h3>Sunday Attendance Statistics</h3><p>A visual view of this member's Sunday Worship consistency.</p></div><span class="m360-attendance-month">${esc(stats.monthName)} ${stats.year}</span></div><div class="m360-attendance-kpis"><div class="m360-attendance-rate"><div class="m360-attendance-ring" style="--rate:${stats.rate}"><strong>${stats.rate}%</strong></div><div class="m360-attendance-rate-copy"><span>This month</span><b>${stats.present} of ${stats.total} Sundays present</b></div></div><div class="m360-attendance-stat present"><span>Present</span><strong>${stats.present}</strong><small>This month</small></div><div class="m360-attendance-stat absent"><span>Absent</span><strong>${stats.absent}</strong><small>This month</small></div><div class="m360-attendance-stat streak"><span>Current streak</span><strong>${stats.streak}</strong><small>Sunday${stats.streak===1?'':'s'} in a row</small></div></div><div class="m360-attendance-subgrid"><div class="m360-attendance-panel"><div class="m360-attendance-panel-head"><b>Last 8 Sundays</b><span>Present / Absent</span></div><div class="m360-sunday-strip">${recent}</div><div class="m360-attendance-legend"><span class="present"><i></i>Present</span><span class="absent"><i></i>Absent / no check-in</span></div></div><div class="m360-attendance-panel"><div class="m360-attendance-panel-head"><b>6-Month Trend</b><span>Attendance rate</span></div><div class="m360-trend">${trend}</div></div></div>`;
+  panel.innerHTML=`<div class="m360-attendance-head"><div><h3>Sunday Attendance</h3><p>Attendance consistency and recent Sunday activity.</p></div><span class="m360-attendance-month">${esc(stats.monthName)} ${stats.year}</span></div><div class="m360-attendance-kpis"><div class="m360-attendance-rate"><div class="m360-attendance-ring" style="--rate:${stats.rate}"><strong>${stats.rate}%</strong></div><div class="m360-attendance-rate-copy"><span>This month</span><b>${stats.present} of ${stats.total} Sundays present</b></div></div><div class="m360-attendance-stat present"><span>Present</span><strong>${stats.present}</strong><small>This month</small></div><div class="m360-attendance-stat absent"><span>Absent</span><strong>${stats.absent}</strong><small>No check-in</small></div><div class="m360-attendance-stat streak"><span>Streak</span><strong>${stats.streak}</strong><small>Sunday${stats.streak===1?'':'s'} in a row</small></div></div><div class="m360-attendance-subgrid"><div class="m360-attendance-panel"><div class="m360-attendance-panel-head"><b>Last 8 Sundays</b><span>Recent activity</span></div><div class="m360-sunday-strip">${recent}</div><div class="m360-attendance-legend"><span class="present"><i></i>Present</span><span class="absent"><i></i>Absent / no check-in</span></div></div><div class="m360-attendance-panel"><div class="m360-attendance-panel-head"><b>6-Month Trend</b><span>Attendance rate</span></div><div class="m360-trend">${trend}</div></div></div>`;
 }
 function updateSummary(stats){
   const cards=[...document.querySelectorAll('#members .m360-summary')];
   const card=cards.find(x=>x.querySelector('h3')?.textContent?.trim().startsWith('Attendance')||x.querySelector('h3')?.textContent?.trim().startsWith('Sunday Attendance'));
-  if(!card)return;card.dataset.memberVisualAttendance='1';card.innerHTML=`<h3>Sunday Attendance · ${esc(stats.monthName)}</h3><strong>${stats.present} / ${stats.total} present</strong><div class="hint">${stats.total?stats.rate+'% attendance this month':'No Sunday has occurred yet this month.'}</div>`;
+  if(!card)return;card.dataset.memberVisualAttendance='1';card.hidden=true;card.innerHTML=`<h3>Sunday Attendance · ${esc(stats.monthName)}</h3><strong>${stats.present} / ${stats.total} present</strong><div class="hint">${stats.total?stats.rate+'% attendance this month':'No Sunday has occurred yet this month.'}</div>`;
+}
+function closeActionSheet(){actionSheet?.remove();actionSheet=null;document.body.classList.remove('m360-sheet-open')}
+function openActionSheet(sources){
+  closeActionSheet();if(!sources.length)return;
+  actionSheet=document.createElement('div');actionSheet.className='m360-action-sheet-backdrop';
+  actionSheet.innerHTML=`<div class="m360-action-sheet" role="dialog" aria-modal="true" aria-label="Member actions"><div class="m360-action-sheet-handle"></div><div class="m360-action-sheet-title"><b>Member actions</b><button type="button" aria-label="Close">×</button></div><div class="m360-action-sheet-list"></div></div>`;
+  document.body.appendChild(actionSheet);document.body.classList.add('m360-sheet-open');
+  const list=actionSheet.querySelector('.m360-action-sheet-list');
+  sources.forEach(source=>{const b=document.createElement('button');b.type='button';b.className='m360-sheet-action'+(source.id==='m360delete'?' danger':'');b.textContent=source.textContent.trim();b.onclick=()=>{closeActionSheet();source.click()};list.appendChild(b)});
+  actionSheet.querySelector('.m360-action-sheet-title button').onclick=closeActionSheet;
+  actionSheet.onclick=e=>{if(e.target===actionSheet)closeActionSheet()};
+}
+function enhanceMobileChrome(){
+  const head=document.querySelector('#members .m360-head'),actions=head?.querySelector('.member-detail-actions'),tabs=document.querySelector('#members .m360-tabs');
+  if(!head||!actions)return;
+  document.body.classList.add('m360-profile-open');
+  if(!mobile()){
+    head.classList.remove('m360-mobile-ready');head.querySelector('.m360-mobile-toolbar')?.remove();
+    document.getElementById('m360back')?.replaceChildren(document.createTextNode('← Back to members'));
+    if(tabs)tabs.style.gridTemplateColumns='';
+    return;
+  }
+  head.classList.add('m360-mobile-ready');
+  const back=document.getElementById('m360back');if(back)back.textContent='← Back';
+  if(tabs){const count=Math.max(1,tabs.querySelectorAll('button').length);tabs.style.gridTemplateColumns=`repeat(${count},minmax(0,1fr))`}
+  let toolbar=head.querySelector('.m360-mobile-toolbar');if(!toolbar){toolbar=document.createElement('div');toolbar.className='m360-mobile-toolbar';head.appendChild(toolbar)}
+  toolbar.replaceChildren();
+  const status=actions.querySelector('.pill');if(status){const copy=status.cloneNode(true);copy.classList.add('m360-mobile-status');toolbar.appendChild(copy)}
+  const all=[...actions.querySelectorAll('button')].filter(b=>!b.hidden),primary=all.find(b=>b.id==='m360edit')||all.find(b=>b.id==='m360digital')||all[0];
+  if(primary){const p=document.createElement('button');p.type='button';p.className='m360-mobile-primary';p.textContent=primary.id==='m360edit'?'Edit':'ID';p.onclick=()=>primary.click();toolbar.appendChild(p)}
+  const moreSources=all.filter(b=>b!==primary);if(moreSources.length){const more=document.createElement('button');more.type='button';more.className='m360-mobile-more';more.setAttribute('aria-label','More member actions');more.textContent='•••';more.onclick=()=>openActionSheet(moreSources);toolbar.appendChild(more)}
 }
 async function enhanceProfile(){
   queued=false;
-  const body=document.getElementById('m360body'),anchor=body?.querySelector('.m360-summary-grid');if(!body||!anchor)return;
+  const body=document.getElementById('m360body');if(!body)return;
+  enhanceMobileChrome();
   const id=detectMemberId();if(!id)return;
   const existing=document.getElementById('m360AttendanceVisual');if(existing?.dataset.memberId===id)return;
-  existing?.remove();const panel=renderLoading(anchor);panel.dataset.memberId=id;
+  existing?.remove();const panel=renderLoading(body);panel.dataset.memberId=id;
   const card=body.closest('.panel.card');card?.classList.add('m360-profile-polished');
   try{const stats=await loadStats(id);if(!panel.isConnected||panel.dataset.memberId!==id)return;renderStats(panel,stats);updateSummary(stats)}catch(e){console.warn('Member 360 visual attendance:',e);if(panel.isConnected)panel.innerHTML='<div class="m360-attendance-empty">Sunday attendance statistics are temporarily unavailable.</div>'}
 }
 function queue(){if(queued)return;queued=true;requestAnimationFrame(()=>void enhanceProfile())}
+function clearProfileChrome(){document.body.classList.remove('m360-profile-open');closeActionSheet()}
 
-document.addEventListener('click',e=>{const target=e.target.closest?.('[data-view-member],[data-member-id]');if(target){activeMemberId=target.dataset.viewMember||target.dataset.memberId||activeMemberId;queue()}if(e.target.closest?.('[data-route="members"],#m360back')){setTimeout(queue,80)}},true);
+document.addEventListener('click',e=>{const target=e.target.closest?.('[data-view-member],[data-member-id]');if(target){activeMemberId=target.dataset.viewMember||target.dataset.memberId||activeMemberId;queue()}if(e.target.closest?.('[data-route="members"],#m360back'))setTimeout(()=>{if(!document.querySelector('#members .m360-head'))clearProfileChrome();queue()},80)},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&actionSheet)closeActionSheet()});
+window.addEventListener('resize',()=>setTimeout(()=>{enhanceMobileChrome();queue()},80));
 new MutationObserver(queue).observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('vccf-member-updated',()=>{cache.clear();queue()});
 window.addEventListener('vccf-app-ready',queue);
-window.addEventListener('vccf-signed-out',()=>{activeMemberId=null;cache.clear()});
+window.addEventListener('vccf-signed-out',()=>{activeMemberId=null;cache.clear();clearProfileChrome()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',queue,{once:true});else queue();
 })();
