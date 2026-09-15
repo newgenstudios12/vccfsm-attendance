@@ -126,8 +126,8 @@ function cardMarkup(member, photo) {
     <footer class="id-card-footer"><p class="id-card-church">Victorious Cross Christian<br>Fellowship - Santa Maria</p><p class="id-card-motto">One God.<br>One Family.</p></footer>
   </article></div>`;
 }
-function fitCardText() {
-  root?.querySelectorAll('[data-id-fit]').forEach(element => {
+function fitCardTextWithin(scope) {
+  scope?.querySelectorAll('[data-id-fit]').forEach(element => {
     const maximum = Number(element.dataset.idFit);
     const minimum = Number(element.dataset.idMin);
     element.style.fontSize = maximum + 'cqw';
@@ -135,6 +135,7 @@ function fitCardText() {
     element.style.fontSize = Math.max(minimum, maximum * element.clientWidth / element.scrollWidth * .98) + 'cqw';
   });
 }
+function fitCardText() { fitCardTextWithin(root); }
 function requestMarkup(own) {
   if (!own) return '';
   const current = requests.find(item => openStatuses.includes(item.status));
@@ -523,6 +524,41 @@ async function loadTemplateSettings() {
   }
   return templateSettings;
 }
+async function mountCardOnly(target) {
+  if (!target || !client() || !state().session?.user?.id) return false;
+  ensureTemplateStyles();
+  target.innerHTML = '<div class="id-quick-loading" role="status">Loading Digital ID…</div>';
+  try {
+    const uid = state().session.user.id;
+    const [{data:profile,error:profileError}] = await Promise.all([
+      client().from('profiles').select('user_id,member_id,profile_photo_url').eq('user_id',uid).maybeSingle(),
+      loadTemplateSettings()
+    ]);
+    if (profileError) throw profileError;
+    if (!profile?.member_id) throw new Error('Your account is not linked to a member record yet.');
+    const {data:member,error:memberError} = await client().from('members').select(memberFields).eq('id',profile.member_id).maybeSingle();
+    if (memberError) throw memberError;
+    if (!member) throw new Error('Your member record could not be loaded.');
+    if (!target.isConnected) return false;
+    const photo = member.photo_url || profile.profile_photo_url || '';
+    target.innerHTML = cardMarkup(member,photo);
+    const qr = target.querySelector('[data-digital-id-qr]');
+    if (window.QRCode && member.member_number) new window.QRCode(qr,{text:'VCCF-MEMBER:'+member.member_number,width:256,height:256,colorDark:'#111111',colorLight:'#ffffff',correctLevel:window.QRCode.CorrectLevel.H});
+    else qr.textContent = member.member_number || 'QR unavailable';
+    fitCardTextWithin(target);
+    document.fonts?.ready.then(()=>fitCardTextWithin(target));
+    if (window.ResizeObserver) {
+      const observer = new ResizeObserver(()=>fitCardTextWithin(target));
+      observer.observe(target.querySelector('.id-card-shell'));
+      target._vccfIdResizeObserver?.disconnect?.();
+      target._vccfIdResizeObserver = observer;
+    }
+    return true;
+  } catch (error) {
+    if (target.isConnected) target.innerHTML = `<div class="id-quick-error" role="status">${esc(error.message || 'Unable to load your Digital ID.')}</div>`;
+    return false;
+  }
+}
 async function fetchSelf(epoch) {
   const uid = state().session?.user?.id;
   const [{data:profile, error:profileError}] = await Promise.all([
@@ -634,7 +670,7 @@ function mountRequests(target) {
 function openMember(id) {
   window.dispatchEvent(new CustomEvent('vccf-open-member-id', {detail:{memberId:id}}));
 }
-window.VCCFMemberIds = {mount, mountRequests, openMember, refresh};
+window.VCCFMemberIds = {mount, mountRequests, mountCardOnly, openMember, refresh};
 ['vccf-profile-photo-updated','vccf-member-updated','vccf-member-contact-updated','vccf-profile-linked','vccf-id-template-updated'].forEach(event => window.addEventListener(event, () => { void refresh(true); }));
 window.addEventListener('focus', () => { void refresh(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
