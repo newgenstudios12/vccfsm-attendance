@@ -23,6 +23,10 @@ let standardRows=[];
 let directory=[];
 let standardMonth='';
 
+function syncTab(){
+  try{activeTab=sessionStorage.getItem('vccf-giving-subtab')==='bible'?'bible':'sunday'}catch(_){ }
+}
+
 function ensureStyles(){
   if(document.getElementById('vccfGivingTabsStyle'))return;
   const style=document.createElement('style');
@@ -233,6 +237,7 @@ async function refreshArea(force=false){
 }
 
 async function applyAll(force=false){
+  syncTab();
   ensureStyles();
   const root=document.getElementById('giving');if(!root)return;
   if(root.querySelector('.alg-wrap'))await refreshArea(force);else if(root.querySelector('.giving-hero'))await refreshStandard(force);
@@ -245,6 +250,12 @@ new MutationObserver(records=>{
 }).observe(document.documentElement,{childList:true,subtree:true});
 
 document.addEventListener('click',event=>{
+  const tabButton=event.target.closest?.('[data-vccf-giving-tab]');
+  if(tabButton){
+    rememberTab(tabButton.dataset.vccfGivingTab);
+    setTimeout(()=>applyAll(true),0);
+    return;
+  }
   const exportButton=event.target.closest?.('#exportGivingCsv');
   if(exportButton&&activeTab==='sunday'){
     event.preventDefault();event.stopImmediatePropagation();exportSundayCsv();return;
