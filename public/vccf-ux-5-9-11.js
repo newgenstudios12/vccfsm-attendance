@@ -75,6 +75,16 @@ async function enhanceAttendanceCards(){
   });
 }
 
+function phTodayParts(){const parts={};new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).forEach(x=>{if(x.type!=='literal')parts[x.type]=x.value});return{year:Number(parts.year),month:Number(parts.month),day:Number(parts.day)}}
+function sundayCountToDay(year,month,day){let n=0;for(let d=1;d<=day;d++)if(new Date(Date.UTC(year,month-1,d)).getUTCDay()===0)n++;return n}
+async function enhanceMember360Monthly(){
+  const grid=document.querySelector('#members .m360-summary-grid');if(!grid||!lastMemberId)return;
+  const attendance=[...grid.querySelectorAll('.m360-summary')].find(x=>x.querySelector('h3')?.textContent?.trim()==='Attendance');if(!attendance)return;
+  const now=phTodayParts(),key=`${lastMemberId}:${now.year}-${String(now.month).padStart(2,'0')}`;if(attendance.dataset.monthPerformance===key)return;attendance.dataset.monthPerformance=key;
+  const mm=String(now.month).padStart(2,'0'),nextMonth=now.month===12?1:now.month+1,nextYear=now.month===12?now.year+1:now.year,start=`${now.year}-${mm}-01T00:00:00+08:00`,end=`${nextYear}-${String(nextMonth).padStart(2,'0')}-01T00:00:00+08:00`;
+  try{const {data,error}=await db().from('attendance').select('checked_in_at,attendance_type').eq('member_id',lastMemberId).gte('checked_in_at',start).lt('checked_in_at',end).order('checked_in_at');if(error)throw error;const present=new Set((data||[]).filter(x=>(x.attendance_type||'sunday')==='sunday').map(x=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(x.checked_in_at)))).size,elapsed=sundayCountToDay(now.year,now.month,now.day),rate=elapsed?Math.round(present/elapsed*100):0,monthName=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long'}).format(new Date(Date.UTC(now.year,now.month-1,1)));attendance.innerHTML=`<h3>Sunday Attendance · ${esc(monthName)}</h3><strong>${present} / ${elapsed} present</strong><div class="hint">${elapsed?rate+'% of Sundays so far this month':'No Sunday has occurred yet this month.'}</div>`}catch(e){attendance.dataset.monthPerformance='';console.warn('Member 360 monthly attendance:',e)}
+}
+
 async function loadCurrentMemberEvents(){
   const tab=document.querySelector('.m360-tabs [data-m360="events"]');const body=document.getElementById('m360body');if(!tab||!body||!lastMemberId)return;
   body.innerHTML='<div class="empty">Loading event participation…</div>';
@@ -89,7 +99,7 @@ async function loadCurrentMemberEvents(){
 function rememberMember(e){const target=e.target.closest?.('[data-view-member],[data-member-id]');if(target)lastMemberId=target.dataset.viewMember||target.dataset.memberId||lastMemberId}
 document.addEventListener('click',e=>{rememberMember(e);if(e.target.closest?.('.m360-tabs [data-m360="events"]'))setTimeout(()=>void loadCurrentMemberEvents(),30)},true);
 
-let queued=false;function enhance(){if(queued)return;queued=true;requestAnimationFrame(async()=>{queued=false;workflowBanner();await Promise.all([enhanceEventCards(),enhanceAttendanceCards()])})}
+let queued=false;function enhance(){if(queued)return;queued=true;requestAnimationFrame(async()=>{queued=false;workflowBanner();await Promise.all([enhanceEventCards(),enhanceAttendanceCards(),enhanceMember360Monthly()])})}
 new MutationObserver(enhance).observe(document.documentElement,{childList:true,subtree:true});
 window.addEventListener('vccf-app-ready',enhance);
 window.addEventListener('vccf-event-photos-updated',async()=>{await refreshPhotoEventIds(true);enhance()});
