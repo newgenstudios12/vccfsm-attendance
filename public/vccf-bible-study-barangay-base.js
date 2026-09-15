@@ -97,7 +97,7 @@ function ensureBibleModule(root,isArea=false){
   const attr=area?'data-vccf-area-bible-giving':'data-vccf-bible-giving';
   if(window[guard]||document.querySelector('script['+attr+']'))return;
   const s=document.createElement('script');
-  s.src=area?'/vccf-area-leader-bible-study-giving.js?v=20260915-2':'/vccf-bible-study-giving.js?v=20260915-2';
+  s.src=area?'/vccf-area-leader-bible-study-giving.js?v=20260916-1':'/vccf-bible-study-giving.js?v=20260916-1';
   s.async=true;s.setAttribute(attr,'1');
   s.onload=()=>{moduleRetry=0;if(area)setTimeout(()=>window.dispatchEvent(new CustomEvent('vccf-profile-updated')),20);schedule()};
   s.onerror=()=>{s.remove();if(++moduleRetry<3)setTimeout(()=>ensureBibleModule(root,area),300)};
@@ -152,7 +152,11 @@ function apply(){styles();syncTab();const root=document.getElementById('giving')
 function schedule(){if(queued)return;queued=true;queueMicrotask(()=>{queued=false;apply()})}
 new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
 document.addEventListener('click',e=>{if(e.target.closest?.('[data-vccf-giving-tab]'))setTimeout(apply,0)},false);
-window.addEventListener('vccf-app-ready',apply);window.addEventListener('pageshow',apply);window.addEventListener('focus',apply);apply();
+window.addEventListener('vccf-app-ready',apply);
+window.addEventListener('pageshow',apply);
+window.addEventListener('focus',apply);
+window.addEventListener('vccf-finance-access',e=>{if(e?.detail?.allowed===true){schedule();setTimeout(()=>window.dispatchEvent(new Event('focus')),0)}});
+apply();
 })();
 
 /* Load the heavier finance reconciler only after the main giving view has
