@@ -54,12 +54,25 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 
 (()=>{
 'use strict';
-if(window.__VCCF_GIVING_TABS_LOADER__)return;
-window.__VCCF_GIVING_TABS_LOADER__=true;
-if(document.querySelector('script[data-vccf-giving-tabs]'))return;
-const s=document.createElement('script');
-s.src='/vccf-giving-tabs.js?v=20260915-1';
-s.defer=true;
-s.dataset.vccfGivingTabs='1';
-document.head.appendChild(s);
+if(window.__VCCF_GIVING_TABS_LOADER_V2__)return;
+window.__VCCF_GIVING_TABS_LOADER_V2__=true;
+let attempts=0;
+function load(force=false){
+  if(window.__VCCF_GIVING_TABS__)return;
+  let old=document.querySelector('script[data-vccf-giving-tabs]');
+  if(old&&!force)return;
+  if(old)old.remove();
+  const s=document.createElement('script');
+  s.src='/vccf-giving-tabs.js?v=20260915-2';
+  s.defer=true;
+  s.dataset.vccfGivingTabs='1';
+  s.onload=()=>{attempts=0};
+  s.onerror=()=>{if(++attempts<3)setTimeout(()=>load(true),500)};
+  document.head.appendChild(s);
+}
+load(false);
+window.addEventListener('vccf-app-ready',()=>setTimeout(()=>load(false),50));
+window.addEventListener('pageshow',()=>setTimeout(()=>load(false),50));
+window.addEventListener('focus',()=>setTimeout(()=>load(false),50));
+setTimeout(()=>{if(!window.__VCCF_GIVING_TABS__)load(true)},1200);
 })();
