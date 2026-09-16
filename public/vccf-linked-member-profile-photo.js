@@ -4,19 +4,19 @@ if(window.__VCCF_LINKED_MEMBER_PROFILE_PHOTO__)return;
 window.__VCCF_LINKED_MEMBER_PROFILE_PHOTO__=true;
 
 const state=()=>window.VCCF?.getState?.()||{};
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_code||'Member';
-let activeMemberId=null,decorateQueued=false;
+let activeMemberId=null,decorateQueued=false,observer=null,observedRoot=null;
 
 function linked(){
   const s=state(),p=s.profile||null;
   const member=p?.member_id?(s.members||[]).find(m=>String(m.id)===String(p.member_id))||null:null;
   return{s,p,member};
 }
-function photoFor(m){
+function photoFor(m,p=null){
   if(!m)return'';
-  const {p}=linked();
-  if(String(m.id)===String(p?.member_id))return String(m.photo_url||p?.profile_photo_url||'').trim();
+  const profile=p||linked().p;
+  if(String(m.id)===String(profile?.member_id))return String(m.photo_url||profile?.profile_photo_url||'').trim();
   return String(m.photo_url||'').trim();
 }
 function putPhoto(el,name,url){
@@ -28,9 +28,9 @@ function putPhoto(el,name,url){
 }
 function decorate(){
   decorateQueued=false;
-  const {s,p,member}=linked();
+  const {s,p,member}=linked(),memberMap=new Map((s.members||[]).map(m=>[String(m.id),m]));
   if(member){
-    const url=photoFor(member),name=memberName(member)||p?.display_name||s.session?.user?.email||'Profile';
+    const url=photoFor(member,p),name=memberName(member)||p?.display_name||s.session?.user?.email||'Profile';
     if(url){
       putPhoto(document.getElementById('avatar'),name,url);
       putPhoto(document.getElementById('sideAvatar'),name,url);
@@ -39,22 +39,31 @@ function decorate(){
       putPhoto(document.querySelector('#selfcheck .member-initial'),name,url);
     }
   }
-  document.querySelectorAll('[data-member-id]').forEach(row=>{
-    const m=(s.members||[]).find(x=>String(x.id)===String(row.dataset.memberId));
-    const url=photoFor(m);if(m&&url)putPhoto(row.querySelector('.member-initial'),memberName(m),url);
+  const root=observedRoot?.isConnected?observedRoot:document.querySelector('.view.active');
+  root?.querySelectorAll?.('[data-member-id]').forEach(row=>{
+    const m=memberMap.get(String(row.dataset.memberId));
+    const url=photoFor(m,p);if(m&&url)putPhoto(row.querySelector('.member-initial'),memberName(m),url);
   });
-  const card=document.querySelector('.member-profile-card');
+  const card=root?.querySelector?.('.member-profile-card')||document.querySelector('.member-profile-card');
   if(card){
-    let m=activeMemberId?(s.members||[]).find(x=>String(x.id)===String(activeMemberId)):null;
+    let m=activeMemberId?memberMap.get(String(activeMemberId)):null;
     if(!m){const title=(card.querySelector('h2')?.textContent||'').trim();m=(s.members||[]).find(x=>memberName(x)===title)||null;}
-    const url=photoFor(m);if(m&&url)putPhoto(card.querySelector('.member-initial'),memberName(m),url);
+    const url=photoFor(m,p);if(m&&url)putPhoto(card.querySelector('.member-initial'),memberName(m),url);
   }
 }
 function queueDecorate(){if(decorateQueued)return;decorateQueued=true;requestAnimationFrame(decorate)}
+function relevantRoot(){return document.querySelector('#members.active,#settings.active,#selfcheck.active,#memberIdView.active,.view.active[data-member-id-root]')||null}
+function bindObserver(){
+  const root=relevantRoot();
+  if(root===observedRoot){queueDecorate();return}
+  observer?.disconnect();observedRoot=root;
+  if(root){observer=new MutationObserver(queueDecorate);observer.observe(root,{childList:true,subtree:true})}
+  queueDecorate();
+}
 function syncFromCurrentState(){
   const {p,member}=linked();
   if(member&&p){const url=String(member.photo_url||p.profile_photo_url||'').trim();if(url){member.photo_url=url;p.profile_photo_url=url;}}
-  queueDecorate();
+  bindObserver();
 }
 function onPhotoUpdated(event){
   const url=String(event?.detail?.url||'').trim();if(!url)return;
@@ -63,10 +72,13 @@ function onPhotoUpdated(event){
 window.addEventListener('vccf-app-ready',syncFromCurrentState);
 window.addEventListener('vccf-profile-linked',syncFromCurrentState);
 window.addEventListener('vccf-profile-photo-updated',onPhotoUpdated);
-document.addEventListener('click',event=>{const el=event.target.closest?.('[data-view-member],[data-member-id]');if(el){activeMemberId=el.dataset.viewMember||el.dataset.memberId||activeMemberId;queueDecorate()}},true);
-const observer=new MutationObserver(queueDecorate);
-if(document.body){observer.observe(document.body,{childList:true,subtree:true});queueDecorate()}
-else document.addEventListener('DOMContentLoaded',()=>{observer.observe(document.body,{childList:true,subtree:true});queueDecorate()},{once:true});
+window.addEventListener('vccf-member-updated',queueDecorate);
+document.addEventListener('click',event=>{
+  const el=event.target.closest?.('[data-view-member],[data-member-id]');
+  if(el)activeMemberId=el.dataset.viewMember||el.dataset.memberId||activeMemberId;
+  if(el||event.target.closest?.('[data-route="members"],[data-route="settings"],[data-route="selfcheck"],[data-route="memberid"]'))setTimeout(bindObserver,60);
+},true);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindObserver,{once:true});else bindObserver();
 })();
 
 (()=>{
@@ -74,16 +86,19 @@ else document.addEventListener('DOMContentLoaded',()=>{observer.observe(document
 function loadOnce(globalGuard,scriptGuard,src,errorText){
   if(window[globalGuard])return;
   if(document.querySelector(`script[${scriptGuard}]`))return;
-  const script=document.createElement('script');script.src=src;script.async=false;script.setAttribute(scriptGuard,'1');script.onerror=()=>console.error(errorText);document.head.appendChild(script);
+  const script=document.createElement('script');script.src=src;script.async=true;script.setAttribute(scriptGuard,'1');script.onerror=()=>console.error(errorText);document.head.appendChild(script);
 }
-function loadExtras(){
-  loadOnce('__VCCF_MEMBER_CONTACT_INFO__','data-vccf-member-contact-info','/vccf-member-contact-info.js?v=20260913-4','Member contact information module could not be loaded.');
-  loadOnce('__VCCF_MEMBER_DELETE_BUTTON__','data-vccf-member-delete-button','/vccf-member-delete-button.js?v=20260913-2','Member delete button module could not be loaded.');
-  loadOnce('__VCCF_ATTENDANCE_CHECKLIST__','data-vccf-attendance-checklist','/vccf-attendance-checklist.js?v=20260913-1','Attendance checklist module could not be loaded.');
-  loadOnce('__VCCF_ID_POSITION_EDITOR__','data-vccf-id-position-editor','/vccf-id-position-editor.js?v=20260914-1','Digital ID position editor module could not be loaded.');
+function loadForRoute(route){
+  if(route==='members'){
+    loadOnce('__VCCF_MEMBER_CONTACT_INFO__','data-vccf-member-contact-info','/vccf-member-contact-info.js?v=20260913-4','Member contact information module could not be loaded.');
+    loadOnce('__VCCF_MEMBER_DELETE_BUTTON__','data-vccf-member-delete-button','/vccf-member-delete-button.js?v=20260913-2','Member delete button module could not be loaded.');
+  }
+  if(route==='attendance')loadOnce('__VCCF_ATTENDANCE_CHECKLIST__','data-vccf-attendance-checklist','/vccf-attendance-checklist.js?v=20260913-1','Attendance checklist module could not be loaded.');
+  if(route==='memberid')loadOnce('__VCCF_ID_POSITION_EDITOR__','data-vccf-id-position-editor','/vccf-id-position-editor.js?v=20260914-1','Digital ID position editor module could not be loaded.');
 }
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadExtras,{once:true});else loadExtras();
-window.addEventListener('vccf-app-ready',loadExtras);
+function currentRoute(){return document.querySelector('.nav [data-route].active')?.dataset.route||document.querySelector('.view.active')?.id||''}
+document.addEventListener('click',event=>{const route=event.target.closest?.('[data-route]')?.dataset.route;if(route)loadForRoute(route)},true);
+window.addEventListener('vccf-app-ready',()=>loadForRoute(currentRoute()));
 })();
 
 (()=>{
@@ -93,7 +108,7 @@ window.__VCCF_PROFILE_PHOTO_FLOW_V3__=true;
 
 const pending={file:null,prepared:null,previewUrl:null,ownerId:null};
 const getState=()=>window.VCCF?.getState?.()||{};
-let bindQueued=false;
+let bindQueued=false,settingsObserver=null,settingsRoot=null;
 
 function currentUserId(){return getState().session?.user?.id||null}
 function setText(el,text){if(el&&el.textContent!==text)el.textContent=text}
@@ -142,6 +157,13 @@ function bindSettings(){
   if(pending.prepared)setPreview(pending.prepared,'adjusted');else if(pending.previewUrl)setPreview(pending.previewUrl,'selected');
 }
 function queueBind(){if(bindQueued)return;bindQueued=true;requestAnimationFrame(bindSettings)}
+function bindSettingsObserver(){
+  const root=document.getElementById('settings');
+  if(root===settingsRoot){queueBind();return}
+  settingsObserver?.disconnect();settingsRoot=root||null;
+  if(root){settingsObserver=new MutationObserver(records=>{for(const record of records){for(const node of record.addedNodes){if(node.nodeType!==1)continue;if(node.id==='profilePhotoInput'||node.querySelector?.('#profilePhotoInput')){queueBind();return}}}});settingsObserver.observe(root,{childList:true,subtree:true})}
+  queueBind();
+}
 function preparePhoto(file){
   return new Promise((resolve,reject)=>{
     try{validate(file)}catch(error){reject(error);return}
@@ -182,11 +204,11 @@ async function saveSelected(event){
 }
 
 document.addEventListener('change',chooseChange,true);
-document.addEventListener('click',event=>{if(event.target.closest?.('#adjustCurrentProfilePhoto'))void adjustSelected(event);else if(event.target.closest?.('#saveProfilePhoto'))void saveSelected(event)},true);
-const settingsObserver=new MutationObserver(records=>{
-  for(const record of records){for(const node of record.addedNodes){if(node.nodeType!==1)continue;if(node.id==='profilePhotoInput'||node.querySelector?.('#profilePhotoInput')){queueBind();return}}}
-});
-function startObserver(){settingsObserver.observe(document.body,{childList:true,subtree:true});queueBind()}
-if(document.body)startObserver();else document.addEventListener('DOMContentLoaded',startObserver,{once:true});
-window.addEventListener('vccf-app-ready',queueBind);window.addEventListener('vccf-profile-linked',queueBind);window.addEventListener('vccf-signed-out',()=>{resetPending();clearPreviewMarker()});
+document.addEventListener('click',event=>{
+  if(event.target.closest?.('#adjustCurrentProfilePhoto'))void adjustSelected(event);
+  else if(event.target.closest?.('#saveProfilePhoto'))void saveSelected(event);
+  if(event.target.closest?.('[data-route="settings"]'))setTimeout(bindSettingsObserver,60);
+},true);
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindSettingsObserver,{once:true});else bindSettingsObserver();
+window.addEventListener('vccf-app-ready',bindSettingsObserver);window.addEventListener('vccf-profile-linked',queueBind);window.addEventListener('vccf-signed-out',()=>{resetPending();clearPreviewMarker();settingsObserver?.disconnect();settingsRoot=null});
 })();
