@@ -88,7 +88,16 @@ function submitForm(session,batch){
   const w=modal('Submit Bible Study Giving','Type your full name as recorder e-signature. Admin/Pastor approval is still required.');w.querySelector('.albsg-body').outerHTML=`<form class="albsg-form"><label>Full name<input name="name" autocomplete="name" required placeholder="Full name"></label><div class="albsg-actions"><button type="button" class="btn secondary" data-cancel>Cancel</button><button type="submit" class="btn">Sign & Submit</button></div><div class="albsg-msg"></div></form>`;const f=w.querySelector('form'),msg=f.querySelector('.albsg-msg');f.querySelector('[data-cancel]').onclick=()=>openSession(session.summary_id);f.onsubmit=async e=>{e.preventDefault();const name=String(new FormData(f).get('name')||'').trim();if(name.length<2){msg.textContent='Enter your full name.';return}const r=await sb().from('bible_study_giving_batches').update({workflow_status:'submitted',recorded_signature_name:name}).eq('id',batch.id).select('id').single();if(r.error){msg.textContent=r.error.message;return}await refresh(session.summary_id);close();openSession(session.summary_id)};
 }
 async function refresh(){sessions=[];document.getElementById('areaLeaderBibleStudyGiving')?.remove();await mount()}
-function queue(delay=100){clearTimeout(timer);timer=setTimeout(mount,delay)}
-function boot(){if(!isAreaLeader())return;styles();queue(300)}
-window.addEventListener('vccf-app-ready',()=>queue(400));window.addEventListener('vccf-profile-updated',()=>queue(250));window.addEventListener('vccf-bible-study-giving-updated',()=>queue(150));new MutationObserver(records=>{if(!isAreaLeader())return;if(records.some(r=>r.addedNodes.length||r.removedNodes.length))queue(120)}).observe(document.documentElement,{childList:true,subtree:true});setTimeout(boot,1200);
+function queue(delay=100){
+  if(timer)return;
+  timer=setTimeout(()=>{timer=0;mount()},delay);
+}
+function boot(){if(!isAreaLeader())return;styles();queue(0)}
+window.addEventListener('vccf-app-ready',()=>queue(0));
+window.addEventListener('vccf-profile-updated',()=>queue(0));
+window.addEventListener('vccf-bible-study-giving-updated',()=>queue(0));
+window.addEventListener('pageshow',()=>queue(0));
+window.addEventListener('focus',()=>queue(0));
+new MutationObserver(records=>{if(!isAreaLeader())return;if(records.some(r=>r.addedNodes.length||r.removedNodes.length))queue(40)}).observe(document.documentElement,{childList:true,subtree:true});
+setTimeout(boot,150);
 })();
