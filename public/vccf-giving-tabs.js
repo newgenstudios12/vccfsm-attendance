@@ -57,7 +57,6 @@ function tabBar(id){
   bar.setAttribute('role','tablist');
   bar.setAttribute('aria-label','Tithes and Offerings sections');
   bar.innerHTML='<button type="button" class="vccf-giving-tab" data-vccf-giving-tab="sunday" role="tab">Sunday Tithes &amp; Offerings</button><button type="button" class="vccf-giving-tab" data-vccf-giving-tab="bible" role="tab">Bible Study Tithes &amp; Offerings</button>';
-  bar.querySelectorAll('[data-vccf-giving-tab]').forEach(button=>button.addEventListener('click',()=>{rememberTab(button.dataset.vccfGivingTab);applyAll(true)}));
   return bar;
 }
 
@@ -151,6 +150,7 @@ function ensureStandardTabs(root){
 async function refreshStandard(force=false){
   const root=document.getElementById('giving');if(!root?.querySelector('.giving-hero'))return;
   ensureStandardTabs(root);
+  if(activeTab==='bible')return;
   await loadStandardRows(force);
   if(!root.isConnected)return;
   ensureStandardTabs(root);
@@ -269,7 +269,7 @@ document.addEventListener('input',event=>{if(event.target?.id==='givingSearch')q
 window.addEventListener('vccf-app-ready',()=>queue(true));
 window.addEventListener('vccf-giving-updated',()=>{standardMonth='';standardRows=[];queue(true)});
 window.addEventListener('vccf-sunday-giving-updated',()=>{standardMonth='';standardRows=[];queue(true)});
-window.addEventListener('vccf-bible-study-giving-updated',()=>{standardMonth='';standardRows=[];queue(true)});
+window.addEventListener('vccf-bible-study-giving-updated',()=>queue(false));
 window.addEventListener('focus',()=>queue(false));
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>queue(true),{once:true});else queue(true);
 })();
