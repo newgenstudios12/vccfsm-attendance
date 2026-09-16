@@ -42,14 +42,27 @@ function patchLocationLabel(){
   if(node)node.textContent='Barangay / Cellgroup';
 }
 
-let timer=0;
+let timer=0,observer=null,observedHost=null,bindTimer=0;
 function queue(){clearTimeout(timer);timer=setTimeout(()=>{patchCurrentSummary();patchGalleryAndPreview();patchLocationLabel()},60)}
-new MutationObserver(queue).observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('change',e=>{if(e.target?.id==='serviceAttendanceType'||e.target?.id==='serviceStudyArea'||e.target?.id==='serviceStudyBarangay')queue()},true);
+function bindObserver(){
+  const host=document.getElementById('serviceAttendancePanel')||document.getElementById('serviceSummaryHost');
+  if(host===observedHost)return;
+  observer?.disconnect();
+  observedHost=host||null;
+  if(!host)return;
+  observer=new MutationObserver(queue);
+  observer.observe(host,{childList:true,subtree:true});
+  queue();
+}
+function scheduleBind(delay=60){clearTimeout(bindTimer);bindTimer=setTimeout(bindObserver,delay)}
+document.addEventListener('change',e=>{if(e.target?.id==='serviceAttendanceType'||e.target?.id==='serviceStudyArea'||e.target?.id==='serviceStudyBarangay'){scheduleBind(0);queue()}},true);
 document.addEventListener('input',e=>{if(e.target?.id==='serviceStudyBarangay')queue()},true);
-window.addEventListener('vccf-app-ready',queue);
-window.addEventListener('focus',queue);
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',queue,{once:true});else queue();
+document.addEventListener('click',e=>{if(e.target.closest?.('[data-route="attendance"],[data-view="attendance"]'))setTimeout(()=>{scheduleBind(0);queue()},100)},true);
+window.addEventListener('vccf-app-ready',()=>{scheduleBind(0);queue()});
+window.addEventListener('focus',()=>{scheduleBind(0);queue()});
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{scheduleBind(0);queue()},{once:true});else{scheduleBind(0);queue()}
+setTimeout(()=>scheduleBind(0),700);
+setTimeout(()=>scheduleBind(0),1600);
 })();
 
 /* Paint the giving sub-tabs as soon as the giving view enters its loading state.
@@ -59,7 +72,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 'use strict';
 if(window.__VCCF_GIVING_TABS_EARLY_V2__)return;
 window.__VCCF_GIVING_TABS_EARLY_V2__=true;
-let activeTab='sunday',queued=false,moduleRetry=0;
+let activeTab='sunday',queued=false,moduleRetry=0,givingObserver=null,observedGiving=null,wakeTimer=0;
 const appState=()=>window.VCCF?.getState?.()||{};
 const role=()=>String(appState().profile?.role||'').toLowerCase();
 
@@ -148,15 +161,27 @@ function area(root){
   ensureBibleModule(root,true);
   return true;
 }
-function apply(){styles();syncTab();const root=document.getElementById('giving');if(!root)return;standard(root)||area(root)}
+function bindGivingObserver(){
+  const root=document.getElementById('giving');
+  if(root===observedGiving)return root;
+  givingObserver?.disconnect();
+  observedGiving=root||null;
+  if(root){givingObserver=new MutationObserver(schedule);givingObserver.observe(root,{childList:true,subtree:true})}
+  return root;
+}
+function apply(){styles();syncTab();const root=bindGivingObserver()||document.getElementById('giving');if(!root)return;standard(root)||area(root)}
 function schedule(){if(queued)return;queued=true;queueMicrotask(()=>{queued=false;apply()})}
-new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
-document.addEventListener('click',e=>{if(e.target.closest?.('[data-vccf-giving-tab]'))setTimeout(apply,0)},false);
-window.addEventListener('vccf-app-ready',apply);
-window.addEventListener('pageshow',apply);
-window.addEventListener('focus',apply);
-window.addEventListener('vccf-finance-access',e=>{if(e?.detail?.allowed===true){schedule();setTimeout(()=>window.dispatchEvent(new Event('focus')),0)}});
-apply();
+function wake(delay=0){clearTimeout(wakeTimer);wakeTimer=setTimeout(()=>{wakeTimer=0;apply()},delay)}
+document.addEventListener('click',e=>{
+  if(e.target.closest?.('[data-vccf-giving-tab]'))setTimeout(apply,0);
+  if(e.target.closest?.('#areaLeaderGivingNav,[data-route="giving"]'))wake(80);
+},false);
+window.addEventListener('vccf-app-ready',()=>wake(120));
+window.addEventListener('pageshow',()=>wake(0));
+window.addEventListener('focus',()=>wake(0));
+window.addEventListener('vccf-finance-access',e=>{if(e?.detail?.allowed===true)wake(0)});
+wake(500);
+setTimeout(()=>wake(0),1500);
 })();
 
 /* Load the heavier finance reconciler only after the main giving view has
@@ -166,7 +191,7 @@ apply();
 'use strict';
 if(window.__VCCF_GIVING_TABS_LOADER_V7__)return;
 window.__VCCF_GIVING_TABS_LOADER_V7__=true;
-let attempts=0,started=false,watcher=null;
+let attempts=0,started=false,checkTimer=0,checks=0;
 function ready(){
   const root=document.getElementById('giving');if(!root)return false;
   if(root.querySelector('.giving-loading'))return false;
@@ -194,14 +219,20 @@ function load(force=false){
   s.onerror=()=>{if(++attempts<3)setTimeout(()=>load(true),350)};
   document.head.appendChild(s);
 }
-function start(){
+function check(){
+  checkTimer=0;
   if(started||window.__VCCF_GIVING_TABS__)return;
-  if(!ready())return;
-  started=true;
-  watcher?.disconnect();
-  setTimeout(()=>load(false),120);
+  if(ready()){started=true;setTimeout(()=>load(false),100);return}
+  if(checks++<30)checkTimer=setTimeout(check,250);
 }
-watcher=new MutationObserver(start);watcher.observe(document.documentElement,{childList:true,subtree:true});
-window.addEventListener('vccf-app-ready',start);window.addEventListener('pageshow',start);window.addEventListener('focus',start);start();
-setTimeout(()=>{if(!started&&ready()){started=true;watcher?.disconnect();load(false)}},2500);
+function kick(reset=false){
+  if(started||window.__VCCF_GIVING_TABS__)return;
+  if(reset)checks=0;
+  if(!checkTimer)checkTimer=setTimeout(check,0);
+}
+document.addEventListener('click',e=>{if(e.target.closest?.('#areaLeaderGivingNav,[data-route="giving"]'))kick(true)},true);
+window.addEventListener('vccf-app-ready',()=>kick(true));
+window.addEventListener('pageshow',()=>kick(false));
+window.addEventListener('focus',()=>kick(false));
+kick(true);
 })();
