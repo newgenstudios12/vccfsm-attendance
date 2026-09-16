@@ -3,19 +3,39 @@
 if (window.__VCCF_ID_INTERACTIONS_V1__) return;
 window.__VCCF_ID_INTERACTIONS_V1__ = true;
 
-if (!document.querySelector('script[data-vccf-ux-5-9-11-loader]')) {
-  const ux = document.createElement('script');
-  ux.src = '/vccf-ux-5-9-11.js?v=20260915-1';
-  ux.defer = true;
-  ux.dataset.vccfUx5911Loader = '1';
-  document.head.appendChild(ux);
-}
-
 let expandedShell = null;
 let closeButton = null;
 let floatingButton = null;
 let quickPanel = null;
 let quickLoading = false;
+let idObserver = null;
+let observedIdRoot = null;
+let enhanceQueued = false;
+let uxLoading = null;
+
+function ensureUxPack() {
+  if (window.__VCCF_UX_5_9_11__) return Promise.resolve();
+  if (uxLoading) return uxLoading;
+  const existing = document.querySelector('script[data-vccf-ux-5-9-11-loader]');
+  if (existing) {
+    uxLoading = new Promise(resolve => {
+      if (window.__VCCF_UX_5_9_11__) return resolve();
+      existing.addEventListener('load', resolve, {once:true});
+      existing.addEventListener('error', resolve, {once:true});
+    });
+    return uxLoading;
+  }
+  uxLoading = new Promise(resolve => {
+    const ux = document.createElement('script');
+    ux.src = '/vccf-ux-5-9-11.js?v=20260916-2';
+    ux.defer = true;
+    ux.dataset.vccfUx5911Loader = '1';
+    ux.onload = resolve;
+    ux.onerror = resolve;
+    document.head.appendChild(ux);
+  });
+  return uxLoading;
+}
 
 function closeExpanded() {
   if (expandedShell?.isConnected) expandedShell.classList.remove('id-card-expanded');
@@ -225,9 +245,28 @@ function enhanceRequestProgress(root) {
   progress.insertAdjacentElement('afterend',hint);
 }
 
-function enhance() {
-  ensureFloatingButton();
+function activeIdRoot() {
   const root = document.getElementById('memberIdView') || document.querySelector('.view.active [data-member-id-root]') || document.querySelector('.view.active .id-layout')?.closest('.view');
+  if (!root?.isConnected) return null;
+  return root;
+}
+
+function bindIdObserver() {
+  const root = activeIdRoot();
+  if (root === observedIdRoot) return root;
+  idObserver?.disconnect();
+  observedIdRoot = root;
+  if (root) {
+    idObserver = new MutationObserver(queueEnhance);
+    idObserver.observe(root,{childList:true,subtree:true});
+  }
+  return root;
+}
+
+function enhance() {
+  enhanceQueued = false;
+  ensureFloatingButton();
+  const root = bindIdObserver();
   if (!root) {
     if (expandedShell && !expandedShell.isConnected) closeExpanded();
     updateFloatingButton();
@@ -239,20 +278,31 @@ function enhance() {
   updateFloatingButton();
 }
 
-const observer = new MutationObserver(() => requestAnimationFrame(enhance));
-observer.observe(document.documentElement,{childList:true,subtree:true});
+function queueEnhance(delay=0) {
+  if (delay) { setTimeout(queueEnhance,delay); return; }
+  if (enhanceQueued) return;
+  enhanceQueued = true;
+  requestAnimationFrame(enhance);
+}
+
+document.addEventListener('click',event => {
+  const route = event.target.closest?.('[data-route]')?.dataset.route;
+  if (route === 'members' || route === 'events') void ensureUxPack();
+  if (route === 'memberid' || event.target.closest?.('[data-download-id],[data-print-id]')) queueEnhance(60);
+},true);
+
 document.addEventListener('keydown',event => {
   if (event.key !== 'Escape') return;
   if (expandedShell) { event.preventDefault(); closeExpanded(); return; }
   if (quickOpen()) { event.preventDefault(); closeQuickId(); }
 });
-window.addEventListener('vccf-signed-out',() => { closeExpanded(); closeQuickId(); updateFloatingButton(); });
-window.addEventListener('vccf-id-template-updated',() => { if (quickOpen()) void openQuickId(); setTimeout(enhance,100); });
-window.addEventListener('vccf-profile-photo-updated',() => { if (quickOpen()) void openQuickId(); setTimeout(enhance,100); });
+window.addEventListener('vccf-signed-out',() => { closeExpanded(); closeQuickId(); idObserver?.disconnect(); observedIdRoot=null; updateFloatingButton(); });
+window.addEventListener('vccf-id-template-updated',() => { if (quickOpen()) void openQuickId(); queueEnhance(100); });
+window.addEventListener('vccf-profile-photo-updated',() => { if (quickOpen()) void openQuickId(); queueEnhance(100); });
 window.addEventListener('vccf-member-updated',() => { if (quickOpen()) void openQuickId(); });
 window.addEventListener('vccf-member-contact-updated',() => { if (quickOpen()) void openQuickId(); });
-window.addEventListener('vccf-app-ready',() => setTimeout(enhance,250));
+window.addEventListener('vccf-app-ready',() => queueEnhance(250));
 window.addEventListener('focus',updateFloatingButton);
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',() => setTimeout(enhance,500),{once:true});
-else setTimeout(enhance,500);
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',() => queueEnhance(500),{once:true});
+else queueEnhance(500);
 })();
