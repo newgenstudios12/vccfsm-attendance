@@ -24,13 +24,12 @@ function injectScript(src,key){
   return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.async=true;if(key)s.dataset.vccfLazyModule=key;s.onload=()=>resolve(s);s.onerror=()=>{s.remove();reject(new Error('Unable to load '+(key||src)))};document.head.appendChild(s)});
 }
 
-/* The Church Management bundle used to execute 16 database queries on every login,
-   including up to 3,000 attendance rows. Keep it completely off the startup path. */
+/* Keep the large Church Management data bundle off the startup path. */
 (()=>{
 'use strict';
 if(window.__VCCF_CHURCH_LAZY_BOOTSTRAP__)return;
 window.__VCCF_CHURCH_LAZY_BOOTSTRAP__=true;
-window.__VCCF_CHURCH_MANAGEMENT__=true;
+window.__VCCF_CHURCH_MANAGEMENT_V1__=true;
 let loading=null;
 const stub={
   navigate(route){const target=route||'overview';return load().then(real=>real?.navigate?.(target));},
@@ -41,18 +40,17 @@ function load(){
   if(window.VCCFChurchManagement!==stub&&window.VCCFChurchManagement?.navigate)return Promise.resolve(window.VCCFChurchManagement);
   if(loading)return loading;
   loading=new Promise((resolve,reject)=>{
-    window.__VCCF_CHURCH_MANAGEMENT__=false;
-    const s=document.createElement('script');s.src='/church-management.js?v=20260916-perf4';s.async=true;s.dataset.vccfChurchManagementLazy='1';
+    window.__VCCF_CHURCH_MANAGEMENT_V1__=false;
+    const s=document.createElement('script');s.src='/church-management.js?v=20260916-perf5';s.async=true;s.dataset.vccfChurchManagementLazy='1';
     s.onload=()=>{const real=window.VCCFChurchManagement;if(!real||real===stub){loading=null;reject(new Error('Church Management did not initialize.'));return}resolve(real)};
-    s.onerror=()=>{window.__VCCF_CHURCH_MANAGEMENT__=true;loading=null;reject(new Error('Unable to load Church Management.'))};
+    s.onerror=()=>{window.__VCCF_CHURCH_MANAGEMENT_V1__=true;loading=null;reject(new Error('Unable to load Church Management.'))};
     document.head.appendChild(s);
   });
   return loading;
 }
 })();
 
-/* Service and event attendance are only needed after the Attendance workspace is opened.
-   Block their eager index copies now and turn them into small lazy API stubs. */
+/* Service and event attendance are only needed after the Attendance workspace is opened. */
 (()=>{
 'use strict';
 function makeLazyApi({guard,globalName,src,methods,blockers=[]}){
@@ -71,12 +69,11 @@ function makeLazyApi({guard,globalName,src,methods,blockers=[]}){
   methods.forEach(name=>{stub[name]=(...args)=>{if(name==='unmount'&&window[globalName]===stub&&!loading)return Promise.resolve();return load().then(real=>real?.[name]?.(...args))}});
   window[globalName]=stub;
 }
-makeLazyApi({guard:'__VCCF_SERVICE_ATTENDANCE__',globalName:'VCCFServiceAttendance',src:'/service-attendance.js?v=20260916-perf4',methods:['mount','unmount','refresh'],blockers:['data-vccf-service-attendance-v2','data-vccf-bible-study-dropdown','data-vccf-bible-study-base','data-vccf-extra-attendance-checklists']});
-makeLazyApi({guard:'__VCCF_EVENT_ATTENDANCE__',globalName:'VCCFEventAttendance',src:'/event-attendance.js?v=20260916-perf4',methods:['mount','unmount']});
+makeLazyApi({guard:'__VCCF_SERVICE_ATTENDANCE__',globalName:'VCCFServiceAttendance',src:'/service-attendance.js?v=20260916-perf5',methods:['mount','unmount','refresh'],blockers:['data-vccf-service-attendance-v2','data-vccf-bible-study-dropdown','data-vccf-bible-study-base','data-vccf-extra-attendance-checklists']});
+makeLazyApi({guard:'__VCCF_EVENT_ATTENDANCE__',globalName:'VCCFEventAttendance',src:'/event-attendance.js?v=20260916-perf5',methods:['mount','unmount']});
 })();
 
-/* Band Fund and Worship Ministry perform permission/database checks during initialization.
-   Let the main dashboard paint first, then initialize these navigation modules during idle time. */
+/* Defer Band Fund and Worship Ministry permission/database checks until the first idle period. */
 (()=>{
 'use strict';
 window.__VCCF_BAND_FUND__=true;
@@ -85,8 +82,8 @@ let started=false;
 function startDeferredModules(){
   if(started)return;started=true;
   const run=()=>{
-    window.__VCCF_BAND_FUND__=false;void injectScript('/vccf-band-fund.js?v=20260916-perf4','band-fund').catch(()=>{});
-    window.__VCCF_WORSHIP_MINISTRY__=false;void injectScript('/vccf-worship-ministry.js?v=20260916-perf4','worship-ministry').catch(()=>{});
+    window.__VCCF_BAND_FUND__=false;void injectScript('/vccf-band-fund.js?v=20260916-perf5','band-fund').catch(()=>{});
+    window.__VCCF_WORSHIP_MINISTRY__=false;void injectScript('/vccf-worship-ministry.js?v=20260916-perf5','worship-ministry').catch(()=>{});
   };
   if(location.hash==='#worship-schedule'||location.hash==='#worship-lineup'){run();return}
   if('requestIdleCallback'in window)requestIdleCallback(run,{timeout:2200});else setTimeout(run,1400);
@@ -105,8 +102,7 @@ function loadVccfEnhancement(key,src){
 }
 loadVccfEnhancement('login-password-toggle','/vccf-login-password-toggle.js?v=20260912-1');
 
-/* Only small cross-app helpers start with an authenticated session.
-   The previous loader injected more than 20 feature scripts at once on every login. */
+/* Only small cross-app helpers start with an authenticated session. */
 const CORE_ENHANCEMENTS=[
   ['pwa','/vccf-pwa.js?v=20260904-6'],
   ['notification-ux','/vccf-notification-ux.js?v=20260904-7'],
@@ -116,7 +112,7 @@ const CORE_ENHANCEMENTS=[
 ];
 const ROUTE_ENHANCEMENTS={
   members:[
-    ['member-360','/vccf-member-360.js?v=20260916-4'],
+    ['member-360','/vccf-member-360.js?v=20260916-5'],
     ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260913-2'],
     ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
     ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],
@@ -129,13 +125,13 @@ const ROUTE_ENHANCEMENTS={
     ['event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1']
   ],
   events:[
-    ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260916-4'],
-    ['events-gallery','/vccf-events-gallery.js?v=20260916-4']
+    ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260916-5'],
+    ['events-gallery','/vccf-events-gallery.js?v=20260916-5']
   ],
   giving:[
-    ['bible-study-giving','/vccf-bible-study-giving.js?v=20260916-4'],
-    ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260916-4'],
-    ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260916-4']
+    ['bible-study-giving','/vccf-bible-study-giving.js?v=20260916-5'],
+    ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260916-5'],
+    ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260916-5']
   ]
 };
 function cleanBsgPreview(){const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())}
