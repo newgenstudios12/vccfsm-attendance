@@ -20,18 +20,21 @@ window.addEventListener('vccf-force-password-change',async()=>{const response=aw
 handleInviteUrl();
 })();
 
-/* Keep the large Church Management data bundle off the startup path.
-   index.html still references church-management.js, but this guard makes that eager copy a no-op.
-   The real module is loaded only when a Church Management route is actually opened. */
+function injectScript(src,key){
+  return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.async=true;if(key)s.dataset.vccfLazyModule=key;s.onload=()=>resolve(s);s.onerror=()=>{s.remove();reject(new Error('Unable to load '+(key||src))};document.head.appendChild(s)});
+}
+
+/* The Church Management bundle used to execute 16 database queries on every login,
+   including up to 3,000 attendance rows. Keep it completely off the startup path. */
 (()=>{
 'use strict';
 if(window.__VCCF_CHURCH_LAZY_BOOTSTRAP__)return;
 window.__VCCF_CHURCH_LAZY_BOOTSTRAP__=true;
 window.__VCCF_CHURCH_MANAGEMENT__=true;
-let loading=null,pendingRoute=null,pendingRefresh=false;
+let loading=null;
 const stub={
-  navigate(route){pendingRoute=route||'overview';return load().then(real=>real?.navigate?.(pendingRoute));},
-  refresh(){pendingRefresh=true;return load().then(real=>real?.refresh?.())}
+  navigate(route){const target=route||'overview';return load().then(real=>real?.navigate?.(target));},
+  refresh(){return load().then(real=>real?.refresh?.())}
 };
 window.VCCFChurchManagement=stub;
 function load(){
@@ -39,10 +42,8 @@ function load(){
   if(loading)return loading;
   loading=new Promise((resolve,reject)=>{
     window.__VCCF_CHURCH_MANAGEMENT__=false;
-    const s=document.createElement('script');
-    s.src='/church-management.js?v=20260916-perf3';
-    s.async=true;s.dataset.vccfChurchManagementLazy='1';
-    s.onload=()=>{const real=window.VCCFChurchManagement;if(!real||real===stub){loading=null;reject(new Error('Church Management did not initialize.'));return}const route=pendingRoute,refresh=pendingRefresh;pendingRoute=null;pendingRefresh=false;resolve(real);if(refresh&&!route)void real.refresh?.()};
+    const s=document.createElement('script');s.src='/church-management.js?v=20260916-perf4';s.async=true;s.dataset.vccfChurchManagementLazy='1';
+    s.onload=()=>{const real=window.VCCFChurchManagement;if(!real||real===stub){loading=null;reject(new Error('Church Management did not initialize.'));return}resolve(real)};
     s.onerror=()=>{window.__VCCF_CHURCH_MANAGEMENT__=true;loading=null;reject(new Error('Unable to load Church Management.'))};
     document.head.appendChild(s);
   });
@@ -50,9 +51,53 @@ function load(){
 }
 })();
 
+/* Service and event attendance are only needed after the Attendance workspace is opened.
+   Block their eager index copies now and turn them into small lazy API stubs. */
+(()=>{
+'use strict';
+function makeLazyApi({guard,globalName,src,methods,blockers=[]}){
+  window[guard]=true;
+  blockers.forEach(attr=>{if(document.querySelector(`script[${attr}]`))return;const b=document.createElement('script');b.type='application/json';b.setAttribute(attr,'1');b.dataset.vccfLazyBlocker='1';document.head.appendChild(b)});
+  let loading=null;
+  const stub={};
+  const load=()=>{
+    const current=window[globalName];if(current&&current!==stub)return Promise.resolve(current);
+    if(loading)return loading;
+    blockers.forEach(attr=>document.querySelector(`script[${attr}][data-vccf-lazy-blocker]`)?.remove());
+    window[guard]=false;
+    loading=injectScript(src,globalName).then(()=>{const real=window[globalName];if(!real||real===stub)throw new Error(globalName+' did not initialize.');return real}).catch(error=>{window[guard]=true;loading=null;throw error});
+    return loading;
+  };
+  methods.forEach(name=>{stub[name]=(...args)=>{if(name==='unmount'&&window[globalName]===stub&&!loading)return Promise.resolve();return load().then(real=>real?.[name]?.(...args))}});
+  window[globalName]=stub;
+}
+makeLazyApi({guard:'__VCCF_SERVICE_ATTENDANCE__',globalName:'VCCFServiceAttendance',src:'/service-attendance.js?v=20260916-perf4',methods:['mount','unmount','refresh'],blockers:['data-vccf-service-attendance-v2','data-vccf-bible-study-dropdown','data-vccf-bible-study-base','data-vccf-extra-attendance-checklists']});
+makeLazyApi({guard:'__VCCF_EVENT_ATTENDANCE__',globalName:'VCCFEventAttendance',src:'/event-attendance.js?v=20260916-perf4',methods:['mount','unmount']});
+})();
+
+/* Band Fund and Worship Ministry perform permission/database checks during initialization.
+   Let the main dashboard paint first, then initialize these navigation modules during idle time. */
+(()=>{
+'use strict';
+window.__VCCF_BAND_FUND__=true;
+window.__VCCF_WORSHIP_MINISTRY__=true;
+let started=false;
+function startDeferredModules(){
+  if(started)return;started=true;
+  const run=()=>{
+    window.__VCCF_BAND_FUND__=false;void injectScript('/vccf-band-fund.js?v=20260916-perf4','band-fund').catch(()=>{});
+    window.__VCCF_WORSHIP_MINISTRY__=false;void injectScript('/vccf-worship-ministry.js?v=20260916-perf4','worship-ministry').catch(()=>{});
+  };
+  if(location.hash==='#worship-schedule'||location.hash==='#worship-lineup'){run();return}
+  if('requestIdleCallback'in window)requestIdleCallback(run,{timeout:2200});else setTimeout(run,1400);
+}
+window.addEventListener('vccf-app-ready',startDeferredModules,{once:true});
+setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show'))startDeferredModules()},1800);
+})();
+
 function scriptAlreadyLoaded(src){
   const wanted=new URL(src,location.href).pathname;
-  return [...document.scripts].some(s=>{try{return new URL(s.src,location.href).pathname===wanted}catch(_){return false}});
+  return [...document.scripts].some(s=>{try{return new URL(s.src,location.href).pathname===wanted&&!s.dataset.vccfLazyBlocker}catch(_){return false}});
 }
 function loadVccfEnhancement(key,src){
   if(scriptAlreadyLoaded(src)||document.querySelector(`script[data-vccf-enhancement="${CSS.escape(key)}"]`))return Promise.resolve();
@@ -60,8 +105,8 @@ function loadVccfEnhancement(key,src){
 }
 loadVccfEnhancement('login-password-toggle','/vccf-login-password-toggle.js?v=20260912-1');
 
-/* Only tiny, cross-app helpers start with the authenticated app.
-   Feature-heavy modules load when their route is opened instead of all at once. */
+/* Only small cross-app helpers start with an authenticated session.
+   The previous loader injected more than 20 feature scripts at once on every login. */
 const CORE_ENHANCEMENTS=[
   ['pwa','/vccf-pwa.js?v=20260904-6'],
   ['notification-ux','/vccf-notification-ux.js?v=20260904-7'],
@@ -71,7 +116,7 @@ const CORE_ENHANCEMENTS=[
 ];
 const ROUTE_ENHANCEMENTS={
   members:[
-    ['member-360','/vccf-member-360.js?v=20260916-3'],
+    ['member-360','/vccf-member-360.js?v=20260916-4'],
     ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260913-2'],
     ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
     ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],
@@ -84,25 +129,23 @@ const ROUTE_ENHANCEMENTS={
     ['event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1']
   ],
   events:[
-    ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260916-3'],
-    ['events-gallery','/vccf-events-gallery.js?v=20260916-3']
+    ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260916-4'],
+    ['events-gallery','/vccf-events-gallery.js?v=20260916-4']
   ],
   giving:[
-    ['bible-study-giving','/vccf-bible-study-giving.js?v=20260916-3'],
-    ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260916-3'],
-    ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260916-3']
+    ['bible-study-giving','/vccf-bible-study-giving.js?v=20260916-4'],
+    ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260916-4'],
+    ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260916-4']
   ]
 };
 function cleanBsgPreview(){const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())}
 function loadRouteEnhancements(route){
-  const list=ROUTE_ENHANCEMENTS[route]||[];
-  list.forEach(([key,src])=>void loadVccfEnhancement(key,src));
+  const list=ROUTE_ENHANCEMENTS[route]||[];list.forEach(([key,src])=>void loadVccfEnhancement(key,src));
   if(route==='attendance'||route==='giving'){cleanBsgPreview();setTimeout(cleanBsgPreview,150);setTimeout(cleanBsgPreview,500)}
 }
 function activeRoute(){return document.querySelector('.nav [data-route].active')?.dataset.route||document.querySelector('.view.active')?.id||''}
 function loadAuthenticatedEnhancements(){
-  const st=window.VCCF?.getState?.();
-  if(!st?.session?.user)return;
+  const st=window.VCCF?.getState?.();if(!st?.session?.user)return;
   if(!window.__VCCF_AUTH_CORE_ENHANCEMENTS_LOADED__){window.__VCCF_AUTH_CORE_ENHANCEMENTS_LOADED__=true;CORE_ENHANCEMENTS.forEach(([key,src])=>void loadVccfEnhancement(key,src))}
   loadRouteEnhancements(activeRoute());
 }
@@ -137,34 +180,21 @@ const withTimeout=(promise,ms)=>new Promise((resolve,reject)=>{
 });
 const setLoginMessage=(text,good=false)=>{const node=document.getElementById('loginMsg');if(!node)return;node.textContent=text;node.style.color=good?'#167647':'#b42318'};
 form.addEventListener('submit',async event=>{
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  const button=document.getElementById('loginBtn');
-  const emailInput=document.getElementById('email');
-  const passwordInput=document.getElementById('password');
-  const raw=String(emailInput?.value||'').trim().toLowerCase();
-  const password=String(passwordInput?.value||'');
+  event.preventDefault();event.stopImmediatePropagation();
+  const button=document.getElementById('loginBtn'),emailInput=document.getElementById('email'),passwordInput=document.getElementById('password');
+  const raw=String(emailInput?.value||'').trim().toLowerCase(),password=String(passwordInput?.value||'');
   if(!raw||!password){setLoginMessage('Enter your email/username and password.');return}
   const normalized=raw.includes('@')?raw:raw.replace(/[^a-z0-9._-]/g,'').replace(/^[-_.]+|[-_.]+$/g,'')+'@vccf.local';
-  if(button){button.disabled=true;button.textContent='Signing in…'}
-  setLoginMessage('');
+  if(button){button.disabled=true;button.textContent='Signing in…'}setLoginMessage('');
   try{
     try{window.VCCF?.sb?.auth?.stopAutoRefresh?.()}catch(_){ }
     clearAuthStorage();
     const url=window.VCCF_SUPABASE_URL,key=window.VCCF_SUPABASE_PUBLISHABLE_KEY;
     if(!window.supabase?.createClient||!url||!key)throw new Error('Authentication service did not initialize. Reload VCCF Connect and try again.');
-    const fresh=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-    if(window.VCCF)window.VCCF.sb=fresh;
-    const response=await withTimeout(fresh.auth.signInWithPassword({email:normalized,password}),10000);
-    if(response?.error)throw response.error;
-    if(!response?.data?.session)throw new Error('No authenticated session returned.');
-    setLoginMessage('Signed in successfully. Opening VCCF Connect…',true);
-    setTimeout(()=>location.reload(),120);
-  }catch(error){
-    console.error('VCCF login recovery',error);
-    setLoginMessage(error?.message||'Unable to sign in.');
-    if(button){button.disabled=false;button.textContent='Sign in'}
-  }
+    const fresh=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});if(window.VCCF)window.VCCF.sb=fresh;
+    const response=await withTimeout(fresh.auth.signInWithPassword({email:normalized,password}),10000);if(response?.error)throw response.error;if(!response?.data?.session)throw new Error('No authenticated session returned.');
+    setLoginMessage('Signed in successfully. Opening VCCF Connect…',true);setTimeout(()=>location.reload(),120);
+  }catch(error){console.error('VCCF login recovery',error);setLoginMessage(error?.message||'Unable to sign in.');if(button){button.disabled=false;button.textContent='Sign in'}}
 },true);
 })();
 
@@ -174,13 +204,10 @@ form.addEventListener('submit',async event=>{
 if(window.__VCCF_LOGIN_GUEST_LIGHT__)return;
 window.__VCCF_LOGIN_GUEST_LIGHT__=true;
 function installLoginGuestLight(){
-  const login=document.getElementById('loginScreen'),card=login?.querySelector('.login-card');
-  if(!login||!card)return;
+  const login=document.getElementById('loginScreen'),card=login?.querySelector('.login-card');if(!login||!card)return;
   login.dataset.loginTheme='light';
   if(!document.getElementById('vccfLoginLightStyle')){
-    const style=document.createElement('style');
-    style.id='vccfLoginLightStyle';
-    style.textContent=`
+    const style=document.createElement('style');style.id='vccfLoginLightStyle';style.textContent=`
 #loginScreen[data-login-theme="light"]{color-scheme:light;--bg:#f5f6f8;--card:#fff;--card-soft:#fafafa;--text:#15171c;--muted:#6b7280;--line:#e5e7eb;--brand:#d71920;--brand2:#ff8a18;--brand-soft:#fff0ed;--input:#fff;--hover:#f6f7f9;--shadow:0 12px 32px rgba(15,23,42,.08);background:#f7f7f8!important;color:#15171c!important}
 #loginScreen[data-login-theme="light"] .login-panel{background:rgba(250,250,251,.98)!important;border-color:rgba(15,23,42,.08)!important;color:#15171c!important}
 #loginScreen[data-login-theme="light"] .login-card{background:#fff!important;color:#15171c!important;border-color:#e5e7eb!important;box-shadow:0 12px 32px rgba(15,23,42,.08)!important}
@@ -195,18 +222,8 @@ function installLoginGuestLight(){
 .vccf-guest-return{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:10px;padding:11px 14px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;text-decoration:none;font-size:.78rem;font-weight:800;transition:background .16s,border-color .16s,color .16s,transform .16s}
 .vccf-guest-return:hover{background:#f9fafb;border-color:#d1d5db;color:#d71920}.vccf-guest-return:active{transform:scale(.99)}.vccf-guest-return:focus-visible{outline:3px solid rgba(215,25,32,.18);outline-offset:2px}
 @media(max-width:600px){#loginScreen[data-login-theme="light"]{background:url('/Churchfront_login.png?v=20260903-2') center/cover no-repeat!important}#loginScreen[data-login-theme="light"] .login-panel{background:transparent!important;border:0!important}#loginScreen[data-login-theme="light"] .login-card{background:rgba(255,255,255,.94)!important}.vccf-guest-return{min-height:44px}}
-`;
-    document.head.appendChild(style);
-  }
-  if(!document.getElementById('guestReturnLink')){
-    const link=document.createElement('a');
-    link.id='guestReturnLink';
-    link.className='vccf-guest-return';
-    link.href='/';
-    link.setAttribute('aria-label','Back to guest page');
-    link.innerHTML='← <span>Back to Guest Page</span>';
-    card.appendChild(link);
-  }
+`;document.head.appendChild(style)}
+  if(!document.getElementById('guestReturnLink')){const link=document.createElement('a');link.id='guestReturnLink';link.className='vccf-guest-return';link.href='/';link.setAttribute('aria-label','Back to guest page');link.innerHTML='← <span>Back to Guest Page</span>';card.appendChild(link)}
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installLoginGuestLight,{once:true});else installLoginGuestLight();
 window.addEventListener('vccf-signed-out',installLoginGuestLight);
