@@ -20,41 +20,93 @@ window.addEventListener('vccf-force-password-change',async()=>{const response=aw
 handleInviteUrl();
 })();
 
-function loadVccfEnhancement(key,src){if(document.querySelector(`script[data-vccf-${key}]`))return;const s=document.createElement('script');s.src=src;s.dataset[`vccf${key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())}`]='1';s.defer=true;document.head.appendChild(s)}
+/* Keep the large Church Management data bundle off the startup path.
+   index.html still references church-management.js, but this guard makes that eager copy a no-op.
+   The real module is loaded only when a Church Management route is actually opened. */
+(()=>{
+'use strict';
+if(window.__VCCF_CHURCH_LAZY_BOOTSTRAP__)return;
+window.__VCCF_CHURCH_LAZY_BOOTSTRAP__=true;
+window.__VCCF_CHURCH_MANAGEMENT__=true;
+let loading=null,pendingRoute=null,pendingRefresh=false;
+const stub={
+  navigate(route){pendingRoute=route||'overview';return load().then(real=>real?.navigate?.(pendingRoute));},
+  refresh(){pendingRefresh=true;return load().then(real=>real?.refresh?.())}
+};
+window.VCCFChurchManagement=stub;
+function load(){
+  if(window.VCCFChurchManagement!==stub&&window.VCCFChurchManagement?.navigate)return Promise.resolve(window.VCCFChurchManagement);
+  if(loading)return loading;
+  loading=new Promise((resolve,reject)=>{
+    window.__VCCF_CHURCH_MANAGEMENT__=false;
+    const s=document.createElement('script');
+    s.src='/church-management.js?v=20260916-perf3';
+    s.async=true;s.dataset.vccfChurchManagementLazy='1';
+    s.onload=()=>{const real=window.VCCFChurchManagement;if(!real||real===stub){loading=null;reject(new Error('Church Management did not initialize.'));return}const route=pendingRoute,refresh=pendingRefresh;pendingRoute=null;pendingRefresh=false;resolve(real);if(refresh&&!route)void real.refresh?.()};
+    s.onerror=()=>{window.__VCCF_CHURCH_MANAGEMENT__=true;loading=null;reject(new Error('Unable to load Church Management.'))};
+    document.head.appendChild(s);
+  });
+  return loading;
+}
+})();
+
+function scriptAlreadyLoaded(src){
+  const wanted=new URL(src,location.href).pathname;
+  return [...document.scripts].some(s=>{try{return new URL(s.src,location.href).pathname===wanted}catch(_){return false}});
+}
+function loadVccfEnhancement(key,src){
+  if(scriptAlreadyLoaded(src)||document.querySelector(`script[data-vccf-enhancement="${CSS.escape(key)}"]`))return Promise.resolve();
+  return new Promise(resolve=>{const s=document.createElement('script');s.src=src;s.dataset.vccfEnhancement=key;s.defer=true;s.onload=resolve;s.onerror=resolve;document.head.appendChild(s)});
+}
 loadVccfEnhancement('login-password-toggle','/vccf-login-password-toggle.js?v=20260912-1');
-const ENHANCEMENTS=[
-  ['member-360','/vccf-member-360.js?v=20260913-3'],
-  ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260913-2'],
-  ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
-  ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],
-  ['member-contact-info','/vccf-member-contact-info.js?v=20260913-2'],
-  ['member-number-normalize','/vccf-member-number-normalize.js?v=20260913-1'],
+
+/* Only tiny, cross-app helpers start with the authenticated app.
+   Feature-heavy modules load when their route is opened instead of all at once. */
+const CORE_ENHANCEMENTS=[
   ['pwa','/vccf-pwa.js?v=20260904-6'],
   ['notification-ux','/vccf-notification-ux.js?v=20260904-7'],
-  ['notification-actions-leadership-photo','/vccf-notification-actions-leadership-photo.js?v=20260904-1'],
   ['visual-hierarchy','/vccf-visual-hierarchy.js?v=20260904-2'],
-  ['service-attendance-v2','/vccf-service-attendance-v2.js?v=20260913-2'],
-  ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260904-1'],
-  ['events-gallery','/vccf-events-gallery.js?v=20260904-1'],
   ['attendance-nav-reconcile','/vccf-attendance-nav-reconcile.js?v=20260904-1'],
-  ['service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-2'],
-  ['bible-study-summary-photos','/vccf-bible-study-summary-photos.js?v=20260905-1'],
-  ['event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1'],
-  ['bible-study-giving','/vccf-bible-study-giving.js?v=20260904-1'],
-  ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260904-1'],
-  ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260904-1'],
-  ['member-address-filter','/vccf-member-address-filter.js?v=20260913-2'],
-  ['band-fund','/vccf-band-fund.js?v=20260904-1']
+  ['member-number-normalize','/vccf-member-number-normalize.js?v=20260913-1']
 ];
-function installBsgPreviewDedupe(){if(window.__VCCF_BSG_PREVIEW_DEDUPE__)return;window.__VCCF_BSG_PREVIEW_DEDUPE__=true;const clean=()=>{const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())};const observer=new MutationObserver(clean);observer.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('vccf-app-ready',clean);setTimeout(clean,0)}
+const ROUTE_ENHANCEMENTS={
+  members:[
+    ['member-360','/vccf-member-360.js?v=20260916-3'],
+    ['member-attendance-performance','/vccf-member-attendance-performance.js?v=20260913-2'],
+    ['member-profile-polish','/vccf-member-profile-polish.js?v=20260904-1'],
+    ['member-followup-alerts','/vccf-member-followup-alerts.js?v=20260904-1'],
+    ['member-contact-info','/vccf-member-contact-info.js?v=20260913-2'],
+    ['member-address-filter','/vccf-member-address-filter.js?v=20260913-2']
+  ],
+  attendance:[
+    ['service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-2'],
+    ['bible-study-summary-photos','/vccf-bible-study-summary-photos.js?v=20260905-1'],
+    ['event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1']
+  ],
+  events:[
+    ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260916-3'],
+    ['events-gallery','/vccf-events-gallery.js?v=20260916-3']
+  ],
+  giving:[
+    ['bible-study-giving','/vccf-bible-study-giving.js?v=20260916-3'],
+    ['bible-study-barangay-base','/vccf-bible-study-barangay-base.js?v=20260916-3'],
+    ['bible-study-barangay-dropdown','/vccf-bible-study-barangay-dropdown.js?v=20260916-3']
+  ]
+};
+function cleanBsgPreview(){const overlay=document.getElementById('serviceSummaryPreviewOverlay');if(!overlay)return;const blocks=[...overlay.querySelectorAll('.bsg-preview-finance')];blocks.slice(1).forEach(node=>node.remove())}
+function loadRouteEnhancements(route){
+  const list=ROUTE_ENHANCEMENTS[route]||[];
+  list.forEach(([key,src])=>void loadVccfEnhancement(key,src));
+  if(route==='attendance'||route==='giving'){cleanBsgPreview();setTimeout(cleanBsgPreview,150);setTimeout(cleanBsgPreview,500)}
+}
+function activeRoute(){return document.querySelector('.nav [data-route].active')?.dataset.route||document.querySelector('.view.active')?.id||''}
 function loadAuthenticatedEnhancements(){
   const st=window.VCCF?.getState?.();
   if(!st?.session?.user)return;
-  if(window.__VCCF_AUTH_ENHANCEMENTS_LOADED__)return;
-  window.__VCCF_AUTH_ENHANCEMENTS_LOADED__=true;
-  ENHANCEMENTS.forEach(([key,src])=>loadVccfEnhancement(key,src));
-  installBsgPreviewDedupe();
+  if(!window.__VCCF_AUTH_CORE_ENHANCEMENTS_LOADED__){window.__VCCF_AUTH_CORE_ENHANCEMENTS_LOADED__=true;CORE_ENHANCEMENTS.forEach(([key,src])=>void loadVccfEnhancement(key,src))}
+  loadRouteEnhancements(activeRoute());
 }
+document.addEventListener('click',e=>{const route=e.target.closest?.('[data-route]')?.dataset.route;if(route)loadRouteEnhancements(route)},true);
 window.addEventListener('vccf-app-ready',loadAuthenticatedEnhancements);
 setTimeout(()=>{if(document.getElementById('app')?.classList.contains('show'))loadAuthenticatedEnhancements()},1200);
 
