@@ -40,7 +40,8 @@ async function ensureCmsSynced(api,route){
   if(syncPromise)return syncPromise;
   syncPromise=(async()=>{
     cmsLoading(route);
-    await waitForCmsIdle();
+    const idle=await waitForCmsIdle();
+    if(!idle)throw new Error('Church Management is still loading. Please retry this module.');
     await api.refresh?.();
     syncedUser=uid;
   })().finally(()=>{syncPromise=null});
@@ -69,7 +70,8 @@ function patchChurchManagement(){
     }
   };
   api.refresh=async()=>{
-    await waitForCmsIdle();
+    const idle=await waitForCmsIdle();
+    if(!idle)throw new Error('Church Management is still loading.');
     try{await originalRefresh?.();syncedUser=userId();}
     catch(error){cmsFailure('refresh',error,()=>api.refresh());throw error;}
   };
@@ -109,18 +111,18 @@ function scheduleRouteHealth(route,delayMs=220){
 
 function boot(){
   patchChurchManagement();
-  const uid=userId();
-  if(!uid){syncedUser='';syncPromise=null}
+  if(!userId()){syncedUser='';syncPromise=null}
 }
 
 document.addEventListener('click',e=>{
   const target=e.target.closest?.('[data-route]');
   if(!target)return;
-  scheduleRouteHealth(target.dataset.route,260);
+  const route=target.dataset.route;
+  patchChurchManagement();
+  if(!CMS_ROUTES.has(route))scheduleRouteHealth(route,260);
 },true);
 window.addEventListener('vccf-app-ready',()=>{syncedUser='';setTimeout(boot,40)});
 window.addEventListener('vccf-signed-out',()=>{syncedUser='';syncPromise=null});
-window.addEventListener('vccf-cms-route',e=>scheduleRouteHealth(e.detail?.route,80));
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.VCCFModuleHealth={check:route=>routeHealthCheck(route),patch:patchChurchManagement};
 })();
