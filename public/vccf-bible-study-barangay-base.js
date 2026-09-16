@@ -53,7 +53,8 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 })();
 
 /* Paint the giving sub-tabs as soon as the giving view enters its loading state.
-   The finance data can continue loading below without blocking navigation. */
+   Start the Bible Study finance module in parallel so its data is already warm
+   by the time the giving view finishes rendering. */
 (()=>{
 'use strict';
 if(window.__VCCF_GIVING_TABS_EARLY_V2__)return;
@@ -88,10 +89,7 @@ function paint(bar){bar?.querySelectorAll('[data-vccf-giving-tab]').forEach(b=>{
 function pending(bar,id,text,show){if(!bar)return;let p=document.getElementById(id);if(show&&!p){p=document.createElement('div');p.id=id;p.className='vccf-giving-tab-placeholder';p.textContent=text;bar.insertAdjacentElement('afterend',p)}else if(!show)p?.remove()}
 
 function ensureBibleModule(root,isArea=false){
-  if(activeTab!=='bible'||!root)return;
-  if(root.querySelector('.giving-loading'))return;
-  const loadingArea=[...root.querySelectorAll('.card')].some(x=>String(x.textContent||'').toLowerCase().includes('loading area giving'));
-  if(loadingArea)return;
+  if(!root)return;
   const area=isArea||role()==='area_leader';
   const guard=area?'__VCCF_AREA_LEADER_BIBLE_STUDY_GIVING__':'__VCCF_BIBLE_STUDY_GIVING__';
   const attr=area?'data-vccf-area-bible-giving':'data-vccf-bible-giving';
@@ -114,6 +112,7 @@ function standard(root){
     paint(bar);
     pending(bar,'vccfBibleGivingPending','Loading Bible Study Tithes & Offerings…',activeTab==='bible');
     setVisible(loading,activeTab!=='bible');
+    ensureBibleModule(root,false);
     return true;
   }
   let bar=document.getElementById('vccfGivingSectionTabs');
@@ -135,6 +134,7 @@ function area(root){
     if(!bar){bar=createBar('vccfAreaGivingSectionTabs');root.insertBefore(bar,loading)}paint(bar);
     pending(bar,'vccfAreaBibleGivingPending','Loading Bible Study Tithes & Offerings for your area…',activeTab==='bible');
     setVisible(loading,activeTab!=='bible');
+    ensureBibleModule(root,true);
     return true;
   }
   let bar=document.getElementById('vccfAreaGivingSectionTabs');
