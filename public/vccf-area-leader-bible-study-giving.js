@@ -92,12 +92,25 @@ function queue(delay=100){
   if(timer)return;
   timer=setTimeout(()=>{timer=0;mount()},delay);
 }
-function boot(){if(!isAreaLeader())return;styles();queue(0)}
-window.addEventListener('vccf-app-ready',()=>queue(0));
-window.addEventListener('vccf-profile-updated',()=>queue(0));
+let observer=null,observedRoot=null;
+function bindObserver(){
+  const root=document.getElementById('giving');
+  if(root===observedRoot)return;
+  observer?.disconnect();
+  observedRoot=root||null;
+  if(!root)return;
+  observer=new MutationObserver(records=>{
+    if(!isAreaLeader())return;
+    if(records.some(r=>r.addedNodes.length||r.removedNodes.length))queue(40);
+  });
+  observer.observe(root,{childList:true,subtree:true});
+}
+function boot(){if(!isAreaLeader())return;styles();bindObserver();queue(0)}
+window.addEventListener('vccf-app-ready',boot);
+window.addEventListener('vccf-profile-updated',boot);
 window.addEventListener('vccf-bible-study-giving-updated',()=>queue(0));
-window.addEventListener('pageshow',()=>queue(0));
-window.addEventListener('focus',()=>queue(0));
-new MutationObserver(records=>{if(!isAreaLeader())return;if(records.some(r=>r.addedNodes.length||r.removedNodes.length))queue(40)}).observe(document.documentElement,{childList:true,subtree:true});
+window.addEventListener('pageshow',boot);
+window.addEventListener('focus',boot);
+document.addEventListener('click',e=>{if(e.target.closest?.('#areaLeaderGivingNav,[data-route="giving"]'))setTimeout(boot,80)},true);
 setTimeout(boot,150);
 })();
