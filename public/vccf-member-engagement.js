@@ -11,6 +11,7 @@ const fmtDate=v=>v?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month
 let enabled=null,wallBusy=false,dashboardCount=null,dashboardCountAt=0,observer=null,timer=0;
 
 async function featureEnabled(force=false){
+  if(!S().session?.user?.id)return false;
   if(!force&&enabled!==null)return enabled;
   const db=DB();if(!db)return false;
   try{
@@ -139,7 +140,7 @@ function watch(){
 }
 function boot(){watch();schedule(500);}
 
-window.addEventListener('vccf-app-ready',boot);
+window.addEventListener('vccf-app-ready',()=>{enabled=null;dashboardCountAt=0;boot();});
 window.addEventListener('vccf-signed-out',()=>{enabled=null;dashboardCount=null;dashboardCountAt=0;});
 document.addEventListener('click',e=>{
   if(e.target.closest?.('[data-route="dashboard"],button[data-view="dashboard"]'))schedule(350);
