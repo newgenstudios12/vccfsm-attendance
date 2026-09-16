@@ -21,7 +21,7 @@ handleInviteUrl();
 })();
 
 function injectScript(src,key){
-  return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.async=true;if(key)s.dataset.vccfLazyModule=key;s.onload=()=>resolve(s);s.onerror=()=>{s.remove();reject(new Error('Unable to load '+(key||src))};document.head.appendChild(s)});
+  return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.async=true;if(key)s.dataset.vccfLazyModule=key;s.onload=()=>resolve(s);s.onerror=()=>{s.remove();reject(new Error('Unable to load '+(key||src)))};document.head.appendChild(s)});
 }
 
 /* The Church Management bundle used to execute 16 database queries on every login,
