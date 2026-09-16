@@ -6,7 +6,7 @@ window.__VCCF_MEMBER_ENGAGEMENT_PHASE1__=true;
 const V=()=>window.VCCF||null;
 const DB=()=>V()?.sb||null;
 const S=()=>V()?.getState?.()||{};
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtDate=v=>v?new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:'numeric'}).format(new Date(v)):'—';
 let enabled=null,wallBusy=false,dashboardCount=null,dashboardCountAt=0,observer=null,timer=0;
 
@@ -109,10 +109,12 @@ async function renderPrayerWall(force=false){
   const onPrayer=String(document.getElementById('title')?.textContent||'').trim()==='Prayer Requests'||document.querySelector('[data-route="prayer"].active');
   if(!content||!onPrayer)return;
   let section=document.getElementById('vccfPrayerWall');
+  if(section?.dataset.ready==='1'&&!force)return;
   if(!section){
     section=document.createElement('section');section.id='vccfPrayerWall';section.className='vccf-prayer-wall card';
     content.prepend(section);
   }
+  section.dataset.ready='1';
   section.innerHTML='<div class="vccf-prayer-wall-head"><div><span class="vccf-prayer-wall-kicker">PRAY TOGETHER</span><h2>Church Prayer Wall</h2><p>Shared requests appear here without exposing private or leaders-only requests. Use “I prayed” as encouragement rather than a like or popularity score.</p></div><div class="vccf-prayer-wall-actions"><button id="vccfSharePrayer" type="button" class="btn">Share a prayer request</button></div></div><div class="vccf-prayer-wall-grid"><div class="vccf-prayer-empty">Loading prayer requests…</div></div><div class="vccf-prayer-wall-note">When adding a request, choose <b>Church</b> to share it here. Anonymous shared requests display only as “Anonymous”; the Prayer Wall never receives the requester’s member or user ID.</div>';
   document.getElementById('vccfSharePrayer').onclick=()=>{document.getElementById('addPrayer')?.click();decoratePrayerModal();};
   const grid=section.querySelector('.vccf-prayer-wall-grid');
