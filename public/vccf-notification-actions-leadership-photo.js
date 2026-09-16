@@ -8,7 +8,7 @@ const sb=()=>V()?.sb;
 const state=()=>V()?.getState?.()||{};
 const initials=name=>String(name||'Member').trim().split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'M';
 const memberName=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_code||'Member';
-let decorateQueued=false,notificationDecorateQueued=false,metaLoading=false;
+let decorateQueued=false,notificationDecorateQueued=false,metaLoading=false,leadershipObserver=null,notificationObserver=null,observedChurch=null,observedNotifications=null;
 const notificationMeta=new Map();
 
 function installStyles(){
@@ -266,11 +266,17 @@ function decorateLeadership(){
 }
 
 function queueLeadership(){if(decorateQueued)return;decorateQueued=true;setTimeout(decorateLeadership,60);}
+function bindObservers(){
+  const church=document.getElementById('church');
+  if(church!==observedChurch){leadershipObserver?.disconnect();observedChurch=church||null;if(church){leadershipObserver=new MutationObserver(queueLeadership);leadershipObserver.observe(church,{childList:true,subtree:true})}}
+  const notifications=document.getElementById('notifications');
+  if(notifications!==observedNotifications){notificationObserver?.disconnect();observedNotifications=notifications||null;if(notifications){notificationObserver=new MutationObserver(queueNotificationActions);notificationObserver.observe(notifications,{childList:true,subtree:true})}}
+}
 function init(){
-  installStyles();document.addEventListener('click',handleNotificationClick,true);queueLeadership();queueNotificationActions();
-  window.addEventListener('vccf-app-ready',()=>{queueLeadership();queueNotificationActions();setTimeout(handlePageDeepLink,180);setTimeout(handlePageDeepLink,700);});
-  window.addEventListener('focus',()=>{queueLeadership();queueNotificationActions();});
-  new MutationObserver(()=>{queueLeadership();queueNotificationActions();}).observe(document.documentElement,{childList:true,subtree:true});
+  installStyles();document.addEventListener('click',handleNotificationClick,true);bindObservers();queueLeadership();queueNotificationActions();
+  document.addEventListener('click',event=>{if(event.target.closest?.('[data-route="leadership"],[data-route="notifications"],[data-view="notifications"]'))setTimeout(()=>{bindObservers();queueLeadership();queueNotificationActions()},80)},true);
+  window.addEventListener('vccf-app-ready',()=>{bindObservers();queueLeadership();queueNotificationActions();setTimeout(handlePageDeepLink,180);setTimeout(handlePageDeepLink,700);});
+  window.addEventListener('focus',()=>{if(document.getElementById('notifications')?.classList.contains('active'))queueNotificationActions();if(document.getElementById('church')?.classList.contains('active'))queueLeadership();});
   setTimeout(handlePageDeepLink,900);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
