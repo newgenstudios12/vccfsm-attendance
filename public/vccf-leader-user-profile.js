@@ -64,3 +64,21 @@ function loadEventsGallery(){
 document.addEventListener('click',e=>{if(e.target.closest?.('[data-route="events"]'))setTimeout(loadEventsGallery,0)},true);
 window.addEventListener('vccf-app-ready',()=>{if(eventsActive())setTimeout(loadEventsGallery,120)});
 })();
+
+(()=>{
+'use strict';
+if(window.__VCCF_MODULE_HEALTH_LOADER__)return;
+window.__VCCF_MODULE_HEALTH_LOADER__=true;
+let requested=false;
+function loadModuleHealth(){
+  if(requested||window.__VCCF_MODULE_HEALTH__||document.querySelector('script[data-vccf-module-health]'))return;
+  requested=true;
+  const script=document.createElement('script');
+  script.src='/vccf-module-health.js?v=20260916-1';
+  script.defer=true;
+  script.dataset.vccfModuleHealth='1';
+  script.onerror=()=>{requested=false;script.remove();console.error('Unable to load VCCF module health guard.')};
+  document.head.appendChild(script);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadModuleHealth,{once:true});else loadModuleHealth();
+})();
