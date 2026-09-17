@@ -82,16 +82,13 @@ function openInAttendance(row){
 async function deleteSummary(row,button){
  if(!row||!canDeleteSummary()||!sb())return;
  const location=(row.area_id?areaName(row.area_id):'Church-wide')+(row.barangay?' · '+row.barangay:'');
- if(!confirm(`Delete this Bible Study summary?\n\n${row.title||'Bible Study Summary'}\n${fmtDate(row.summary_date)} · ${location}\n\nThis removes the summary and its attached gallery pictures. The actual Bible Study attendance records will remain.`))return;
+ if(!confirm(`Delete this Bible Study summary?\n\n${row.title||'Bible Study Summary'}\n${fmtDate(row.summary_date)} · ${location}\n\nThis removes the summary, its attached gallery pictures, and any linked draft giving entries. Submitted or approved giving records are protected and will block deletion. The actual Bible Study attendance records will remain.`))return;
  const old=button?.textContent;
  if(button){button.disabled=true;button.textContent='Deleting…'}
  try{
-  const photoRows=await sb().from('cms_service_summary_photos').select('storage_path').eq('summary_id',row.id);
-  if(photoRows.error)throw photoRows.error;
-  const deleted=await sb().from('cms_service_summaries').delete().eq('id',row.id).eq('summary_type','Bible Study').select('id').maybeSingle();
+  const deleted=await sb().rpc('delete_bible_study_summary',{p_summary_id:row.id});
   if(deleted.error)throw deleted.error;
-  if(!deleted.data)throw new Error('This summary could not be deleted. Refresh and try again.');
-  const paths=(photoRows.data||[]).map(photo=>String(photo.storage_path||'').trim()).filter(Boolean);
+  const paths=(Array.isArray(deleted.data?.storage_paths)?deleted.data.storage_paths:[]).map(path=>String(path||'').trim()).filter(Boolean);
   if(paths.length){const cleaned=await sb().storage.from('vccf-gallery').remove(paths);if(cleaned.error)console.warn('Bible Study summary picture cleanup',cleaned.error)}
   rowsCache=rowsCache.filter(item=>String(item.id)!==String(row.id));
   closePreview();
