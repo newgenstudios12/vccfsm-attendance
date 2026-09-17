@@ -120,8 +120,8 @@ const ROUTE_ENHANCEMENTS={
     ['member-address-filter','/vccf-member-address-filter.js?v=20260913-2']
   ],
   attendance:[
-    ['service-summary-gallery','/vccf-service-summary-gallery.js?v=20260904-2'],
-    ['bible-study-summary-photos','/vccf-bible-study-summary-photos.js?v=20260905-1'],
+    ['service-summary-gallery','/vccf-service-summary-gallery.js?v=20260917-1'],
+    ['bible-study-summary-photos','/vccf-bible-study-summary-photos.js?v=20260917-1'],
     ['event-attendance-area-stats','/vccf-event-attendance-area-stats.js?v=20260904-1']
   ],
   events:[
