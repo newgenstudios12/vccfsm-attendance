@@ -111,7 +111,7 @@ function openPreview(row){
 
 document.addEventListener('click',e=>{const b=e.target.closest?.('[data-preview-service-summary]');if(!b)return;const row=rowsCache.find(x=>String(x.id)===String(b.dataset.previewServiceSummary));if(row){e.preventDefault();openPreview(row)}},true);
 function queue(){clearTimeout(scheduled);scheduled=setTimeout(reconcile,110)}
-new MutationObserver(mutations=>{if(mutations.some(m=>{const target=m.target?.nodeType===1?m.target:m.target?.parentElement;if(!target)return false;if(target.closest?.('[data-service-summary-gallery]'))return false;return target.id==='serviceSummaryHost'||Boolean(target.closest?.('#serviceSummaryHost'))}))queue()}).observe(document.documentElement,{childList:true,subtree:true});
+new MutationObserver(mutations=>{if(mutations.some(m=>{const target=m.target?.nodeType===1?m.target:m.target?.parentElement;if(target?.closest?.('[data-service-summary-gallery]'))return false;if(target&&(target.id==='serviceSummaryHost'||Boolean(target.closest?.('#serviceSummaryHost'))))return true;return [...(m.addedNodes||[])].some(node=>node?.nodeType===1&&(node.id==='serviceSummaryHost'||Boolean(node.querySelector?.('#serviceSummaryHost'))))}))queue()}).observe(document.documentElement,{childList:true,subtree:true});
 document.addEventListener('change',e=>{if(['serviceAttendanceType','serviceStudyArea','serviceStudyBarangay','serviceAttendanceDate'].includes(e.target?.id))queue()});
 window.addEventListener('vccf-app-ready',queue);window.addEventListener('focus',queue);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',queue,{once:true});else queue();
