@@ -126,7 +126,7 @@ const ROUTE_ENHANCEMENTS={
   ],
   events:[
     ['event-attendance-gallery','/vccf-event-attendance-gallery.js?v=20260916-5'],
-    ['events-gallery','/vccf-events-gallery.js?v=20260916-5']
+    ['events-gallery','/vccf-events-gallery.js?v=20260918-3']
   ],
   giving:[
     ['bible-study-giving','/vccf-bible-study-giving.js?v=20260916-5'],
