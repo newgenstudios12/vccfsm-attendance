@@ -69,7 +69,7 @@ function makeLazyApi({guard,globalName,src,methods,blockers=[]}){
   methods.forEach(name=>{stub[name]=(...args)=>{if(name==='unmount'&&window[globalName]===stub&&!loading)return Promise.resolve();return load().then(real=>real?.[name]?.(...args))}});
   window[globalName]=stub;
 }
-makeLazyApi({guard:'__VCCF_SERVICE_ATTENDANCE__',globalName:'VCCFServiceAttendance',src:'/service-attendance.js?v=20260916-perf5',methods:['mount','unmount','refresh'],blockers:['data-vccf-service-attendance-v2','data-vccf-bible-study-dropdown','data-vccf-bible-study-base','data-vccf-extra-attendance-checklists']});
+makeLazyApi({guard:'__VCCF_SERVICE_ATTENDANCE__',globalName:'VCCFServiceAttendance',src:'/service-attendance.js?v=20260918-2',methods:['mount','unmount','refresh'],blockers:['data-vccf-service-attendance-v2','data-vccf-bible-study-dropdown','data-vccf-bible-study-base','data-vccf-extra-attendance-checklists']});
 makeLazyApi({guard:'__VCCF_EVENT_ATTENDANCE__',globalName:'VCCFEventAttendance',src:'/event-attendance.js?v=20260916-perf5',methods:['mount','unmount']});
 })();
 
@@ -105,7 +105,7 @@ loadVccfEnhancement('login-password-toggle','/vccf-login-password-toggle.js?v=20
 /* Only small cross-app helpers start with an authenticated session. */
 const CORE_ENHANCEMENTS=[
   ['pwa','/vccf-pwa.js?v=20260904-6'],
-  ['notification-ux','/vccf-notification-ux.js?v=20260904-7'],
+  ['notification-ux','/vccf-notification-ux.js?v=20260918-2'],
   ['visual-hierarchy','/vccf-visual-hierarchy.js?v=20260904-2'],
   ['attendance-nav-reconcile','/vccf-attendance-nav-reconcile.js?v=20260904-1'],
   ['member-number-normalize','/vccf-member-number-normalize.js?v=20260913-1']
