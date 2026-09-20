@@ -355,6 +355,13 @@ function facebookVideoUrl(value){
   }catch(e){}
   return '';
 }
+function facebookShareUrl(value){
+  const raw=facebookVideoUrl(value);if(!raw)return '';
+  try{
+    const u=new URL(raw),path=u.pathname.toLowerCase();
+    return path.startsWith('/share/v/')||path.startsWith('/share/r/')||path.startsWith('/share/')||u.hostname.replace(/^www\./,'').toLowerCase()==='fb.watch'?raw:'';
+  }catch(e){return ''}
+}
 function serviceMediaProvider(value){
   if(youtubeVideoId(value))return 'youtube';
   if(facebookVideoUrl(value))return 'facebook';
@@ -363,7 +370,8 @@ function serviceMediaProvider(value){
 function serviceEmbedUrl(value){
   const yt=youtubeEmbedUrl(value);if(yt)return yt;
   const fb=facebookVideoUrl(value);
-  return fb?'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(fb)+'&show_text=false&width=1280':'';
+  if(!fb||facebookShareUrl(fb))return '';
+  return 'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(fb)+'&show_text=false&width=1280';
 }
 function serviceMediaProviderLabel(value){
   return serviceMediaProvider(value)==='facebook'?'Facebook':'YouTube';
@@ -376,9 +384,12 @@ function serviceMediaStatusLabel(item){
 }
 function renderServicePlayer(item){
   const player=document.getElementById('serviceFeaturedPlayer');if(!player||!item)return;
-  const provider=serviceMediaProvider(item.youtube_url),embed=serviceEmbedUrl(item.youtube_url),status=serviceMediaStatus(item);
+  const provider=serviceMediaProvider(item.youtube_url),shareLink=facebookShareUrl(item.youtube_url),embed=serviceEmbedUrl(item.youtube_url),status=serviceMediaStatus(item);
   const external=provider==='facebook'?'<div class="service-media-actions" style="margin-top:12px"><a class="cms-small" style="text-decoration:none;display:inline-flex;align-items:center" href="'+attr(item.youtube_url)+'" target="_blank" rel="noopener noreferrer">Open on Facebook ↗</a></div>':'';
-  player.innerHTML='<div class="service-video-frame">'+(embed?'<iframe src="'+attr(embed)+'" title="'+attr(item.title||'Church Service')+'" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>':'<div class="service-video-invalid">Invalid YouTube or Facebook link</div>')+'</div>'+
+  const unavailable=shareLink
+    ? '<div class="service-video-invalid"><b>Facebook share link detected</b><span style="display:block;margin-top:8px;line-height:1.45">The video still exists, but Facebook does not allow this share URL to play inside embedded players. Open it on Facebook, then edit this service and paste the video\'s direct permalink for in-app playback.</span></div>'
+    : '<div class="service-video-invalid">This video link cannot be embedded.</div>';
+  player.innerHTML='<div class="service-video-frame">'+(embed?'<iframe src="'+attr(embed)+'" title="'+attr(item.title||'Church Service')+'" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>':unavailable)+'</div>'+
     '<div class="service-video-feature-copy"><div class="service-video-meta"><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span><span>'+esc(serviceMediaProviderLabel(item.youtube_url))+' · '+esc(fmtDate(item.service_date))+'</span></div><h3>'+esc(item.title||'Church Service')+'</h3><p>'+esc(item.description||'Watch this church service inside VCCF Connect.')+'</p>'+external+'</div>';
   document.querySelectorAll('[data-service-watch]').forEach(b=>b.classList.toggle('active',b.dataset.serviceWatch===item.id));
 }
@@ -387,12 +398,13 @@ function serviceMediaForm(item=null){
   const status=serviceMediaStatus(item||{broadcast_status:'replay'});
   modal(item?'Edit Church Service Video':'Add Church Service Video / Live',
     '<label>Title<input name="title" required value="'+attr(item?.title||'')+'" placeholder="Sunday Worship Service"></label>'+
-    '<label>YouTube or Facebook video / live URL<input name="youtube_url" type="url" required value="'+attr(item?.youtube_url||'')+'" placeholder="https://www.youtube.com/... or https://www.facebook.com/..."><span class="cms-sub">Supports YouTube videos/live links and public Facebook video/live links, including fb.watch links.</span></label>'+
+    '<label>YouTube or Facebook video / live URL<input name="youtube_url" type="url" required value="'+attr(item?.youtube_url||'')+'" placeholder="https://www.youtube.com/... or https://www.facebook.com/..."><span class="cms-sub">Supports YouTube videos/live links and public Facebook video/live links. For Facebook playback inside the app, use the direct video permalink (for example /videos/... or /watch/?v=...), not a /share/v/ or fb.watch share link.</span></label>'+
     '<div class="cms-form-grid"><label>Service date<input name="service_date" type="date" required value="'+attr(item?.service_date||phDay(new Date()))+'"></label><label>Broadcast status<select name="broadcast_status"><option value="upcoming" '+(status==='upcoming'?'selected':'')+'>Upcoming</option><option value="live" '+(status==='live'?'selected':'')+'>Live now</option><option value="replay" '+(status==='replay'?'selected':'')+'>Replay / ended</option></select></label></div>'+
     '<label>Description<textarea name="description" rows="4" placeholder="Service title, preacher, theme, or short description">'+esc(item?.description||'')+'</textarea></label>',
     async f=>{
       const url=String(f.get('youtube_url')||'').trim(),provider=serviceMediaProvider(url),broadcastStatus=f.get('broadcast_status');
       if(!provider)throw new Error('Enter a valid YouTube or Facebook video/live URL.');
+      if(provider==='facebook'&&facebookShareUrl(url))toast('Facebook share links can be saved, but use the direct video permalink for playback inside VCCF Connect.');
       return saveRow('cms_services',{
         title:String(f.get('title')||'').trim(),
         youtube_url:url,
