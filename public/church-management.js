@@ -345,6 +345,29 @@ function youtubeEmbedUrl(value){
 function youtubeThumb(value){
   const id=youtubeVideoId(value);return id?'https://i.ytimg.com/vi/'+id+'/hqdefault.jpg':'';
 }
+function facebookVideoUrl(value){
+  const raw=String(value||'').trim();if(!raw)return '';
+  try{
+    const u=new URL(raw);
+    if(!['http:','https:'].includes(u.protocol))return '';
+    const host=u.hostname.replace(/^(www\.|m\.)/,'').toLowerCase();
+    if(host==='fb.watch'||host==='facebook.com'||host.endsWith('.facebook.com'))return u.href;
+  }catch(e){}
+  return '';
+}
+function serviceMediaProvider(value){
+  if(youtubeVideoId(value))return 'youtube';
+  if(facebookVideoUrl(value))return 'facebook';
+  return '';
+}
+function serviceEmbedUrl(value){
+  const yt=youtubeEmbedUrl(value);if(yt)return yt;
+  const fb=facebookVideoUrl(value);
+  return fb?'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(fb)+'&show_text=false&width=1280':'';
+}
+function serviceMediaProviderLabel(value){
+  return serviceMediaProvider(value)==='facebook'?'Facebook':'YouTube';
+}
 function serviceMediaStatus(item){
   return item.broadcast_status|| (item.is_live?'live':(item.service_date&&item.service_date>phDay(new Date())?'upcoming':'replay'));
 }
@@ -353,22 +376,23 @@ function serviceMediaStatusLabel(item){
 }
 function renderServicePlayer(item){
   const player=document.getElementById('serviceFeaturedPlayer');if(!player||!item)return;
-  const embed=youtubeEmbedUrl(item.youtube_url),status=serviceMediaStatus(item);
-  player.innerHTML='<div class="service-video-frame">'+(embed?'<iframe src="'+attr(embed)+'" title="'+attr(item.title||'Church Service')+'" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>':'<div class="service-video-invalid">Invalid YouTube link</div>')+'</div>'+
-    '<div class="service-video-feature-copy"><div class="service-video-meta"><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span><span>'+esc(fmtDate(item.service_date))+'</span></div><h3>'+esc(item.title||'Church Service')+'</h3><p>'+esc(item.description||'Watch this church service inside VCCF Connect.')+'</p></div>';
+  const provider=serviceMediaProvider(item.youtube_url),embed=serviceEmbedUrl(item.youtube_url),status=serviceMediaStatus(item);
+  const external=provider==='facebook'?'<div class="service-media-actions" style="margin-top:12px"><a class="cms-small" style="text-decoration:none;display:inline-flex;align-items:center" href="'+attr(item.youtube_url)+'" target="_blank" rel="noopener noreferrer">Open on Facebook ↗</a></div>':'';
+  player.innerHTML='<div class="service-video-frame">'+(embed?'<iframe src="'+attr(embed)+'" title="'+attr(item.title||'Church Service')+'" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>':'<div class="service-video-invalid">Invalid YouTube or Facebook link</div>')+'</div>'+
+    '<div class="service-video-feature-copy"><div class="service-video-meta"><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span><span>'+esc(serviceMediaProviderLabel(item.youtube_url))+' · '+esc(fmtDate(item.service_date))+'</span></div><h3>'+esc(item.title||'Church Service')+'</h3><p>'+esc(item.description||'Watch this church service inside VCCF Connect.')+'</p>'+external+'</div>';
   document.querySelectorAll('[data-service-watch]').forEach(b=>b.classList.toggle('active',b.dataset.serviceWatch===item.id));
 }
 function serviceMediaForm(item=null){
   if(!canManageChurch())return;
   const status=serviceMediaStatus(item||{broadcast_status:'replay'});
-  modal(item?'Edit Church Service Video':'Add YouTube / Live Church Service',
+  modal(item?'Edit Church Service Video':'Add Church Service Video / Live',
     '<label>Title<input name="title" required value="'+attr(item?.title||'')+'" placeholder="Sunday Worship Service"></label>'+
-    '<label>YouTube video / live URL<input name="youtube_url" type="url" required value="'+attr(item?.youtube_url||'')+'" placeholder="https://www.youtube.com/watch?v=... or /live/..."><span class="cms-sub">Supports regular YouTube videos, YouTube Live, youtu.be, Shorts, and embed links.</span></label>'+
+    '<label>YouTube or Facebook video / live URL<input name="youtube_url" type="url" required value="'+attr(item?.youtube_url||'')+'" placeholder="https://www.youtube.com/... or https://www.facebook.com/..."><span class="cms-sub">Supports YouTube videos/live links and public Facebook video/live links, including fb.watch links.</span></label>'+
     '<div class="cms-form-grid"><label>Service date<input name="service_date" type="date" required value="'+attr(item?.service_date||phDay(new Date()))+'"></label><label>Broadcast status<select name="broadcast_status"><option value="upcoming" '+(status==='upcoming'?'selected':'')+'>Upcoming</option><option value="live" '+(status==='live'?'selected':'')+'>Live now</option><option value="replay" '+(status==='replay'?'selected':'')+'>Replay / ended</option></select></label></div>'+
     '<label>Description<textarea name="description" rows="4" placeholder="Service title, preacher, theme, or short description">'+esc(item?.description||'')+'</textarea></label>',
     async f=>{
-      const url=String(f.get('youtube_url')||'').trim(),videoId=youtubeVideoId(url),broadcastStatus=f.get('broadcast_status');
-      if(!videoId)throw new Error('Enter a valid YouTube or YouTube Live URL.');
+      const url=String(f.get('youtube_url')||'').trim(),provider=serviceMediaProvider(url),broadcastStatus=f.get('broadcast_status');
+      if(!provider)throw new Error('Enter a valid YouTube or Facebook video/live URL.');
       return saveRow('cms_services',{
         title:String(f.get('title')||'').trim(),
         youtube_url:url,
@@ -392,9 +416,9 @@ function renderServices(){
   });
   const featured=media[0]||null;
   const mediaCards=media.map(item=>{
-    const thumb=youtubeThumb(item.youtube_url),status=serviceMediaStatus(item);
+    const thumb=youtubeThumb(item.youtube_url),status=serviceMediaStatus(item),provider=serviceMediaProvider(item.youtube_url);
     return '<article class="service-media-card card"><button class="service-media-thumb" type="button" data-service-watch="'+item.id+'" aria-label="Watch '+attr(item.title||'church service')+'">'+
-      (thumb?'<img src="'+attr(thumb)+'" alt="" loading="lazy">':'<span>No preview</span>')+
+      (thumb?'<img src="'+attr(thumb)+'" alt="" loading="lazy">':'<span>'+(provider==='facebook'?'Facebook video':'No preview')+'</span>')+
       '<i class="service-play-button">▶</i><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span></button>'+
       '<div class="service-media-copy"><span class="service-media-date">'+esc(fmtDate(item.service_date))+'</span><h3>'+esc(item.title||'Church Service')+'</h3><p>'+esc(item.description||'Watch this service inside the app.')+'</p>'+
       '<div class="service-media-actions"><button type="button" class="cms-small" data-service-watch="'+item.id+'">Watch</button>'+(can?'<button type="button" class="cms-small" data-service-media-edit="'+item.id+'">Edit</button><button type="button" class="cms-small danger-text" data-service-media-delete="'+item.id+'">Delete</button>':'')+'</div></div></article>';
@@ -403,8 +427,8 @@ function renderServices(){
   const typeRows=data.serviceTypes.map(t=>'<tr><td><b>'+esc(t.name)+'</b><div class="cms-sub">'+esc(t.description||'')+'</div></td><td>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.day_of_week]+'</td><td>'+esc(t.start_time?.slice(0,5)||'—')+'</td><td>'+esc(t.location||'—')+'</td><td>'+badge(t.is_active?'Active':'Inactive',t.is_active?'ok':'muted')+'</td><td>'+(can?'<button class="cms-small" data-service-type="'+t.id+'">Edit</button>':'')+'</td></tr>').join('');
   const sessions=data.serviceSessions.slice(0,100).map(s=>{const att=new Set(data.attendance.filter(a=>phDay(a.checked_in_at)===s.service_date).map(a=>a.member_id)).size;return '<tr><td><b>'+esc(s.title||data.serviceTypes.find(t=>t.id===s.service_type_id)?.name||'Church Service')+'</b><div class="cms-sub">'+esc(s.theme||s.scripture||'')+'</div></td><td>'+esc(s.service_date)+'</td><td>'+esc(s.preacher_member_id?memberName(s.preacher_member_id):(s.guest_preacher||'—'))+'</td><td>'+att+'</td><td>'+badge(s.status,s.status==='Completed'?'ok':'')+'</td><td>'+(can?'<button class="cms-small" data-service-session="'+s.id+'">Edit</button>':'')+'</td></tr>';}).join('');
 
-  content().innerHTML='<section class="service-media-hero card"><div><span class="cms-kicker">WATCH & WORSHIP</span><h2>Church Services</h2><p>Watch live services, upcoming streams, and previous worship services without leaving VCCF Connect.</p></div>'+(can?'<button id="addServiceMedia" class="btn">+ Add YouTube / Live Service</button>':'')+'</section>'+
-    (featured?'<section id="serviceFeaturedPlayer" class="service-featured-player card"></section>':'<section class="service-featured-empty card"><h3>No service video yet</h3><p>'+(can?'Add a YouTube video or YouTube Live link to feature it here.':'Church service videos will appear here when published by an Admin or Pastor.')+'</p></section>')+
+  content().innerHTML='<section class="service-media-hero card"><div><span class="cms-kicker">WATCH & WORSHIP</span><h2>Church Services</h2><p>Watch live services, upcoming streams, and previous worship services without leaving VCCF Connect.</p></div>'+(can?'<button id="addServiceMedia" class="btn">+ Add Video / Live Service</button>':'')+'</section>'+
+    (featured?'<section id="serviceFeaturedPlayer" class="service-featured-player card"></section>':'<section class="service-featured-empty card"><h3>No service video yet</h3><p>'+(can?'Add a YouTube or Facebook video/live link to feature it here.':'Church service videos will appear here when published by an Admin or Pastor.')+'</p></section>')+
     (media.length?'<section class="service-media-library"><div class="service-media-library-head"><div><span class="cms-kicker">SERVICE LIBRARY</span><h3>Watch Church Services</h3></div><span>'+media.length+' service'+(media.length===1?'':'s')+'</span></div><div class="service-media-grid">'+mediaCards+'</div></section>':'')+
     '<div class="cms-grid one service-admin-schedules"><section class="cms-panel card"><div class="cms-panel-head"><div><h3>Service Schedules</h3><p>Recurring church service templates.</p></div>'+(can?'<button id="addServiceType" class="btn secondary">Add Schedule</button>':'')+'</div>'+
     '<div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Day</th><th>Time</th><th>Location</th><th>Status</th><th></th></tr></thead><tbody>'+typeRows+'</tbody></table></div></section>'+
