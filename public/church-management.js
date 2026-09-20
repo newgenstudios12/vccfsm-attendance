@@ -7,6 +7,7 @@ const ROOT_ID = 'church';
 let activeTab = 'overview';
 let loading = false;
 let loaded = false;
+let loadWaiters = [];
 let eventScanner = null;
 let data = {
   areas:[], ministries:[], ministryMembers:[],
@@ -92,7 +93,7 @@ async function read(query, fallback=[]) {
 }
 
 async function loadAll(force=false) {
-  if (loading) return;
+  if (loading) return new Promise(resolve => loadWaiters.push(resolve));
   if (loaded && !force) return;
   const client=sb(); if(!client) return;
   setBusy(true);
@@ -133,6 +134,8 @@ async function loadAll(force=false) {
     loaded=true;
   } finally {
     setBusy(false);
+    const waiters=loadWaiters.splice(0);
+    waiters.forEach(resolve=>resolve());
   }
 }
 

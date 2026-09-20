@@ -74,7 +74,7 @@ function loadModuleHealth(){
   if(requested||window.__VCCF_MODULE_HEALTH__||document.querySelector('script[data-vccf-module-health]'))return;
   requested=true;
   const script=document.createElement('script');
-  script.src='/vccf-module-health.js?v=20260916-1';
+  script.src='/vccf-module-health.js?v=20260920-1';
   script.defer=true;
   script.dataset.vccfModuleHealth='1';
   script.onerror=()=>{requested=false;script.remove();console.error('Unable to load VCCF module health guard.')};
