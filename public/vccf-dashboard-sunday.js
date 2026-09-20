@@ -135,6 +135,56 @@ function publicPhotoUrl(row){
   if(row.storage_path)return sb()?.storage?.from('vccf-gallery')?.getPublicUrl(row.storage_path)?.data?.publicUrl||'';
   return '';
 }
+function dashboardYoutubeId(value){
+  const raw=String(value||'').trim();if(!raw)return '';
+  if(/^[A-Za-z0-9_-]{11}$/.test(raw))return raw;
+  try{
+    const u=new URL(raw),host=u.hostname.replace(/^www\./,'').toLowerCase();let id='';
+    if(host==='youtu.be')id=u.pathname.split('/').filter(Boolean)[0]||'';
+    else if(host.endsWith('youtube.com')){
+      if(u.pathname==='/watch')id=u.searchParams.get('v')||'';
+      else{const parts=u.pathname.split('/').filter(Boolean);if(['embed','live','shorts'].includes(parts[0]))id=parts[1]||''}
+    }
+    return /^[A-Za-z0-9_-]{11}$/.test(id)?id:'';
+  }catch(_){return ''}
+}
+function dashboardFacebookUrl(value){
+  const raw=String(value||'').trim();if(!raw)return '';
+  try{
+    const u=new URL(raw);if(!['http:','https:'].includes(u.protocol))return '';
+    const host=u.hostname.replace(/^(www\.|m\.)/,'').toLowerCase();
+    return host==='fb.watch'||host==='facebook.com'||host.endsWith('.facebook.com')?u.href:'';
+  }catch(_){return ''}
+}
+function dashboardFacebookShare(value){
+  const raw=dashboardFacebookUrl(value);if(!raw)return '';
+  try{
+    const u=new URL(raw),path=u.pathname.toLowerCase(),host=u.hostname.replace(/^www\./,'').toLowerCase();
+    return host==='fb.watch'||path.startsWith('/share/')?raw:'';
+  }catch(_){return ''}
+}
+function dashboardServiceProvider(value){
+  if(dashboardYoutubeId(value))return 'YouTube';
+  if(dashboardFacebookUrl(value))return 'Facebook';
+  return 'Video';
+}
+function dashboardServiceEmbed(value){
+  const yt=dashboardYoutubeId(value);if(yt)return 'https://www.youtube-nocookie.com/embed/'+yt+'?rel=0&modestbranding=1';
+  const fb=dashboardFacebookUrl(value);if(!fb||dashboardFacebookShare(fb))return '';
+  return 'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(fb)+'&show_text=false&width=1280';
+}
+function latestServiceCard(service){
+  if(!service)return '';
+  const url=String(service.youtube_url||'').trim(),provider=dashboardServiceProvider(url),embed=dashboardServiceEmbed(url),share=Boolean(dashboardFacebookShare(url));
+  const status=String(service.broadcast_status||'replay').toLowerCase(),statusLabel=status==='live'?'LIVE NOW':status==='upcoming'?'UPCOMING':'RECENT SERVICE';
+  const media=embed
+    ?'<div class="dashboard-service-media"><iframe src="'+esc(embed)+'" title="'+esc(service.title||'Recent Worship Service')+'" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>'
+    :'<a class="dashboard-service-media dashboard-service-link" href="'+esc(url||'#')+'" '+(url?'target="_blank" rel="noopener noreferrer"':'')+'><span class="dashboard-service-play">▶</span><strong>'+(share?'Watch on Facebook':'Open Church Services')+'</strong><small>'+(share?'Facebook share links open in Facebook.':'Open the latest worship service.')+'</small></a>';
+  return '<section class="dashboard-latest-service card">'+
+    '<div class="dashboard-service-head"><div><span class="dashboard-kicker">RECENT WORSHIP SERVICE</span><h2>'+esc(service.title||'Sunday Worship Service')+'</h2><p>'+esc(provider)+' · '+esc(dateLabel(service.service_date||phDay(new Date())))+'</p></div><span class="dashboard-service-status '+esc(status)+'">'+esc(statusLabel)+'</span></div>'+
+    '<div class="dashboard-service-grid">'+media+'<div class="dashboard-service-copy"><h3>Watch the latest service</h3><p>'+esc(service.description||'Catch up on the most recent VCCF Santa Maria worship service.')+'</p><div class="dashboard-service-actions"><button class="btn" type="button" data-dashboard-service-route>Church Services</button>'+(provider==='Facebook'&&url?'<a class="btn secondary" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Open Facebook ↗</a>':'')+'</div></div></div>'+
+  '</section>';
+}
 function summarySnapshot(rows,type,date,title){
   return (rows||[]).find(x=>String(x.summary_type||'').toLowerCase()===type&&x.summary_date===date&&(!title||String(x.title||'').toLowerCase()===String(title).toLowerCase()))
     ||(rows||[]).find(x=>String(x.summary_type||'').toLowerCase()===type&&x.summary_date===date)
@@ -191,13 +241,14 @@ async function loadDashboardData(){
   const requests=[
     client.from('attendance').select('member_id,area_id,checked_in_at,source,attendance_type').gte('checked_in_at',fromIso).order('checked_in_at',{ascending:false}),
     client.from('church_events').select('id,title,event_type,start_at,location,status,area_id').lt('start_at',nowIso).order('start_at',{ascending:false}).limit(12),
-    client.from('photos').select('id,title,storage_path,taken_on,featured,created_at').order('created_at',{ascending:false}).limit(30)
+    client.from('photos').select('id,title,storage_path,taken_on,featured,created_at').order('created_at',{ascending:false}).limit(30),
+    client.from('cms_services').select('id,title,youtube_url,service_date,broadcast_status,is_live,description,updated_at').order('service_date',{ascending:false}).order('updated_at',{ascending:false}).limit(1)
   ];
   if(financeAllowed())requests.push(client.from('giving_records').select('given_on,giving_type,amount').gte('given_on',dayToIso(rangeStart)).order('given_on',{ascending:false}));
   else requests.push(Promise.resolve({data:[],error:null}));
   requests.push(client.from('cms_sunday_event_summaries').select('*').eq('workflow_status','posted').order('summary_date',{ascending:false}).limit(30));
   requests.push(client.from('site_settings').select('key,value').in('key',['dashboard_banner_url','dashboard_banner_storage_path']));
-  const [attRes,eventRes,photoRes,giveRes,sumRes,settingsRes]=await Promise.all(requests);
+  const [attRes,eventRes,photoRes,serviceRes,giveRes,sumRes,settingsRes]=await Promise.all(requests);
   const fatal=attRes.error||eventRes.error||photoRes.error;if(fatal)throw fatal;
   const events=eventRes.data||[],latestEvent=events[0]||null;
   let regs=[],summaryPhotos=[],eventPhotos=[];
@@ -245,7 +296,8 @@ async function loadDashboardData(){
     location:latestEvent?.location||'',eventType:latestEvent?.event_type||'Event'
   };
   const settingMap={};(settingsRes?.data||[]).forEach(row=>settingMap[row.key]=row.value||'');
-  return {attendance,giving,galleryPhotos:photoRes.data||[],summaries,summaryPhotos,eventPhotos,announcements,photoById,sunday,event,areaStats,monthAvg,activeCount:base,bannerUrl:settingMap.dashboard_banner_url||'',bannerPath:settingMap.dashboard_banner_storage_path||''};
+  const latestService=serviceRes?.error?null:((serviceRes?.data||[])[0]||null);
+  return {attendance,giving,galleryPhotos:photoRes.data||[],summaries,summaryPhotos,eventPhotos,announcements,photoById,sunday,event,latestService,areaStats,monthAvg,activeCount:base,bannerUrl:settingMap.dashboard_banner_url||'',bannerPath:settingMap.dashboard_banner_storage_path||''};
 }
 
 function renderCarousel(data,kind){
@@ -318,10 +370,15 @@ function renderDashboard(){
   const el=document.getElementById('dashboard');if(!el||!dashboardData)return;
   const s=state(),p=s.profile||{},email=s.session?.user?.email||'',name=p.display_name||memberName((s.members||[]).find(m=>m.id===p.member_id))||email||'Kapatid';
   const topRate=Math.round(Number(dashboardData.sunday.rate)||0),birthdays=upcomingBirthdays(activeMembers());
-  el.innerHTML='<section class="welcome-banner card"><div><span class="welcome-kicker">VCCF SANTA MARIA</span><h2>Welcome, Kapatid!</h2><p>'+esc(name)+' · '+esc(scopeCopy())+'</p>'+churchSocialLinks()+'</div><div class="welcome-date">'+esc(new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(new Date()))+'</div>'+(canEditBanner()?'<button id="editDashboardBanner" class="welcome-banner-edit" type="button">✎ Edit banner</button>':'')+'</section>'+birthdayCard(birthdays)+(dashboardData.announcements?.length?'<section class="dashboard-announcements card"><div class="dashboard-announcement-head"><div><span class="dashboard-kicker">ANNOUNCEMENTS</span><h2>Church Updates</h2></div><span>'+dashboardData.announcements.length+' active</span></div><div id="dashboardAnnouncementCarousel"></div></section>':'')+'<div class="dashboard-section-head"><div><span class="dashboard-kicker">SUNDAY ANALYTICS</span><h2>Sunday Analytics & Stats</h2><p>Performance is based on completed Sundays only. Event attendance stays separate.</p></div><span class="scope-chip">'+esc(role().replace(/_/g,' '))+'</span></div><div class="sunday-stat-grid">'+summaryMetric('Previous Sunday',String(dashboardData.sunday.attendance),dateLabel(dashboardData.sunday.date))+summaryMetric('Attendance rate',topRate+'%','Previous Sunday')+summaryMetric('Monthly average',String(dashboardData.monthAvg),'Completed Sundays this month')+summaryMetric(role()==='member'?'Accessible members':'Active members',String(dashboardData.activeCount),'Current analytics scope')+'</div>'+areaAttendanceSection(dashboardData.areaStats,dashboardData.sunday.date)+'<section class="summary-layout"><div class="summary-analytics card"><div class="summary-tabs"><button class="active" type="button" data-summary-kind="sunday">Previous Sunday</button><button type="button" data-summary-kind="event" '+(dashboardData.event.exists?'':'disabled')+'>Latest Event</button></div><div id="summaryAnalyticsBody"></div></div><div class="summary-carousel-card card"><div class="carousel-heading"><div><span class="dashboard-kicker">FEATURED PHOTOS</span><h3>Summary Highlights</h3></div><span>Carousel</span></div><div id="summaryCarousel" class="summary-carousel"></div></div></section>';
+  el.innerHTML=latestServiceCard(dashboardData.latestService)+'<section class="welcome-banner card"><div><span class="welcome-kicker">VCCF SANTA MARIA</span><h2>Welcome, Kapatid!</h2><p>'+esc(name)+' · '+esc(scopeCopy())+'</p>'+churchSocialLinks()+'</div><div class="welcome-date">'+esc(new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'}).format(new Date()))+'</div>'+(canEditBanner()?'<button id="editDashboardBanner" class="welcome-banner-edit" type="button">✎ Edit banner</button>':'')+'</section>'+birthdayCard(birthdays)+(dashboardData.announcements?.length?'<section class="dashboard-announcements card"><div class="dashboard-announcement-head"><div><span class="dashboard-kicker">ANNOUNCEMENTS</span><h2>Church Updates</h2></div><span>'+dashboardData.announcements.length+' active</span></div><div id="dashboardAnnouncementCarousel"></div></section>':'')+'<div class="dashboard-section-head"><div><span class="dashboard-kicker">SUNDAY ANALYTICS</span><h2>Sunday Analytics & Stats</h2><p>Performance is based on completed Sundays only. Event attendance stays separate.</p></div><span class="scope-chip">'+esc(role().replace(/_/g,' '))+'</span></div><div class="sunday-stat-grid">'+summaryMetric('Previous Sunday',String(dashboardData.sunday.attendance),dateLabel(dashboardData.sunday.date))+summaryMetric('Attendance rate',topRate+'%','Previous Sunday')+summaryMetric('Monthly average',String(dashboardData.monthAvg),'Completed Sundays this month')+summaryMetric(role()==='member'?'Accessible members':'Active members',String(dashboardData.activeCount),'Current analytics scope')+'</div>'+areaAttendanceSection(dashboardData.areaStats,dashboardData.sunday.date)+'<section class="summary-layout"><div class="summary-analytics card"><div class="summary-tabs"><button class="active" type="button" data-summary-kind="sunday">Previous Sunday</button><button type="button" data-summary-kind="event" '+(dashboardData.event.exists?'':'disabled')+'>Latest Event</button></div><div id="summaryAnalyticsBody"></div></div><div class="summary-carousel-card card"><div class="carousel-heading"><div><span class="dashboard-kicker">FEATURED PHOTOS</span><h3>Summary Highlights</h3></div><span>Carousel</span></div><div id="summaryCarousel" class="summary-carousel"></div></div></section>';
   const banner=el.querySelector('.welcome-banner'),bannerUrl=dashboardData.bannerUrl||DEFAULT_BANNER;
   if(banner)banner.style.setProperty('--welcome-banner-image',bannerCssUrl(bannerUrl));
   document.getElementById('editDashboardBanner')?.addEventListener('click',openBannerEditor);
+  el.querySelector('[data-dashboard-service-route]')?.addEventListener('click',()=>{
+    const nav=document.querySelector('[data-route="services"]');
+    if(nav)nav.click();
+    else{document.querySelector('[data-view="church"]')?.click();window.VCCFChurchManagement?.navigate?.('services')}
+  });
   renderAnnouncementCarousel(dashboardData);
   el.querySelectorAll('[data-summary-kind]').forEach(b=>b.onclick=()=>renderSummary(b.dataset.summaryKind));
   renderSummary(selectedSummary==='event'&&dashboardData.event.exists?'event':'sunday');
