@@ -7,7 +7,7 @@ if(!document.getElementById('vccfMemberEngagementExtendedCss')){
   const link=document.createElement('link');
   link.id='vccfMemberEngagementExtendedCss';
   link.rel='stylesheet';
-  link.href='/vccf-member-engagement-extended.css?v=20260916-2';
+  link.href='/vccf-member-engagement-extended.css?v=20260921-1';
   document.head.appendChild(link);
 }
 
