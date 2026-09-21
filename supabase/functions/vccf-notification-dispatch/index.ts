@@ -19,6 +19,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const manilaDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 const manilaTime = (d = new Date()) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
 const manilaWeekday = (d = new Date()) => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', weekday: 'long' }).format(d);
+const manilaMonth = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit' }).format(d);
+const manilaDayNumber = (d = new Date()) => Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', day: 'numeric' }).format(d));
 const cleanTime = (v: string | null) => String(v || '').slice(0, 5);
 
 type Caller = { kind: 'cron' } | { kind: 'user'; user: any; profile: any };
@@ -310,6 +312,13 @@ function isDue(a: any, now = new Date()) {
     if (manilaWeekday(now) !== scheduledWeekday) return false;
     const last = a.last_push_at ? manilaDay(new Date(a.last_push_at)) : null;
     return last !== manilaDay(now) && cleanTime(a.daily_time) <= manilaTime(now);
+  }
+  if (a.recurrence === 'monthly') {
+    if (!a.daily_time || !a.publish_at) return false;
+    const scheduledDay = manilaDayNumber(new Date(a.publish_at));
+    if (manilaDayNumber(now) !== scheduledDay) return false;
+    const lastMonth = a.last_push_at ? manilaMonth(new Date(a.last_push_at)) : null;
+    return lastMonth !== manilaMonth(now) && cleanTime(a.daily_time) <= manilaTime(now);
   }
   return !a.last_push_at;
 }
