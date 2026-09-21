@@ -19,6 +19,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const manilaDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 const manilaTime = (d = new Date()) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
 const manilaWeekday = (d = new Date()) => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', weekday: 'long' }).format(d);
+const manilaMonth = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit' }).format(d);
+const manilaDayNumber = (d = new Date()) => Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', day: 'numeric' }).format(d));
 const cleanTime = (v: string | null) => String(v || '').slice(0, 5);
 
 type Caller = { kind: 'cron' } | { kind: 'user'; user: any; profile: any };
@@ -122,8 +124,42 @@ function notificationKind(table: string, a: any) {
   if (source === 'sermon') return 'sermon';
   if (source === 'church_event') return 'event';
   if (source === 'worship_assignment') return 'worship';
-  if (url.includes('daily-verse') || title.startsWith("today's word")) return 'verse';
+  if (source === 'sunday_attendance') return 'attendance';
+  if (source === 'birthday') return 'birthday';
+  if (source === 'daily_verse' || url.includes('daily-verse') || title.startsWith("today's word")) return 'verse';
   return 'push';
+}
+
+async function automationSettings() {
+  const r = await service.from('notification_automation_settings').select('automation_key,enabled');
+  if (r.error) {
+    console.error('automation settings unavailable', r.error.message);
+    return new Map<string, boolean>();
+  }
+  return new Map<string, boolean>((r.data || []).map((x: any) => [String(x.automation_key), x.enabled === true]));
+}
+
+function automationKey(a: any) {
+  const source = String(a.source_type || '').toLowerCase();
+  const key = String(a.source_key || '').toLowerCase();
+  const url = String(a.push_url || '').toLowerCase();
+  const title = String(a.title || '').toLowerCase();
+  if (source === 'sermon') return 'new_sermon';
+  if (source === 'church_event' && key === 'new_event') return 'new_event';
+  if (source === 'church_event' && key === 'upcoming_reminder') return 'event_reminder';
+  if (source === 'worship_assignment' && key === 'assignment_notice') return 'worship_assignment';
+  if (source === 'worship_assignment' && (key.startsWith('service_reminder:') || key.startsWith('monday_reminder:'))) return 'worship_reminder';
+  if (source === 'sunday_attendance') return 'sunday_attendance_reminder';
+  if (source === 'birthday') return 'birthday_greeting';
+  if (source === 'daily_verse' || url.includes('daily-verse') || title.startsWith("today's word")) return 'daily_verse';
+  return null;
+}
+
+function automationAllowed(a: any, settings: Map<string, boolean>) {
+  const key = automationKey(a);
+  if (!key) return true;
+  if (settings.size === 0) return true;
+  return settings.get('master') !== false && settings.get(key) !== false;
 }
 
 async function saveInboxRows(table: string, a: any, userIds: string[]) {
@@ -277,6 +313,13 @@ function isDue(a: any, now = new Date()) {
     const last = a.last_push_at ? manilaDay(new Date(a.last_push_at)) : null;
     return last !== manilaDay(now) && cleanTime(a.daily_time) <= manilaTime(now);
   }
+  if (a.recurrence === 'monthly') {
+    if (!a.daily_time || !a.publish_at) return false;
+    const scheduledDay = manilaDayNumber(new Date(a.publish_at));
+    if (manilaDayNumber(now) !== scheduledDay) return false;
+    const lastMonth = a.last_push_at ? manilaMonth(new Date(a.last_push_at)) : null;
+    return lastMonth !== manilaMonth(now) && cleanTime(a.daily_time) <= manilaTime(now);
+  }
   return !a.last_push_at;
 }
 
@@ -305,15 +348,16 @@ Deno.serve(async req => {
 
     if (body.mode === 'due') {
       if (who.kind !== 'cron') return json({ error: 'Scheduled dispatch is internal only.' }, 403);
-      const [ann, push] = await Promise.all([
+      const [ann, push, auto] = await Promise.all([
         service.from('church_announcements').select('*').eq('is_published', true).eq('push_enabled', true).order('publish_at', { ascending: true }).limit(500),
         service.from('push_notifications').select('*').eq('is_published', true).eq('push_enabled', true).order('publish_at', { ascending: true }).limit(500),
+        automationSettings(),
       ]);
       if (ann.error) throw ann.error;
       if (push.error) throw push.error;
       const jobs = [
         ...(ann.data || []).filter(isDue).map((a: any) => ['church_announcements', a] as const),
-        ...(push.data || []).filter(isDue).map((a: any) => ['push_notifications', a] as const),
+        ...(push.data || []).filter((a: any) => isDue(a) && automationAllowed(a, auto)).map((a: any) => ['push_notifications', a] as const),
       ];
       const results = [];
       for (const [table, a] of jobs) results.push(await sendRow(table, a, cfg.vapid_private_key));
