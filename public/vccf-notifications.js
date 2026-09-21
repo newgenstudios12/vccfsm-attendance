@@ -35,7 +35,7 @@ function ensureView(){
   const nav=document.querySelector('.nav');if(nav&&!nav.querySelector('[data-view="notifications"]')){const b=document.createElement('button');b.type='button';b.dataset.view='notifications';b.textContent='Notifications';const church=nav.querySelector('[data-view="church"]');nav.insertBefore(b,church||null);b.onclick=()=>openNotifications()}
   return true;
 }
-function ensurePushOnlyModule(){if(window.__VCCF_PUSH_ONLY__||document.querySelector('script[data-vccf-notifications-v2]'))return;const s=document.createElement('script');s.src='/vccf-notifications-v2.js?v=20260916-2';s.dataset.vccfNotificationsV2='1';s.defer=true;document.head.appendChild(s)}
+function ensurePushOnlyModule(){if(window.__VCCF_PUSH_ONLY__||document.querySelector('script[data-vccf-notifications-v2]'))return;const s=document.createElement('script');s.src='/vccf-notifications-v2.js?v=20260921-3';s.dataset.vccfNotificationsV2='1';s.defer=true;document.head.appendChild(s)}
 function openNotifications(){ensurePushOnlyModule();document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById('notifications')?.classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view==='notifications'));const t=document.getElementById('title');if(t)t.textContent='Notifications';void load(Date.now()-lastLoadAt>30000)}
 
 function rerouteLegacyAnnouncements(){
