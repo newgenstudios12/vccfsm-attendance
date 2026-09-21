@@ -93,7 +93,7 @@ function loadForRoute(route){
     loadOnce('__VCCF_MEMBER_CONTACT_INFO__','data-vccf-member-contact-info','/vccf-member-contact-info.js?v=20260913-4','Member contact information module could not be loaded.');
     loadOnce('__VCCF_MEMBER_DELETE_BUTTON__','data-vccf-member-delete-button','/vccf-member-delete-button.js?v=20260913-2','Member delete button module could not be loaded.');
   }
-  if(route==='attendance')loadOnce('__VCCF_ATTENDANCE_CHECKLIST__','data-vccf-attendance-checklist','/vccf-attendance-checklist.js?v=20260913-1','Attendance checklist module could not be loaded.');
+  if(route==='attendance')loadOnce('__VCCF_ATTENDANCE_CHECKLIST__','data-vccf-attendance-checklist','/vccf-attendance-checklist.js?v=20260921-1','Attendance checklist module could not be loaded.');
   if(route==='memberid')loadOnce('__VCCF_ID_POSITION_EDITOR__','data-vccf-id-position-editor','/vccf-id-position-editor.js?v=20260914-1','Digital ID position editor module could not be loaded.');
 }
 function currentRoute(){return document.querySelector('.nav [data-route].active')?.dataset.route||document.querySelector('.view.active')?.id||''}
