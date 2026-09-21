@@ -188,9 +188,22 @@ function prepareAttendanceWorkspace(){
 function setAttendanceStatus(id,message,kind=''){const el=document.getElementById(id);if(!el)return;el.className='attendance-status '+kind;el.textContent=message}
 function memberFromQr(raw){const code=String(raw||'').trim().replace(/^VCCF-MEMBER:/i,'');return (state().members||[]).find(m=>String(m.member_number||'')===code||String(m.member_code||'')===code||String(m.id)===code)}
 function attendanceTypeLabel(type){return type==='bible_study'?'Bible Study':type==='midweek_service'?'Midweek Service':'Sunday Worship'}
+async function sundayAreaSubmission(areaId,date){
+  if(!areaId)return null;
+  const result=await window.VCCF.sb.from('sunday_attendance_submissions').select('status,submitted_at').eq('area_id',areaId).eq('sunday_date',date).maybeSingle();
+  if(result.error){console.warn('Sunday attendance submission check',result.error);return null}
+  return result.data||null;
+}
 async function recordAttendance(member,source,button,statusId,attendanceType='sunday'){
   if(!member)return false;const today=phDay(new Date()),bounds=attendanceDateBounds(today),oldText=button?.textContent,type=attendanceType||'sunday';if(button){button.disabled=true;button.textContent='Saving…'}setAttendanceStatus(statusId,'Checking '+attendanceTypeLabel(type)+' attendance…');
   try{
+    if(type==='sunday'&&member.area_id){
+      const finalized=await sundayAreaSubmission(member.area_id,today);
+      if(finalized?.status==='submitted'){
+        setAttendanceStatus(statusId,areaName(member.area_id)+' attendance is already submitted. Ask an Admin or Pastor to reopen it before recording a late arrival.','warning');
+        return false;
+      }
+    }
     const existing=await window.VCCF.sb.from('attendance').select('id').eq('member_id',member.id).eq('attendance_type',type).gte('checked_in_at',bounds.start).lt('checked_in_at',new Date(bounds.end).toISOString()).limit(1);
     if(existing.error)throw existing.error;
     if(existing.data?.length){setAttendanceStatus(statusId,memberName(member)+' is already checked in for '+attendanceTypeLabel(type)+' today.','warning');return false}
