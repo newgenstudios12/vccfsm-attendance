@@ -11,7 +11,7 @@ let loadWaiters = [];
 let eventScanner = null;
 let data = {
   areas:[], ministries:[], ministryMembers:[],
-  serviceTypes:[], serviceSessions:[], mediaServices:[],
+  serviceTypes:[], serviceSessions:[], mediaServices:[], sermons:[],
   events:[], registrations:[], leadership:[],
   pastoral:[], prayers:[], announcements:[], documents:[],
   profiles:[], audit:[], attendance:[]
@@ -110,7 +110,7 @@ async function loadAll(force=false) {
       : Promise.resolve({data:[]});
 
     const [
-      areas,ministries,ministryMembers,serviceTypes,serviceSessions,mediaServices,events,registrations,
+      areas,ministries,ministryMembers,serviceTypes,serviceSessions,mediaServices,sermons,events,registrations,
       leadership,pastoral,prayers,announcements,documents,profiles,audit,attendance
     ] = await Promise.all([
       read(client.from('areas').select('id,name,is_active,description,updated_at').order('name')),
@@ -119,6 +119,7 @@ async function loadAll(force=false) {
       read(client.from('church_service_types').select('*').order('name')),
       read(client.from('church_service_sessions').select('*').order('service_date',{ascending:false}).limit(200)),
       read(client.from('cms_services').select('*').order('is_live',{ascending:false}).order('service_date',{ascending:false}).limit(200)),
+      read(client.from('vccf_sermons').select('id,title,sermon_category,sermon_date,service_media_id,service_session_id').order('sermon_date',{ascending:false,nullsFirst:false}).limit(300)),
       read(client.from('church_events').select('*').order('start_at',{ascending:true}).limit(300)),
       read(client.from('church_event_registrations').select('*').order('registered_at',{ascending:false}).limit(500)),
       read(client.from('church_leadership').select('*').order('display_order').order('created_at')),
@@ -130,7 +131,7 @@ async function loadAll(force=false) {
       read(auditQuery),
       read(client.from('attendance').select('id,member_id,area_id,checked_in_at').gte('checked_in_at',since).order('checked_in_at',{ascending:false}).limit(3000))
     ]);
-    Object.assign(data,{areas,ministries,ministryMembers,serviceTypes,serviceSessions,mediaServices,events,registrations,leadership,pastoral,prayers,announcements,documents,profiles,audit,attendance});
+    Object.assign(data,{areas,ministries,ministryMembers,serviceTypes,serviceSessions,mediaServices,sermons,events,registrations,leadership,pastoral,prayers,announcements,documents,profiles,audit,attendance});
     loaded=true;
   } finally {
     setBusy(false);
@@ -384,14 +385,15 @@ function serviceMediaStatusLabel(item){
 }
 function renderServicePlayer(item){
   const player=document.getElementById('serviceFeaturedPlayer');if(!player||!item)return;
-  const provider=serviceMediaProvider(item.youtube_url),shareLink=facebookShareUrl(item.youtube_url),embed=serviceEmbedUrl(item.youtube_url),status=serviceMediaStatus(item);
-  const external=provider==='facebook'?'<div class="service-media-actions" style="margin-top:12px"><a class="cms-small" style="text-decoration:none;display:inline-flex;align-items:center" href="'+attr(item.youtube_url)+'" target="_blank" rel="noopener noreferrer">Open on Facebook ↗</a></div>':'';
+  const provider=serviceMediaProvider(item.youtube_url),shareLink=facebookShareUrl(item.youtube_url),embed=serviceEmbedUrl(item.youtube_url),status=serviceMediaStatus(item),sermon=linkedSermonForMedia(item.id)||linkedSermonForDate(item.service_date);
+  const external='<div class="service-media-actions" style="margin-top:12px">'+(provider==='facebook'?'<a class="cms-small" style="text-decoration:none;display:inline-flex;align-items:center" href="'+attr(item.youtube_url)+'" target="_blank" rel="noopener noreferrer">Open on Facebook ↗</a>':'')+(sermon?'<button type="button" class="cms-small" data-linked-sermon="'+sermon.id+'">View Sermon</button>':'')+'</div>';
   const unavailable=shareLink
     ? '<div class="service-video-invalid"><b>Facebook share link detected</b><span style="display:block;margin-top:8px;line-height:1.45">The video still exists, but Facebook does not allow this share URL to play inside embedded players. Open it on Facebook, then edit this service and paste the video\'s direct permalink for in-app playback.</span></div>'
     : '<div class="service-video-invalid">This video link cannot be embedded.</div>';
   player.innerHTML='<div class="service-video-frame">'+(embed?'<iframe src="'+attr(embed)+'" title="'+attr(item.title||'Church Service')+'" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>':unavailable)+'</div>'+
     '<div class="service-video-feature-copy"><div class="service-video-meta"><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span><span>'+esc(serviceMediaProviderLabel(item.youtube_url))+' · '+esc(fmtDate(item.service_date))+'</span></div><h3>'+esc(item.title||'Church Service')+'</h3><p>'+esc(item.description||'Watch this church service inside VCCF Connect.')+'</p>'+external+'</div>';
   document.querySelectorAll('[data-service-watch]').forEach(b=>b.classList.toggle('active',b.dataset.serviceWatch===item.id));
+  player.querySelectorAll('[data-linked-sermon]').forEach(b=>b.onclick=()=>openLinkedSermon(b.dataset.linkedSermon));
 }
 function serviceMediaForm(item=null){
   if(!canManageChurch())return;
@@ -419,6 +421,10 @@ function serviceMediaForm(item=null){
   );
 }
 
+function linkedSermonForMedia(mediaId){return data.sermons.find(s=>s.service_media_id===mediaId)||null}
+function linkedSermonForSession(sessionId){return data.sermons.find(s=>s.service_session_id===sessionId)||null}
+function linkedSermonForDate(date){const sessionIds=new Set(data.serviceSessions.filter(s=>s.service_date===date).map(s=>s.id));return data.sermons.find(s=>(s.service_session_id&&sessionIds.has(s.service_session_id))||(!s.service_session_id&&s.sermon_date===date))||null}
+function openLinkedSermon(id){if(!id)return;window.VCCFSermons?.openById?.(id)}
 function renderServices(){
   const can=canManageChurch();
   const media=data.mediaServices.slice().sort((a,b)=>{
@@ -428,16 +434,16 @@ function renderServices(){
   });
   const featured=media[0]||null;
   const mediaCards=media.map(item=>{
-    const thumb=youtubeThumb(item.youtube_url),status=serviceMediaStatus(item),provider=serviceMediaProvider(item.youtube_url);
+    const thumb=youtubeThumb(item.youtube_url),status=serviceMediaStatus(item),provider=serviceMediaProvider(item.youtube_url),sermon=linkedSermonForMedia(item.id)||linkedSermonForDate(item.service_date);
     return '<article class="service-media-card card"><button class="service-media-thumb" type="button" data-service-watch="'+item.id+'" aria-label="Watch '+attr(item.title||'church service')+'">'+
       (thumb?'<img src="'+attr(thumb)+'" alt="" loading="lazy">':'<span>'+(provider==='facebook'?'Facebook video':'No preview')+'</span>')+
       '<i class="service-play-button">▶</i><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span></button>'+
       '<div class="service-media-copy"><span class="service-media-date">'+esc(fmtDate(item.service_date))+'</span><h3>'+esc(item.title||'Church Service')+'</h3><p>'+esc(item.description||'Watch this service inside the app.')+'</p>'+
-      '<div class="service-media-actions"><button type="button" class="cms-small" data-service-watch="'+item.id+'">Watch</button>'+(can?'<button type="button" class="cms-small" data-service-media-edit="'+item.id+'">Edit</button><button type="button" class="cms-small danger-text" data-service-media-delete="'+item.id+'">Delete</button>':'')+'</div></div></article>';
+      '<div class="service-media-actions"><button type="button" class="cms-small" data-service-watch="'+item.id+'">Watch</button>'+(sermon?'<button type="button" class="cms-small" data-linked-sermon="'+sermon.id+'">View Sermon</button>':'')+(can?'<button type="button" class="cms-small" data-service-media-edit="'+item.id+'">Edit</button><button type="button" class="cms-small danger-text" data-service-media-delete="'+item.id+'">Delete</button>':'')+'</div></div></article>';
   }).join('');
 
   const typeRows=data.serviceTypes.map(t=>'<tr><td><b>'+esc(t.name)+'</b><div class="cms-sub">'+esc(t.description||'')+'</div></td><td>'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.day_of_week]+'</td><td>'+esc(t.start_time?.slice(0,5)||'—')+'</td><td>'+esc(t.location||'—')+'</td><td>'+badge(t.is_active?'Active':'Inactive',t.is_active?'ok':'muted')+'</td><td>'+(can?'<button class="cms-small" data-service-type="'+t.id+'">Edit</button>':'')+'</td></tr>').join('');
-  const sessions=data.serviceSessions.slice(0,100).map(s=>{const att=new Set(data.attendance.filter(a=>phDay(a.checked_in_at)===s.service_date).map(a=>a.member_id)).size;return '<tr><td><b>'+esc(s.title||data.serviceTypes.find(t=>t.id===s.service_type_id)?.name||'Church Service')+'</b><div class="cms-sub">'+esc(s.theme||s.scripture||'')+'</div></td><td>'+esc(s.service_date)+'</td><td>'+esc(s.preacher_member_id?memberName(s.preacher_member_id):(s.guest_preacher||'—'))+'</td><td>'+att+'</td><td>'+badge(s.status,s.status==='Completed'?'ok':'')+'</td><td>'+(can?'<button class="cms-small" data-service-session="'+s.id+'">Edit</button>':'')+'</td></tr>';}).join('');
+  const sessions=data.serviceSessions.slice(0,100).map(s=>{const att=new Set(data.attendance.filter(a=>phDay(a.checked_in_at)===s.service_date).map(a=>a.member_id)).size,sermon=linkedSermonForSession(s.id);return '<tr><td><b>'+esc(s.title||data.serviceTypes.find(t=>t.id===s.service_type_id)?.name||'Church Service')+'</b><div class="cms-sub">'+esc(s.theme||s.scripture||'')+'</div></td><td>'+esc(s.service_date)+'</td><td>'+esc(s.preacher_member_id?memberName(s.preacher_member_id):(s.guest_preacher||'—'))+'</td><td>'+att+'</td><td>'+(sermon?'<button class="cms-small" type="button" data-linked-sermon="'+sermon.id+'">'+esc(sermon.title)+'</button>':'<span class="cms-sub">Not linked</span>')+'</td><td>'+badge(s.status,s.status==='Completed'?'ok':'')+'</td><td>'+(can?'<button class="cms-small" data-service-session="'+s.id+'">Edit</button>':'')+'</td></tr>';}).join('');
 
   content().innerHTML='<section class="service-media-hero card"><div><span class="cms-kicker">WATCH & WORSHIP</span><h2>Church Services</h2><p>Watch live services, upcoming streams, and previous worship services without leaving VCCF Connect.</p></div>'+(can?'<button id="addServiceMedia" class="btn">+ Add Video / Live Service</button>':'')+'</section>'+
     (featured?'<section id="serviceFeaturedPlayer" class="service-featured-player card"></section>':'<section class="service-featured-empty card"><h3>No service video yet</h3><p>'+(can?'Add a YouTube or Facebook video/live link to feature it here.':'Church service videos will appear here when published by an Admin or Pastor.')+'</p></section>')+
@@ -445,7 +451,7 @@ function renderServices(){
     '<div class="cms-grid one service-admin-schedules"><section class="cms-panel card"><div class="cms-panel-head"><div><h3>Service Schedules</h3><p>Recurring church service templates.</p></div>'+(can?'<button id="addServiceType" class="btn secondary">Add Schedule</button>':'')+'</div>'+
     '<div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Day</th><th>Time</th><th>Location</th><th>Status</th><th></th></tr></thead><tbody>'+typeRows+'</tbody></table></div></section>'+
     '<section class="cms-panel card"><div class="cms-panel-head"><div><h3>Service Sessions</h3><p>Actual scheduled/completed church services.</p></div>'+(can?'<button id="addServiceSession" class="btn secondary">Add Session</button>':'')+'</div>'+
-    '<div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Date</th><th>Preacher</th><th>Attendance</th><th>Status</th><th></th></tr></thead><tbody>'+(sessions||'<tr><td colspan="6">'+empty('No service sessions yet.')+'</td></tr>')+'</tbody></table></div></section></div>';
+    '<div class="table-wrap"><table class="table"><thead><tr><th>Service</th><th>Date</th><th>Preacher</th><th>Attendance</th><th>Sermon</th><th>Status</th><th></th></tr></thead><tbody>'+(sessions||'<tr><td colspan="7">'+empty('No service sessions yet.')+'</td></tr>')+'</tbody></table></div></section></div>';
 
   if(featured)renderServicePlayer(featured);
   document.getElementById('addServiceMedia')?.addEventListener('click',()=>serviceMediaForm());
@@ -454,6 +460,7 @@ function renderServices(){
   content().querySelectorAll('[data-service-watch]').forEach(b=>b.onclick=()=>{const item=data.mediaServices.find(x=>x.id===b.dataset.serviceWatch);if(item){renderServicePlayer(item);document.getElementById('serviceFeaturedPlayer')?.scrollIntoView({behavior:'smooth',block:'start'})}});
   content().querySelectorAll('[data-service-media-edit]').forEach(b=>b.onclick=()=>serviceMediaForm(data.mediaServices.find(x=>x.id===b.dataset.serviceMediaEdit)));
   content().querySelectorAll('[data-service-media-delete]').forEach(b=>b.onclick=()=>deleteRow('cms_services',b.dataset.serviceMediaDelete,'Church service video'));
+  content().querySelectorAll('[data-linked-sermon]').forEach(b=>b.onclick=()=>openLinkedSermon(b.dataset.linkedSermon));
   content().querySelectorAll('[data-service-type]').forEach(b=>b.onclick=()=>serviceTypeForm(data.serviceTypes.find(x=>x.id===b.dataset.serviceType)));
   content().querySelectorAll('[data-service-session]').forEach(b=>b.onclick=()=>serviceSessionForm(data.serviceSessions.find(x=>x.id===b.dataset.serviceSession)));
 }
@@ -898,7 +905,7 @@ function navigate(tab){
 window.VCCFChurchManagement={navigate,refresh:async()=>{loaded=false;await loadAll(true);renderActive();}};
 
 window.addEventListener('vccf-app-ready',()=>setTimeout(init,0));
-window.addEventListener('vccf-signed-out',()=>{loaded=false;data={areas:[],ministries:[],ministryMembers:[],serviceTypes:[],serviceSessions:[],mediaServices:[],events:[],registrations:[],leadership:[],pastoral:[],prayers:[],announcements:[],documents:[],profiles:[],audit:[],attendance:[]};});
+window.addEventListener('vccf-signed-out',()=>{loaded=false;data={areas:[],ministries:[],ministryMembers:[],serviceTypes:[],serviceSessions:[],mediaServices:[],sermons:[],events:[],registrations:[],leadership:[],pastoral:[],prayers:[],announcements:[],documents:[],profiles:[],audit:[],attendance:[]};});
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(init,0),{once:true});
 else setTimeout(init,0);
 })();
