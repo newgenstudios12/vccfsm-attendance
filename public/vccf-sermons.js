@@ -47,6 +47,26 @@ const isFacebookUrl=value=>{const u=safeHttps(value);return !!u&&(u.hostname.toL
 const youtubeEmbedUrl=value=>{const u=safeHttps(value);if(!u||!isYouTubeUrl(value))return'';let id='';if(u.hostname.toLowerCase()==='youtu.be')id=u.pathname.split('/').filter(Boolean)[0]||'';else if(u.pathname==='/watch')id=u.searchParams.get('v')||'';else{const p=u.pathname.split('/').filter(Boolean);if(['shorts','live','embed'].includes(p[0]))id=p[1]||''}return id?'https://www.youtube.com/embed/'+encodeURIComponent(id):''};
 const googleDrivePreviewUrl=value=>{const u=safeHttps(value);if(!u||!isGoogleDriveUrl(value))return'';const p=u.pathname.split('/').filter(Boolean);const d=p.indexOf('d');if(d>=0&&p[d+1]){const prefix=u.hostname.toLowerCase()==='drive.google.com'?'file':(p[0]||'document');return 'https://'+u.hostname+'/'+prefix+'/d/'+encodeURIComponent(p[d+1])+'/preview'}return value};
 const facebookEmbedUrl=value=>{const u=safeHttps(value);if(!u||!isFacebookUrl(value))return'';return 'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(u.href)+'&show_text=false&width=1000'};
+const facebookShareServiceUrl=value=>{const u=safeHttps(value);if(!u||!isFacebookUrl(value))return'';const path=u.pathname.toLowerCase(),host=u.hostname.replace(/^(www\.|m\.)/,'').toLowerCase();return path.startsWith('/share/')||host==='fb.watch'?u.href:''};
+const servicePreviewHtml=service=>{
+  if(!service)return'';
+  const source=String(service.youtube_url||'').trim(),yt=youtubeEmbedUrl(source),fbShare=facebookShareServiceUrl(source),fb=fbShare?'':facebookEmbedUrl(source);
+  const label=service.title||'Sunday Service',date=service.service_date?dateLabel(service.service_date):'';
+  const player=yt
+    ? '<iframe src="'+attr(yt)+'" title="'+attr(label)+' service video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>'
+    : fb
+      ? '<iframe src="'+attr(fb)+'" title="'+attr(label)+' Facebook service video" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowfullscreen></iframe>'
+      : '<div class="sermon-service-fallback"><strong>Service video</strong><span>'+(fbShare?'Facebook does not allow this share link to play inside the app.':'This service link cannot be embedded in the preview.')+'</span></div>';
+  return '<section class="sermon-preview-section sermon-linked-service"><div class="sermon-preview-section-head"><div><span class="sermon-kicker">LINKED SUNDAY SERVICE</span><h4>'+esc(label)+'</h4><p>'+esc(date)+(service.description?' · '+esc(service.description):'')+'</p></div>'+(source?'<a class="btn secondary" href="'+attr(source)+'" target="_blank" rel="noopener noreferrer">Open Service</a>':'')+'</div><div class="sermon-service-frame">'+player+'</div></section>';
+};
+async function sermonMaterialHtml(row){
+  if(!row?.file_path)return '<div class="sermon-nonpdf-preview"><h4>No sermon document attached</h4><p>The linked Sunday Service is available above.</p></div>';
+  const url=await signedUrl(row,false),type=fileType(row);
+  if(type==='PDF')return '<iframe src="'+attr(url)+'#toolbar=1&navpanes=0" title="'+attr(row.title)+' sermon preview"></iframe>';
+  if(type==='PowerPoint'||type==='Word')return '<iframe src="'+attr('https://view.officeapps.live.com/op/embed.aspx?src='+encodeURIComponent(url))+'" title="'+attr(row.title)+' '+attr(type)+' preview" allowfullscreen></iframe>';
+  return '<div class="sermon-nonpdf-preview">'+iconFor(row)+'<h4>'+esc(row.file_name||row.title)+'</h4><p>Open or download this sermon resource.</p><div><a class="btn secondary" href="'+attr(url)+'" target="_blank" rel="noopener">Open File</a></div></div>';
+}
+
 const hasPreviewSource=row=>!!(row?.file_path||row?.google_drive_url||row?.youtube_url||row?.facebook_url);
 const resourceSummary=row=>{const parts=[];if(row?.file_path)parts.push(fileType(row)||'File');if(row?.google_drive_url)parts.push('Google Drive');if(row?.youtube_url)parts.push('YouTube');if(row?.facebook_url)parts.push('Facebook');return parts.join(' · ')||'No resource'};
 const externalActionLinks=row=>[
@@ -135,6 +155,12 @@ async function previewSermon(row){
   wrap.querySelector('#sermonPreviewDownload')?.addEventListener('click',e=>downloadSermon(row,e.currentTarget));
   const body=wrap.querySelector('#sermonPreviewBody');
   try{
+    if(service&&row.sermon_category==='sunday_sermon'){
+      body.classList.add('with-service');
+      const material=await sermonMaterialHtml(row);
+      body.innerHTML=servicePreviewHtml(service)+'<section class="sermon-preview-section sermon-material-section"><div class="sermon-preview-section-head"><div><span class="sermon-kicker">SERMON MATERIAL</span><h4>'+esc(row.file_name||row.title)+'</h4><p>'+esc(fileType(row)||'Document')+'</p></div></div><div class="sermon-material-frame">'+material+'</div></section>';
+      return;
+    }
     const yt=youtubeEmbedUrl(row.youtube_url),drive=googleDrivePreviewUrl(row.google_drive_url),fb=facebookEmbedUrl(row.facebook_url);
     if(yt){
       body.innerHTML='<iframe src="'+attr(yt)+'" title="'+attr(row.title)+' YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
@@ -143,10 +169,7 @@ async function previewSermon(row){
     }else if(drive){
       body.innerHTML='<iframe src="'+attr(drive)+'" title="'+attr(row.title)+' Google Drive preview" allowfullscreen></iframe>';
     }else if(row.file_path){
-      const url=await signedUrl(row,false),type=fileType(row);
-      if(type==='PDF')body.innerHTML='<iframe src="'+attr(url)+'#toolbar=1&navpanes=0" title="'+attr(row.title)+' sermon preview"></iframe>';
-      else if(type==='PowerPoint'||type==='Word')body.innerHTML='<iframe src="'+attr('https://view.officeapps.live.com/op/embed.aspx?src='+encodeURIComponent(url))+'" title="'+attr(row.title)+' '+attr(type)+' preview" allowfullscreen></iframe>';
-      else body.innerHTML='<div class="sermon-nonpdf-preview">'+iconFor(row)+'<h4>'+esc(row.file_name||row.title)+'</h4><p>Open or download this sermon resource.</p><div><a class="btn secondary" href="'+attr(url)+'" target="_blank" rel="noopener">Open File</a></div></div>';
+      body.innerHTML=await sermonMaterialHtml(row);
     }else{
       body.innerHTML='<div class="sermon-nonpdf-preview"><h4>No in-app preview available</h4><p>Use one of the linked resource buttons below.</p></div>';
     }
