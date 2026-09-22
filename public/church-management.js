@@ -119,7 +119,7 @@ async function loadAll(force=false) {
       read(client.from('church_service_types').select('*').order('name')),
       read(client.from('church_service_sessions').select('*').order('service_date',{ascending:false}).limit(200)),
       read(client.from('cms_services').select('*').order('is_live',{ascending:false}).order('service_date',{ascending:false}).limit(200)),
-      read(client.from('vccf_sermons').select('id,title,sermon_category,sermon_date,service_session_id').order('sermon_date',{ascending:false,nullsFirst:false}).limit(300)),
+      read(client.from('vccf_sermons').select('id,title,sermon_category,sermon_date,service_media_id,service_session_id').order('sermon_date',{ascending:false,nullsFirst:false}).limit(300)),
       read(client.from('church_events').select('*').order('start_at',{ascending:true}).limit(300)),
       read(client.from('church_event_registrations').select('*').order('registered_at',{ascending:false}).limit(500)),
       read(client.from('church_leadership').select('*').order('display_order').order('created_at')),
@@ -385,14 +385,15 @@ function serviceMediaStatusLabel(item){
 }
 function renderServicePlayer(item){
   const player=document.getElementById('serviceFeaturedPlayer');if(!player||!item)return;
-  const provider=serviceMediaProvider(item.youtube_url),shareLink=facebookShareUrl(item.youtube_url),embed=serviceEmbedUrl(item.youtube_url),status=serviceMediaStatus(item);
-  const external=provider==='facebook'?'<div class="service-media-actions" style="margin-top:12px"><a class="cms-small" style="text-decoration:none;display:inline-flex;align-items:center" href="'+attr(item.youtube_url)+'" target="_blank" rel="noopener noreferrer">Open on Facebook ↗</a></div>':'';
+  const provider=serviceMediaProvider(item.youtube_url),shareLink=facebookShareUrl(item.youtube_url),embed=serviceEmbedUrl(item.youtube_url),status=serviceMediaStatus(item),sermon=linkedSermonForMedia(item.id)||linkedSermonForDate(item.service_date);
+  const external='<div class="service-media-actions" style="margin-top:12px">'+(provider==='facebook'?'<a class="cms-small" style="text-decoration:none;display:inline-flex;align-items:center" href="'+attr(item.youtube_url)+'" target="_blank" rel="noopener noreferrer">Open on Facebook ↗</a>':'')+(sermon?'<button type="button" class="cms-small" data-linked-sermon="'+sermon.id+'">View Sermon</button>':'')+'</div>';
   const unavailable=shareLink
     ? '<div class="service-video-invalid"><b>Facebook share link detected</b><span style="display:block;margin-top:8px;line-height:1.45">The video still exists, but Facebook does not allow this share URL to play inside embedded players. Open it on Facebook, then edit this service and paste the video\'s direct permalink for in-app playback.</span></div>'
     : '<div class="service-video-invalid">This video link cannot be embedded.</div>';
   player.innerHTML='<div class="service-video-frame">'+(embed?'<iframe src="'+attr(embed)+'" title="'+attr(item.title||'Church Service')+'" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>':unavailable)+'</div>'+
     '<div class="service-video-feature-copy"><div class="service-video-meta"><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span><span>'+esc(serviceMediaProviderLabel(item.youtube_url))+' · '+esc(fmtDate(item.service_date))+'</span></div><h3>'+esc(item.title||'Church Service')+'</h3><p>'+esc(item.description||'Watch this church service inside VCCF Connect.')+'</p>'+external+'</div>';
   document.querySelectorAll('[data-service-watch]').forEach(b=>b.classList.toggle('active',b.dataset.serviceWatch===item.id));
+  player.querySelectorAll('[data-linked-sermon]').forEach(b=>b.onclick=()=>openLinkedSermon(b.dataset.linkedSermon));
 }
 function serviceMediaForm(item=null){
   if(!canManageChurch())return;
@@ -420,8 +421,9 @@ function serviceMediaForm(item=null){
   );
 }
 
+function linkedSermonForMedia(mediaId){return data.sermons.find(s=>s.service_media_id===mediaId)||null}
 function linkedSermonForSession(sessionId){return data.sermons.find(s=>s.service_session_id===sessionId)||null}
-function linkedSermonForDate(date){const sessionIds=new Set(data.serviceSessions.filter(s=>s.service_date===date).map(s=>s.id));return data.sermons.find(s=>s.service_session_id&&sessionIds.has(s.service_session_id))||null}
+function linkedSermonForDate(date){const sessionIds=new Set(data.serviceSessions.filter(s=>s.service_date===date).map(s=>s.id));return data.sermons.find(s=>(s.service_session_id&&sessionIds.has(s.service_session_id))||(!s.service_session_id&&s.sermon_date===date))||null}
 function openLinkedSermon(id){if(!id)return;window.VCCFSermons?.openById?.(id)}
 function renderServices(){
   const can=canManageChurch();
@@ -432,7 +434,7 @@ function renderServices(){
   });
   const featured=media[0]||null;
   const mediaCards=media.map(item=>{
-    const thumb=youtubeThumb(item.youtube_url),status=serviceMediaStatus(item),provider=serviceMediaProvider(item.youtube_url),sermon=linkedSermonForDate(item.service_date);
+    const thumb=youtubeThumb(item.youtube_url),status=serviceMediaStatus(item),provider=serviceMediaProvider(item.youtube_url),sermon=linkedSermonForMedia(item.id)||linkedSermonForDate(item.service_date);
     return '<article class="service-media-card card"><button class="service-media-thumb" type="button" data-service-watch="'+item.id+'" aria-label="Watch '+attr(item.title||'church service')+'">'+
       (thumb?'<img src="'+attr(thumb)+'" alt="" loading="lazy">':'<span>'+(provider==='facebook'?'Facebook video':'No preview')+'</span>')+
       '<i class="service-play-button">▶</i><span class="service-video-state '+status+'">'+esc(serviceMediaStatusLabel(item))+'</span></button>'+

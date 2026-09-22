@@ -5,6 +5,7 @@ window.__VCCF_SERMONS__=true;
 
 let root=null;
 let sermons=[];
+let serviceMedia=[];
 let serviceSessions=[];
 let selectedCategory='sunday_sermon';
 
@@ -33,10 +34,11 @@ const fileSize=n=>{
   return (bytes/(1024*1024)).toFixed(1)+' MB';
 };
 
-const serviceLabel=s=>s?((s.title||s.theme||'Sunday Service')+' · '+dateLabel(s.service_date)):'';
-const linkedService=row=>serviceSessions.find(s=>s.id===row?.service_session_id)||null;
+const serviceLabel=s=>s?((s.title||'Sunday Service')+' · '+dateLabel(s.service_date)):'';
+const linkedService=row=>serviceMedia.find(s=>s.id===row?.service_media_id)||null;
 const isSundayDate=v=>{if(!v)return false;return new Date(v+'T12:00:00+08:00').getDay()===0};
-const sundaySessions=()=>serviceSessions.filter(s=>isSundayDate(s.service_date)&&String(s.status||'').toLowerCase()!=='cancelled').sort((a,b)=>String(b.service_date||'').localeCompare(String(a.service_date||'')));
+const sundayServices=()=>serviceMedia.filter(s=>isSundayDate(s.service_date)).sort((a,b)=>String(b.service_date||'').localeCompare(String(a.service_date||'')));
+const sessionForDate=date=>serviceSessions.find(s=>s.service_date===date&&String(s.status||'').toLowerCase()!=='cancelled')||null;
 const memberNameById=id=>{const m=(state().members||[]).find(x=>x.id===id);return m?(m.display_name||[m.first_name,m.last_name].filter(Boolean).join(' ')||''):''};
 const safeHttps=value=>{try{const u=new URL(String(value||'').trim());return u.protocol==='https:'?u:null}catch{return null}};
 const isGoogleDriveUrl=value=>{const u=safeHttps(value);return !!u&&['drive.google.com','docs.google.com'].includes(u.hostname.toLowerCase())};
@@ -52,7 +54,7 @@ const externalActionLinks=row=>[
   row?.youtube_url?'<a class="btn secondary" href="'+attr(row.youtube_url)+'" target="_blank" rel="noopener noreferrer">YouTube</a>':'',
   row?.facebook_url?'<a class="btn secondary" href="'+attr(row.facebook_url)+'" target="_blank" rel="noopener noreferrer">Facebook</a>':''
 ].join('');
-const serviceOptions=selected=>'<option value="">Not linked</option>'+sundaySessions().map(s=>'<option value="'+attr(s.id)+'" '+(s.id===selected?'selected':'')+'>'+esc(serviceLabel(s))+'</option>').join('');
+const serviceOptions=selected=>'<option value="">Not linked</option>'+sundayServices().map(s=>'<option value="'+attr(s.id)+'" '+(s.id===selected?'selected':'')+'>'+esc(serviceLabel(s))+'</option>').join('');
 
 async function signedUrl(row,download=false){
   const client=sb();if(!client||!row?.file_path)throw new Error('Sermon file is unavailable.');
@@ -167,7 +169,7 @@ function openForm(row=null){
   const wrap=document.createElement('div');wrap.id='sermonFormModal';wrap.className='sermon-modal';
   wrap.innerHTML='<div class="sermon-form-card card"><div class="sermon-modal-head"><div><span class="sermon-kicker">SERMON MANAGEMENT</span><h3>'+(row?'Edit Sermon':'Upload Sermon')+'</h3><p>Link Sunday Sermons to a Sunday Service, or attach Drive / YouTube / Facebook resources to Discipleship Training.</p></div><button class="sermon-close" type="button" aria-label="Close">×</button></div>'+
     '<form id="sermonForm"><label>Category<select name="sermon_category"><option value="sunday_sermon" '+((row?.sermon_category||selectedCategory)==='sunday_sermon'?'selected':'')+'>Sunday Sermon</option><option value="discipleship_training" '+((row?.sermon_category||selectedCategory)==='discipleship_training'?'selected':'')+'>Discipleship Training Sermon</option></select></label>'+
-    '<div data-sunday-link><label>Linked Sunday Service<select name="service_session_id">'+serviceOptions(row?.service_session_id||'')+'</select><span class="sermon-form-help">Selecting a service can suggest its date, preacher, title, theme, and scripture when those sermon fields are blank.</span></label></div>'+
+    '<div data-sunday-link><label>Linked Sunday Service<select name="service_media_id">'+serviceOptions(row?.service_media_id||'')+'</select><span class="sermon-form-help">Links this sermon to the actual Church Service video/replay. When matching service details exist for the same date, the form can also suggest preacher, theme, and scripture.</span></label></div>'+
     '<label>Title<input name="title" required value="'+attr(row?.title||'')+'" placeholder="Sermon title"></label>'+
     '<div class="sermon-form-grid"><label>Preacher / Teacher<input name="preacher" value="'+attr(row?.preacher||'')+'" placeholder="Name"></label><label>Sermon date<input name="sermon_date" type="date" value="'+attr(row?.sermon_date||'')+'"></label></div>'+
     '<label>Description<textarea name="description" rows="4" placeholder="Theme, scripture, or short summary">'+esc(row?.description||'')+'</textarea></label>'+
@@ -175,13 +177,13 @@ function openForm(row=null){
     '<label>Sermon / training file<input name="file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"><span class="sermon-form-help">'+(row?.file_path?'Leave blank to keep '+esc(row.file_name||'the current file')+'.':'Sunday Sermons require an uploaded file. Discipleship Training can use a file or external links. Maximum 50 MB.')+'</span></label>'+
     '<div class="sermon-form-actions"><button class="btn secondary sermon-cancel" type="button">Cancel</button><button class="btn" type="submit">'+(row?'Save Changes':'Save Sermon')+'</button></div><div id="sermonFormMsg" class="sermon-form-msg"></div></form></div>';
   document.body.appendChild(wrap);
-  const close=()=>wrap.remove(),form=wrap.querySelector('form'),category=form.elements.sermon_category,service=form.elements.service_session_id,file=form.elements.file,sundayWrap=wrap.querySelector('[data-sunday-link]'),trainingWrap=wrap.querySelector('[data-training-links]');
+  const close=()=>wrap.remove(),form=wrap.querySelector('form'),category=form.elements.sermon_category,service=form.elements.service_media_id,file=form.elements.file,sundayWrap=wrap.querySelector('[data-sunday-link]'),trainingWrap=wrap.querySelector('[data-training-links]');
   wrap.querySelector('.sermon-close').onclick=close;wrap.querySelector('.sermon-cancel').onclick=close;wrap.onclick=e=>{if(e.target===wrap)close()};
   const syncMode=()=>{const sunday=category.value==='sunday_sermon';sundayWrap.hidden=!sunday;trainingWrap.hidden=sunday;file.required=sunday&&!row?.file_path};
-  const fillFromService=()=>{const s=serviceSessions.find(x=>x.id===service.value);if(!s)return;if(!form.elements.sermon_date.value)form.elements.sermon_date.value=s.service_date||'';if(!form.elements.title.value.trim())form.elements.title.value=s.theme||s.title||'Sunday Sermon';if(!form.elements.preacher.value.trim())form.elements.preacher.value=s.guest_preacher||memberNameById(s.preacher_member_id)||'';if(!form.elements.description.value.trim())form.elements.description.value=[s.theme,s.scripture].filter(Boolean).join(' · ')};
-  category.onchange=()=>{syncMode();if(category.value==='sunday_sermon'&&!service.value){const date=form.elements.sermon_date.value,candidates=sundaySessions().filter(s=>s.service_date===date);if(candidates.length===1){service.value=candidates[0].id;fillFromService()}}};
-  service.onchange=()=>{const s=serviceSessions.find(x=>x.id===service.value);if(s&&s.service_date)form.elements.sermon_date.value=s.service_date;fillFromService()};
-  form.elements.sermon_date.onchange=()=>{if(category.value!=='sunday_sermon'||service.value)return;const candidates=sundaySessions().filter(s=>s.service_date===form.elements.sermon_date.value);if(candidates.length===1){service.value=candidates[0].id;fillFromService()}};
+  const fillFromService=()=>{const s=serviceMedia.find(x=>x.id===service.value);if(!s)return;const session=sessionForDate(s.service_date);if(!form.elements.sermon_date.value)form.elements.sermon_date.value=s.service_date||'';if(!form.elements.title.value.trim())form.elements.title.value=s.title||session?.theme||'Sunday Sermon';if(!form.elements.preacher.value.trim())form.elements.preacher.value=session?.guest_preacher||memberNameById(session?.preacher_member_id)||'';if(!form.elements.description.value.trim())form.elements.description.value=[session?.theme,session?.scripture,s.description].filter(Boolean).join(' · ')};
+  category.onchange=()=>{syncMode();if(category.value==='sunday_sermon'&&!service.value){const date=form.elements.sermon_date.value,candidates=sundayServices().filter(s=>s.service_date===date);if(candidates.length===1){service.value=candidates[0].id;fillFromService()}}};
+  service.onchange=()=>{const s=serviceMedia.find(x=>x.id===service.value);if(s&&s.service_date)form.elements.sermon_date.value=s.service_date;fillFromService()};
+  form.elements.sermon_date.onchange=()=>{if(category.value!=='sunday_sermon'||service.value)return;const candidates=sundayServices().filter(s=>s.service_date===form.elements.sermon_date.value);if(candidates.length===1){service.value=candidates[0].id;fillFromService()}};
   syncMode();
   if(!row&&category.value==='sunday_sermon'&&form.elements.sermon_date.value){form.elements.sermon_date.dispatchEvent(new Event('change'))}
   form.onsubmit=e=>saveSermon(e,row,close);
@@ -209,7 +211,8 @@ async function saveSermon(event,row,close){
       sermon_category:category,
       preacher:String(fd.get('preacher')||'').trim()||null,
       sermon_date:fd.get('sermon_date')||null,
-      service_session_id:category==='sunday_sermon'?(fd.get('service_session_id')||null):null,
+      service_media_id:category==='sunday_sermon'?(fd.get('service_media_id')||null):null,
+      service_session_id:category==='sunday_sermon'?(sessionForDate(fd.get('sermon_date'))?.id||null):null,
       google_drive_url:category==='discipleship_training'?(drive||null):null,
       youtube_url:category==='discipleship_training'?(youtube||null):null,
       facebook_url:category==='discipleship_training'?(facebook||null):null,
@@ -248,13 +251,15 @@ async function deleteSermon(row){
 async function refresh(){
   if(!root)return;
   root.innerHTML='<div class="sermon-loading card">Loading sermons…</div>';
-  const [result,sessions]=await Promise.all([
-    sb().from('vccf_sermons').select('id,title,description,file_path,file_name,mime_type,file_size,uploaded_by,created_at,sermon_category,preacher,sermon_date,updated_at,service_session_id,google_drive_url,youtube_url,facebook_url').order('sermon_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}),
+  const [result,media,sessions]=await Promise.all([
+    sb().from('vccf_sermons').select('id,title,description,file_path,file_name,mime_type,file_size,uploaded_by,created_at,sermon_category,preacher,sermon_date,updated_at,service_media_id,service_session_id,google_drive_url,youtube_url,facebook_url').order('sermon_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}),
+    sb().from('cms_services').select('id,title,youtube_url,service_date,is_live,description,broadcast_status').order('service_date',{ascending:false}).limit(250),
     sb().from('church_service_sessions').select('id,service_date,title,preacher_member_id,guest_preacher,theme,scripture,status').order('service_date',{ascending:false}).limit(250)
   ]);
   if(result.error){root.innerHTML='<div class="notice">Sermons could not be loaded. '+esc(result.error.message)+'</div>';return}
   sermons=result.data||[];
-  if(sessions.error){console.warn('Sunday service links unavailable:',sessions.error);serviceSessions=[]}else serviceSessions=sessions.data||[];
+  if(media.error){console.warn('Church Service links unavailable:',media.error);serviceMedia=[]}else serviceMedia=media.data||[];
+  if(sessions.error){console.warn('Service detail suggestions unavailable:',sessions.error);serviceSessions=[]}else serviceSessions=sessions.data||[];
   render();
 }
 async function openById(id){
