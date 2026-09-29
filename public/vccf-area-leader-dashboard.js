@@ -2,6 +2,7 @@
 'use strict';
 if(window.__VCCF_AREA_LEADER_DASHBOARD__)return;
 window.__VCCF_AREA_LEADER_DASHBOARD__=true;
+if(!window.__VCCF_SHARED_BIRTHDAYS__&&!document.querySelector('script[data-vccf-shared-birthdays]')){const s=document.createElement('script');s.src='/vccf-shared-birthdays.js?v=20260929-1';s.defer=true;s.dataset.vccfSharedBirthdays='1';document.head.appendChild(s)}
 
 const S=()=>window.VCCF?.getState?.()||{};
 const db=()=>window.VCCF?.sb;
