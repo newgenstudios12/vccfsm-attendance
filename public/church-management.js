@@ -808,11 +808,22 @@ function renderAccess(){
   content().innerHTML='<section class="cms-panel card"><div class="cms-panel-head"><div><h3>User & Access Management</h3><p>Create login accounts, then manage roles and area permissions here.</p></div><button id="createAccountInvite" class="btn" type="button">+ Create Account</button></div>'+
     '<div class="cms-info">Choose an e-mail invitation or a username with a temporary password. Username users will be required to create a new password on first sign-in.</div>'+
     '<div class="table-wrap"><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Area</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
-  document.getElementById('createAccountInvite')?.addEventListener('click',createAccountForm);
+  document.getElementById('createAccountInvite')?.addEventListener('click',()=>createAccountForm());
+  void renderRegistrationRequests();
   content().querySelectorAll('[data-access-edit]').forEach(b=>b.onclick=()=>accessForm(data.profiles.find(x=>x.user_id===b.dataset.accessEdit)));
 }
 
-function createAccountForm(){
+async function renderRegistrationRequests(){
+  const host=content();const section=document.createElement('section');section.className='cms-panel card';host.prepend(section);section.textContent='Loading registration requests…';
+  const result=await sb().from('account_registration_requests').select('*').eq('status','pending').order('created_at');
+  if(!section.isConnected)return;
+  if(result.error){section.textContent='Unable to load registration requests. '+result.error.message;return;}
+  section.innerHTML='<h3>Pending Registrations ('+result.data.length+')</h3><p>Review the request and link the correct member before approving. Approval sends an invitation to set a password.</p>'+result.data.map(r=>'<div class="cms-info"><b>'+esc(r.display_name)+'</b><br>'+esc(r.email)+'<br>'+esc(r.contact||'')+'<br>'+esc(r.notes||'')+'<div class="cms-actions"><button class="btn" data-approve="'+r.id+'">Review & Approve</button><button class="btn secondary" data-reject="'+r.id+'">Reject</button></div></div>').join('');
+  section.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>createAccountForm(result.data.find(r=>r.id===b.dataset.approve)));
+  section.querySelectorAll('[data-reject]').forEach(b=>b.onclick=async()=>{if(!confirm('Reject this registration request?'))return;b.disabled=true;const r=await sb().from('account_registration_requests').update({status:'rejected',reviewed_by:appState().session.user.id,reviewed_at:new Date().toISOString()}).eq('id',b.dataset.reject).eq('status','pending');if(r.error){toast(r.error.message);b.disabled=false;}else renderAccess();});
+}
+
+function createAccountForm(request=null){
   if(!isAdmin())return;
   const members=(appState().members||[]).slice().sort((a,b)=>memberName(a.id).localeCompare(memberName(b.id)));
   modal('Create Account',
@@ -834,6 +845,7 @@ function createAccountForm(){
       if(rr==='member'&&!areaId&&member?.area_id)areaId=member.area_id;
       if(rr==='admin'||rr==='pastor'||rr==='treasurer')areaId=null;
       const payload={account_mode:mode,display_name:displayName,role:rr,member_id:memberId,area_id:areaId};
+      if(request){payload.registration_request_id=request.id;payload.account_mode='email_invite';payload.email=request.email;}
       if(mode==='email_invite'){
         payload.email=String(f.get('email')||'').trim().toLowerCase();
         if(!payload.email)throw new Error("Enter the user's e-mail address.");
@@ -856,6 +868,7 @@ function createAccountForm(){
   const modalEl=document.getElementById('cmsModal'),modeSelect=modalEl?.querySelector('#accountMode'),emailFields=modalEl?.querySelector('#accountEmailFields'),usernameFields=modalEl?.querySelector('#accountUsernameFields'),emailInput=modalEl?.querySelector('#accountEmail'),usernameInput=modalEl?.querySelector('#accountUsername'),tempInput=modalEl?.querySelector('#accountTempPassword');
   const syncMode=()=>{const usernameMode=modeSelect?.value==='username_temp';if(emailFields)emailFields.hidden=usernameMode;if(usernameFields)usernameFields.hidden=!usernameMode;if(emailInput)emailInput.required=!usernameMode;if(usernameInput)usernameInput.required=usernameMode;if(tempInput)tempInput.required=usernameMode;};
   modeSelect?.addEventListener('change',syncMode);syncMode();
+  if(request){modeSelect.value='email_invite';modeSelect.disabled=true;emailInput.value=request.email;emailInput.readOnly=true;modalEl.querySelector('[name=display_name]').value=request.display_name;syncMode();}
 }
 
 function accessForm(p){

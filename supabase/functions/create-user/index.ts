@@ -26,6 +26,12 @@ Deno.serve(async(req)=>{
   try{
     const body=await req.json(),mode=String(body?.account_mode||"email_invite").trim().toLowerCase(),displayName=String(body?.display_name||"").trim(),role=String(body?.role||"member").trim().toLowerCase(),memberId=body?.member_id||null;
     let areaId=body?.area_id||null;
+    const requestId=body?.registration_request_id||null;
+    if(requestId){
+      const {data:registration,error}=await adminClient.from("account_registration_requests").select("id,email,status").eq("id",requestId).single();
+      if(error||!registration||registration.status!=="pending")return json({error:"Registration is no longer pending. Refresh the requests."},409);
+      if(mode!=="email_invite"||String(body?.email||"").trim().toLowerCase()!==registration.email)return json({error:"Approval must invite the registered email address."},400);
+    }
     const allowedRoles=["admin","pastor","treasurer","area_leader","member"];
     if(!["email_invite","username_temp"].includes(mode))return json({error:"Invalid account creation mode."},400);
     if(!displayName)return json({error:"Display name is required."},400);
@@ -47,7 +53,7 @@ Deno.serve(async(req)=>{
     if(mode==="email_invite"){
       const email=String(body?.email||"").trim().toLowerCase();
       if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json({error:"Enter a valid e-mail address."},400);
-      const {data:invited,error:inviteError}=await adminClient.auth.admin.inviteUserByEmail(email,{redirectTo:"https://vccfsm-attendance.vercel.app/",data:{display_name:displayName}});
+      const {data:invited,error:inviteError}=await adminClient.auth.admin.inviteUserByEmail(email,{redirectTo:"https://vccfsm-attendance.vercel.app/login",data:{display_name:displayName}});
       if(inviteError||!invited.user)return json({error:inviteError?.message||"Unable to send the account invitation."},400);
       createdUser=invited.user;identifier=email;
     }else{
@@ -55,12 +61,16 @@ Deno.serve(async(req)=>{
       if(username.length<2)return json({error:"Username must contain at least 2 letters or numbers."},400);
       if(password.length<8)return json({error:"Temporary password must be at least 8 characters."},400);
       const emailAlias=`${username}@vccf.local`;
-      const {data:created,error:createError}=await adminClient.auth.admin.createUser({email:emailAlias,password,email_confirm:true,user_metadata:{display_name:displayName,username}});
+      const {data:created,error:createError}=await adminClient.auth.admin.createUser({email:emailAlias,password,email_confirm:true,app_metadata:{vccf_admin_created:true},user_metadata:{display_name:displayName,username}});
       if(createError||!created.user)return json({error:createError?.message||"Unable to create the username account."},400);
       createdUser=created.user;identifier=username;mustChangePassword=true;
     }
     const {error:profileError}=await adminClient.from("profiles").upsert({user_id:createdUser.id,role,area_id:areaId,member_id:memberId,display_name:displayName,must_change_password:mustChangePassword,updated_at:new Date().toISOString()},{onConflict:"user_id"});
     if(profileError){await adminClient.auth.admin.deleteUser(createdUser.id);return json({error:profileError.message},400)}
+    if(requestId){
+      const {error:reviewError}=await adminClient.from("account_registration_requests").update({status:"approved",reviewed_by:authData.user.id,reviewed_at:new Date().toISOString(),user_id:createdUser.id}).eq("id",requestId).eq("status","pending");
+      if(reviewError)return json({error:"Account created, but request status could not be updated. Contact an administrator."},500);
+    }
     await adminClient.from("audit_log").insert({actor_user_id:authData.user.id,action:mode==="email_invite"?"create_account_invite":"create_username_account",entity_type:"profile",entity_id:createdUser.id,metadata:{identifier,mode,role,area_id:areaId,member_id:memberId}});
     return json({ok:true,mode,user_id:createdUser.id,identifier,role,must_change_password:mustChangePassword});
   }catch(error){return json({error:error instanceof Error?error.message:"Unable to create account."},400)}
