@@ -5,7 +5,8 @@
 
   const ALLOWED_MINISTRIES = new Set([
     'worship','worship ministry','creative ministry','creative arts','creative arts ministry',
-    'music','music ministry','band','band ministry'
+    'music','music ministry','band','band ministry',
+    'worship leader','worship leaders','worship leader ministry','worship leaders ministry'
   ]);
   const SERVICE_ROLE_OPTIONS = [
     'Worship Leader','Backup Singer','Keyboard','Acoustic Guitar','Electric Guitar',
@@ -285,8 +286,10 @@
       const titles=Array.from({length:6},(_,i)=>String(f.get(`song_${i+1}_title`)||'').trim());
       const nonEmpty=titles.filter(Boolean);if(nonEmpty.length>6)throw new Error('A worship line-up can contain no more than six songs.');
       if(status==='Submitted' && nonEmpty.length===0)throw new Error('Add at least one worship song before submitting.');
-      const s=schedules.find(x=>x.id===scheduleId);const wl=(s?.worship_schedule_assignments||[]).find(a=>norm(a.ministry_role)==='worship leader');
+      const s=schedules.find(x=>x.id===scheduleId);const leaders=(s?.worship_schedule_assignments||[]).filter(a=>norm(a.ministry_role)==='worship leader');
+      const wl=leaders.find(a=>a.member_id===profile.member_id)||leaders[0];
       const payload={schedule_id:scheduleId,worship_leader_member_id:wl?.member_id||profile.member_id||null,status,offertory_title:String(f.get('offertory_title')||'').trim()||null,offertory_artist:String(f.get('offertory_artist')||'').trim()||null,offertory_key:String(f.get('offertory_key')||'').trim()||null,offertory_reference_url:String(f.get('offertory_reference_url')||'').trim()||null,offertory_notes:String(f.get('offertory_notes')||'').trim()||null,revision_note:status==='Submitted'?null:(existing?.revision_note||null),submitted_at:status==='Submitted'?new Date().toISOString():(existing?.submitted_at||null),updated_by:user.id,updated_at:new Date().toISOString()};
+      payload.approved_by=null;payload.approved_at=null;
       let lineupId=existing?.id;
       if(lineupId){const r=await sb.from('worship_lineups').update(payload).eq('id',lineupId);if(r.error)throw r.error;}
       else{payload.created_by=user.id;const r=await sb.from('worship_lineups').insert(payload).select('id').single();if(r.error)throw r.error;lineupId=r.data.id;}
