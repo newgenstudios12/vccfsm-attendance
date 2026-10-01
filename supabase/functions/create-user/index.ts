@@ -53,7 +53,7 @@ Deno.serve(async(req)=>{
     if(mode==="email_invite"){
       const email=String(body?.email||"").trim().toLowerCase();
       if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json({error:"Enter a valid e-mail address."},400);
-      const {data:invited,error:inviteError}=await adminClient.auth.admin.inviteUserByEmail(email,{redirectTo:"https://vccfsm-attendance.vercel.app/login",data:{display_name:displayName}});
+      const {data:invited,error:inviteError}=await adminClient.auth.admin.inviteUserByEmail(email,{redirectTo:"https://vccfsm-attendance.vercel.app/login?setup=password",data:{display_name:displayName}});
       if(inviteError||!invited.user)return json({error:inviteError?.message||"Unable to send the account invitation."},400);
       createdUser=invited.user;identifier=email;
     }else{
