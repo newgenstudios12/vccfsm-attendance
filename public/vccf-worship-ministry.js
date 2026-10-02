@@ -152,8 +152,29 @@
   }
 
   async function loadSchedules(){
-    const sr=await sb.from('worship_service_schedules').select('id,service_date,service_name,notes,created_at,updated_at,worship_schedule_assignments(id,member_id,ministry_role,notes,members(id,display_name,first_name,last_name))').order('service_date',{ascending:false}).limit(80);
-    if(sr.error) throw sr.error; schedules=sr.data||[]; return schedules;
+    // Keep assignment/member IDs for ministry actions, but resolve public schedule
+    // names through the same read-only function used by church members. Joining
+    // members directly is area-scoped by RLS for Area Leaders.
+    const [sr,nr]=await Promise.all([
+      sb.from('worship_service_schedules').select('id,service_date,service_name,notes,created_at,updated_at,worship_schedule_assignments(id,member_id,ministry_role,notes,members(id,display_name,first_name,last_name))').order('service_date',{ascending:false}).limit(80),
+      sb.rpc('get_music_ministry_readonly')
+    ]);
+    if(sr.error) throw sr.error;
+    if(nr.error) throw nr.error;
+    const namesByAssignment=new Map(
+      (Array.isArray(nr.data)?nr.data:[])
+        .flatMap(s=>Array.isArray(s.assignments)?s.assignments:[])
+        .filter(a=>a.id)
+        .map(a=>[a.id,a.member_name])
+    );
+    schedules=(sr.data||[]).map(s=>({
+      ...s,
+      worship_schedule_assignments:(s.worship_schedule_assignments||[]).map(a=>{
+        const name=namesByAssignment.get(a.id);
+        return name?{...a,members:{...(a.members||{}),id:a.member_id,display_name:name}}:a;
+      })
+    }));
+    return schedules;
   }
 
   async function loadMembers(){
@@ -202,7 +223,7 @@
       const upcoming=ordered.filter(x=>x.service_date>=todayPH());
       const recent=ordered.filter(x=>x.service_date<todayPH()).slice(-6).reverse();
       root.innerHTML=`
-        <div class="wm-hero"><div><h2>Schedule of Ministers</h2><div class="wm-muted">Sunday worship team assignments for Worship Ministry, Creative Arts, Music Ministry and Band Ministry.</div></div><span class="wm-pill">Restricted ministry access</span></div>
+        <div class="wm-hero"><div><h2>Schedule of Ministers</h2><div class="wm-muted">Sunday worship team assignments for Worship Ministry, Creative Arts, Music Ministry and Band Ministry.</div></div><span class="wm-pill">${canManage?'Ministry manager access':'Ministry member access'}</span></div>
         ${canManage?`<div class="wm-card" style="margin-bottom:14px"><h3>Create Sunday Schedule</h3><form id="wmScheduleForm" class="wm-form"><div class="wm-row"><div><label>Sunday / Service Date</label><input type="date" name="service_date" min="${todayPH()}" required></div><div><label>Service Name</label><input name="service_name" value="Sunday Worship Service" required></div></div><div><label>Notes</label><textarea name="notes" rows="2" placeholder="Call time, rehearsal notes, special instructions…"></textarea></div><div class="wm-actions"><button class="wm-btn" type="submit">Create Schedule</button></div></form></div>`:''}
         <div class="wm-grid">
           <div class="wm-card"><h3>Upcoming Sundays</h3><div class="wm-schedule-list">${upcoming.map(renderScheduleCard).join('')||'<div class="wm-empty">No upcoming worship schedule yet.</div>'}</div></div>
