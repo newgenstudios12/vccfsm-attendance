@@ -161,8 +161,9 @@ if(!form)return;
 const projectRef='hvnlstaecjqhjtiojutd';
 const storagePrefix='sb-'+projectRef+'-auth-token';
 const clearAuthStorage=()=>{
-  for(const storage of [window.localStorage,window.sessionStorage]){
+  for(const name of ['localStorage','sessionStorage']){
     try{
+      const storage=window[name];
       for(let i=storage.length-1;i>=0;i--){
         const key=storage.key(i);
         if(key&&(key===storagePrefix||key.startsWith(storagePrefix)))storage.removeItem(key);
@@ -176,6 +177,8 @@ const withTimeout=(promise,ms)=>new Promise((resolve,reject)=>{
 });
 const setLoginMessage=(text,good=false)=>{const node=document.getElementById('loginMsg');if(!node)return;node.textContent=text;node.style.color=good?'#167647':'#b42318'};
 form.addEventListener('submit',async event=>{
+  // The main login handler supports session/memory fallback without reloading.
+  if(window.VCCFAuthStorage?.mode!=='localStorage')return;
   event.preventDefault();event.stopImmediatePropagation();
   const button=document.getElementById('loginBtn'),emailInput=document.getElementById('email'),passwordInput=document.getElementById('password');
   const raw=String(emailInput?.value||'').trim().toLowerCase(),password=String(passwordInput?.value||'');
@@ -187,7 +190,7 @@ form.addEventListener('submit',async event=>{
     clearAuthStorage();
     const url=window.VCCF_SUPABASE_URL,key=window.VCCF_SUPABASE_PUBLISHABLE_KEY;
     if(!window.supabase?.createClient||!url||!key)throw new Error('Authentication service did not initialize. Reload VCCF Connect and try again.');
-    const fresh=window.supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});if(window.VCCF)window.VCCF.sb=fresh;
+    const fresh=window.supabase.createClient(url,key,{auth:{storage:window.VCCFAuthStorage.storage,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});if(window.VCCF)window.VCCF.sb=fresh;
     const response=await withTimeout(fresh.auth.signInWithPassword({email:normalized,password}),10000);if(response?.error)throw response.error;if(!response?.data?.session)throw new Error('No authenticated session returned.');
     setLoginMessage('Signed in successfully. Opening VCCF Connect…',true);setTimeout(()=>location.reload(),120);
   }catch(error){console.error('VCCF login recovery',error);setLoginMessage(error?.message||'Unable to sign in.');if(button){button.disabled=false;button.textContent='Sign in'}}
