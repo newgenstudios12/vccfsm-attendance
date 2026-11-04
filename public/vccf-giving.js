@@ -102,6 +102,10 @@ function sundayWorkflowHtml(){
   else if(status==='draft')actions='<button id="recordSundayGiving" class="btn secondary" type="button">+ Record Tithe / Offering</button><button id="submitSundayGiving" class="btn" type="button">Sign & Submit</button>';
   else if(status==='submitted')actions=canApprove()?'<button id="returnSundayGivingDraft" class="btn secondary" type="button">Return to Draft</button><button id="approveSundayGiving" class="btn" type="button">Approve Sunday Giving</button>':'<span class="sunday-giving-approved-note">Submitted · waiting for Admin/Pastor approval.</span>';
   else actions='<span class="sunday-giving-approved-note">✓ Approved totals are synced to the Sunday Summary.</span>';
+  if(batch&&status==='draft'&&unassigned.length){
+    const eligible=unassigned.filter(r=>['tithe','offering'].includes(String(r.giving_type||'').toLowerCase()));
+    if(eligible.length)actions='<button id="attachSundayGivingUnassigned" class="btn secondary" type="button">Attach '+eligible.length+' Unassigned Record'+(eligible.length===1?'':'s')+'</button>'+actions;
+  }
 
   return '<section class="sunday-giving card"><div class="sunday-giving-head"><div><span class="giving-kicker">SUNDAY GIVING APPROVAL</span><h3>Tithes & Offerings for Sunday</h3><p>Record member giving, sign the Sunday batch, then obtain Admin/Pastor approval before totals appear in the Sunday Summary.</p></div><div class="sunday-giving-date"><label>Sunday<input id="sundayGivingDate" type="date" value="'+attr(selectedSunday)+'" max="'+attr(todayKey())+'"></label><button id="openSundayGiving" class="btn secondary" type="button">Open Sunday</button></div></div>'+
     '<div class="sunday-giving-status-line"><span class="sunday-giving-status '+batchStatusClass(status)+'">'+esc(statusText)+'</span>'+(batch?'<span>'+totals.rows.length+' linked record'+(totals.rows.length===1?'':'s')+'</span>':'<span>No Sunday batch yet</span>')+(unassigned.length?'<span>'+unassigned.length+' existing Sunday record'+(unassigned.length===1?'':'s')+' will be attached when the batch starts</span>':'')+'</div>'+
@@ -154,6 +158,7 @@ function render(){
     document.getElementById('submitSundayGiving')?.addEventListener('click',submitSundayBatch);
     document.getElementById('approveSundayGiving')?.addEventListener('click',approveSundayBatch);
     document.getElementById('returnSundayGivingDraft')?.addEventListener('click',returnSundayBatchToDraft);
+    document.getElementById('attachSundayGivingUnassigned')?.addEventListener('click',attachUnassignedSundayGiving);
   }
   renderBody();
 }
@@ -181,6 +186,33 @@ function signatureModal({title,copy,buttonLabel,onConfirm}){
     const button=e.currentTarget,old=button.textContent;button.disabled=true;button.textContent='Saving…';msg.textContent='';
     try{await onConfirm(name);close()}catch(error){msg.textContent=error.message||'Unable to save e-signature.';button.disabled=false;button.textContent=old}
   };
+}
+
+async function attachUnassignedSundayGiving(){
+  const batch=currentBatch();
+  if(!canManage()||!batch||batch.workflow_status!=='draft')return;
+  const eligible=sundayRecords.filter(r=>r.given_on===batch.sunday_date&&!r.sunday_batch_id&&!r.bible_study_batch_id&&['tithe','offering'].includes(String(r.giving_type||'').toLowerCase()));
+  if(!eligible.length)return;
+  if(!confirm('Attach '+eligible.length+' unassigned tithe/offering record'+(eligible.length===1?'':'s')+' received on '+dateLabel(batch.sunday_date)+' to this Sunday batch? The original giving dates and amounts will not change.'))return;
+  const button=document.getElementById('attachSundayGivingUnassigned');
+  if(button){button.disabled=true;button.textContent='Attaching…'}
+  try{
+    const updated=await sb().from('giving_records')
+      .update({sunday_batch_id:batch.id})
+      .eq('given_on',batch.sunday_date)
+      .is('sunday_batch_id',null)
+      .is('bible_study_batch_id',null)
+      .in('giving_type',['Tithe','Offering'])
+      .select('id');
+    if(updated.error)throw updated.error;
+    const changed=(updated.data||[]).length;
+    window.dispatchEvent(new CustomEvent('vccf-sunday-giving-updated',{detail:{date:batch.sunday_date,status:'draft',attached:changed}}));
+    await refresh(loadedMonth||monthKey());
+    if(changed!==eligible.length)alert('Attached '+changed+' of '+eligible.length+' eligible records. Refresh and check for any remaining unassigned entries.');
+  }catch(error){
+    alert(error?.message||'Unable to attach the unassigned Sunday giving records.');
+    if(button){button.disabled=false;button.textContent='Attach Unassigned Records'}
+  }
 }
 
 function returnSundayBatchToDraft(){
