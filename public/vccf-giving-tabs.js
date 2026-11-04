@@ -160,8 +160,12 @@ async function refreshStandard(force=false){
 async function exportSundayCsv(){
   await loadStandardRows(true);
   const rows=standardFilters(standardRows),members=directory.length?directory:(state().members||[]),map=new Map(members.map(m=>[String(m.id),m]));
-  const values=[['Date','Member','Member Code','Area','Type','Amount','Sunday Workflow','Payment Method','Reference','Notes']];
-  rows.forEach(r=>{const m=map.get(String(r.member_id));values.push([r.given_on,memberName(m),m?.member_code||'',m?areaName(m.area_id):'',r.giving_type,Number(r.amount||0).toFixed(2),r.sunday_batch_id?'Sunday batch':'',r.payment_method||'',r.reference_no||'',r.notes||''])});
+  const assignedIds=[...new Set(rows.map(r=>r.sunday_batch_id).filter(Boolean))];
+  const assigned=assignedIds.length?await sb().from('sunday_giving_batches').select('id,sunday_date').in('id',assignedIds):{data:[],error:null};
+  if(assigned.error){alert('Unable to export Sunday assignments: '+assigned.error.message);return}
+  const dates=new Map((assigned.data||[]).map(b=>[b.id,b.sunday_date]));
+  const values=[['Date received','Assigned Sunday','Member','Member Code','Area','Type','Amount','Sunday Workflow','Payment Method','Reference','Notes']];
+  rows.forEach(r=>{const m=map.get(String(r.member_id));values.push([r.given_on,dates.get(r.sunday_batch_id)||'',memberName(m),m?.member_code||'',m?areaName(m.area_id):'',r.giving_type,Number(r.amount||0).toFixed(2),r.sunday_batch_id?'Sunday batch':'',r.payment_method||'',r.reference_no||'',r.notes||''])});
   const csv=values.map(cols=>cols.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
   const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));link.download='vccf-sunday-tithes-offerings-'+(document.getElementById('givingMonth')?.value||monthKey())+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
 }
