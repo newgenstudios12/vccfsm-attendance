@@ -100,7 +100,7 @@ function sundayWorkflowHtml(){
   let actions='';
   if(!batch)actions='<button id="startSundayGiving" class="btn" type="button">Start Sunday Giving</button>';
   else if(status==='draft')actions='<button id="recordSundayGiving" class="btn secondary" type="button">+ Record Tithe / Offering</button><button id="submitSundayGiving" class="btn" type="button">Sign & Submit</button>';
-  else if(status==='submitted')actions=canApprove()?'<button id="approveSundayGiving" class="btn" type="button">Approve Sunday Giving</button>':'<span class="sunday-giving-approved-note">Submitted · waiting for Admin/Pastor approval.</span>';
+  else if(status==='submitted')actions=canApprove()?'<button id="returnSundayGivingDraft" class="btn secondary" type="button">Return to Draft</button><button id="approveSundayGiving" class="btn" type="button">Approve Sunday Giving</button>':'<span class="sunday-giving-approved-note">Submitted · waiting for Admin/Pastor approval.</span>';
   else actions='<span class="sunday-giving-approved-note">✓ Approved totals are synced to the Sunday Summary.</span>';
 
   return '<section class="sunday-giving card"><div class="sunday-giving-head"><div><span class="giving-kicker">SUNDAY GIVING APPROVAL</span><h3>Tithes & Offerings for Sunday</h3><p>Record member giving, sign the Sunday batch, then obtain Admin/Pastor approval before totals appear in the Sunday Summary.</p></div><div class="sunday-giving-date"><label>Sunday<input id="sundayGivingDate" type="date" value="'+attr(selectedSunday)+'" max="'+attr(todayKey())+'"></label><button id="openSundayGiving" class="btn secondary" type="button">Open Sunday</button></div></div>'+
@@ -153,6 +153,7 @@ function render(){
     document.getElementById('recordSundayGiving')?.addEventListener('click',()=>openForm(null,currentBatch()));
     document.getElementById('submitSundayGiving')?.addEventListener('click',submitSundayBatch);
     document.getElementById('approveSundayGiving')?.addEventListener('click',approveSundayBatch);
+    document.getElementById('returnSundayGivingDraft')?.addEventListener('click',returnSundayBatchToDraft);
   }
   renderBody();
 }
@@ -179,6 +180,55 @@ function signatureModal({title,copy,buttonLabel,onConfirm}){
     if(!name||!certified){msg.textContent='Type your full name and confirm the certification.';return}
     const button=e.currentTarget,old=button.textContent;button.disabled=true;button.textContent='Saving…';msg.textContent='';
     try{await onConfirm(name);close()}catch(error){msg.textContent=error.message||'Unable to save e-signature.';button.disabled=false;button.textContent=old}
+  };
+}
+
+function returnSundayBatchToDraft(){
+  // Approved batches remain immutable. The database trigger enforces the same rules.
+  const batch=currentBatch();
+  if(!canApprove()||!batch||batch.workflow_status!=='submitted')return;
+  document.getElementById('givingReturnDraftModal')?.remove();
+  const wrap=document.createElement('div');
+  wrap.id='givingReturnDraftModal';
+  wrap.className='giving-modal';
+  wrap.innerHTML='<div class="giving-modal-card giving-signature-modal card">'+
+    '<div class="giving-modal-head"><div><span class="giving-kicker">FINANCE CORRECTION</span><h3>Return Sunday Giving to Draft</h3>'+
+    '<p>Reopen '+esc(dateLabel(batch.sunday_date))+' so missing entries can be assigned. The previous recorder e-signature will be cleared, and the corrected batch must be signed and submitted again. This action is recorded in the audit log.</p></div>'+
+    '<button type="button" class="giving-close" aria-label="Close">×</button></div>'+
+    '<label>Reason for reopening (required)<textarea id="givingReturnDraftReason" rows="3" maxlength="500" placeholder="Describe the missing or corrected contributions..."></textarea></label>'+
+    '<label class="giving-certify"><input id="givingReturnDraftConfirm" type="checkbox"><span>I understand the batch will require a new recorder signature and approval.</span></label>'+
+    '<div class="giving-modal-actions"><button type="button" class="btn secondary giving-cancel">Cancel</button><button id="confirmReturnSundayDraft" type="button" class="btn">Return to Draft</button></div>'+
+    '<div id="givingReturnDraftMsg" class="giving-form-msg" role="alert"></div></div>';
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector('.giving-close').onclick=close;
+  wrap.querySelector('.giving-cancel').onclick=close;
+  wrap.onclick=e=>{if(e.target===wrap)close()};
+  wrap.querySelector('#confirmReturnSundayDraft').onclick=async e=>{
+    const reason=String(wrap.querySelector('#givingReturnDraftReason').value||'').trim();
+    const confirmed=wrap.querySelector('#givingReturnDraftConfirm').checked;
+    const msg=wrap.querySelector('#givingReturnDraftMsg');
+    if(reason.length<10||!confirmed){
+      msg.textContent='Enter a reason (at least 10 characters) and confirm the signature will be reset.';
+      return;
+    }
+    const button=e.currentTarget;
+    button.disabled=true;button.textContent='Reopening…';msg.textContent='';
+    try{
+      const result=await sb().from('sunday_giving_batches')
+        .update({workflow_status:'draft',reopened_reason:reason})
+        .eq('id',batch.id)
+        .eq('workflow_status','submitted')
+        .select('id,sunday_date,workflow_status')
+        .single();
+      if(result.error)throw result.error;
+      close();
+      window.dispatchEvent(new CustomEvent('vccf-sunday-giving-updated',{detail:{date:batch.sunday_date,status:'draft',reopened:true}}));
+      await refresh(loadedMonth||monthKey());
+    }catch(error){
+      msg.textContent=error?.message||'Unable to return Sunday giving to draft.';
+      button.disabled=false;button.textContent='Return to Draft';
+    }
   };
 }
 
