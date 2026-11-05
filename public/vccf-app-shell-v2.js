@@ -231,7 +231,7 @@ function renderSelfCheck(){
   const button=document.getElementById('selfCheckButton');if(button&&member&&isSunday)button.onclick=()=>recordAttendance(member,'self',button,'selfCheckStatus','sunday');
 }
 
-async function onReady(){await resolveFinanceAccess();ensureExtraViews();buildShell(true);updateIdentity();prepareAttendanceWorkspace();applyTheme(state().profile?.theme_preference||document.documentElement.dataset.theme||'light');navigate(current)}
+async function onReady(){await resolveFinanceAccess();ensureExtraViews();buildShell(true);updateIdentity();prepareAttendanceWorkspace();applyTheme(state().profile?.theme_preference||document.documentElement.dataset.theme||'light');const params=new URLSearchParams(location.search);if(params.get('view')==='churchcalendar')current='churchcalendar';navigate(current);if(current==='churchcalendar'&&params.get('study'))window.VCCFChurchCalendar?.openStudy?.(params.get('study'))}
 window.addEventListener('vccf-app-ready',()=>setTimeout(onReady,0));window.addEventListener('vccf-cms-route',e=>{if(e.detail?.route){current=e.detail.route;setHeading(current);setActive(current)}});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>buildShell(),{once:true});else buildShell();
 window.addEventListener('vccf-open-member-id',event=>{if(state().session?.user?.id)navigate('memberid',event.detail?.memberId||null)});
 })();
