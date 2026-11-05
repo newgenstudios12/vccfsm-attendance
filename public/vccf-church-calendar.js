@@ -21,7 +21,7 @@ async function load(){if(!db()||!uid())return;let start=new Date(Date.UTC(cursor
 async function refresh(){try{await load();render()}catch(e){msg(e.message||'Unable to load calendar')}}
 function render(){let el=host();if(!el)return;styles();let rows=displayed(),y=cursor.getFullYear(),m=cursor.getMonth(),days=new Date(y,m+1,0).getDate(),first=new Date(y,m,1).getDay(),cells='';for(let i=0;i<first;i++)cells+='<span></span>';for(let i=1;i<=days;i++){let d=y+'-'+String(m+1).padStart(2,'0')+'-'+String(i).padStart(2,'0'),dots=rows.filter(x=>phday(x.start_at)===d).slice(0,5).map(x=>'<span class="vccf-cal-dot '+(x.kind==='event'?'event':'')+'"></span>').join('');cells+='<button type="button" class="vccf-cal-day '+(d===selectedDate?'active':'')+'" data-calendar-date="'+d+'"><b>'+i+'</b><div class="vccf-cal-dots">'+dots+'</div></button>'}
 let items=rows.filter(x=>phday(x.start_at)===selectedDate).sort((a,b)=>a.start_at.localeCompare(b.start_at));
-el.innerHTML='<div class="vccf-cal"><section class="card"><div class="vccf-cal-row"><div><h2>Church Calendar</h2><p>All Bible Studies and Church Activities in one calendar.</p></div>'+(staff()?'<button class="btn" id="calNew">+ Bible Study</button>':'')+'</div><div class="vccf-cal-controls" style="margin-top:12px"><select id="calFilter"><option value="all">All</option><option value="bible">Bible Studies</option><option value="event">Church Activities</option></select><select id="calArea"><option value="">All Areas</option>'+(S().areas||[]).map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join('')+'</select><button class="btn secondary" id="calPrev">‹</button><b>'+esc(cursor.toLocaleDateString('en-PH',{month:'long',year:'numeric'}))+'</b><button class="btn secondary" id="calNext">›</button><button class="btn secondary" id="calToday">Today</button></div><div class="vccf-cal-days">'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=>'<small style="text-align:center">'+x+'</small>').join('')+cells+'</div></section><section class="card"><h3>'+esc(new Date(selectedDate+'T12:00:00+08:00').toLocaleDateString('en-PH',{dateStyle:'full'}))+'</h3>'+(items.length?items.map(x=>'<div class="vccf-cal-item"><div class="vccf-cal-row"><div><b>'+esc(x.title)+'</b><p>'+(x.kind==='study'?'Bible Study · '+esc(area(x.area_id)):'Church Activity · '+esc(x.event_type||'Event'))+'</p><p>'+esc(time(x.start_at))+' · '+esc(x.location||'Location not specified')+'</p></div><button class="btn secondary" '+(x.kind==='study'?'data-cal-open="'+esc(x.id)+'"':'data-cal-event')+'>'+(x.kind==='study'?'Attendance / Details':'Events Module')+'</button></div></div>').join(''):'<p>No activities on this day for the selected filter.</p>')+'<p id="calStatus" role="status"></p></section><div id="calDetail"></div></div>';
+el.innerHTML='<div class="vccf-cal"><section class="card"><div class="vccf-cal-row"><div><h2>Church Calendar</h2><p>All Bible Studies and Church Activities in one calendar.</p></div>'+(staff()?'<button class="btn" id="calNew">+ Bible Study</button>':'')+'</div><div class="vccf-cal-controls" style="margin-top:12px"><select id="calFilter"><option value="all">All</option><option value="bible">Bible Studies</option><option value="event">Church Activities</option></select><select id="calArea"><option value="">All Areas</option>'+(S().areas||[]).map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join('')+'</select><button class="btn secondary" id="calPrev">‹</button><b>'+esc(cursor.toLocaleDateString('en-PH',{month:'long',year:'numeric'}))+'</b><button class="btn secondary" id="calNext">›</button><button class="btn secondary" id="calToday">Today</button></div><div class="vccf-cal-days">'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=>'<small style="text-align:center">'+x+'</small>').join('')+cells+'</div></section><section class="card"><h3>'+esc(new Date(selectedDate+'T12:00:00+08:00').toLocaleDateString('en-PH',{dateStyle:'full'}))+'</h3>'+(items.length?items.map(x=>'<div class="vccf-cal-item"><div class="vccf-cal-row"><div><b>'+esc(x.title)+'</b><p>'+(x.kind==='study'?'Bible Study · '+esc(area(x.area_id)):'Church Activity · '+esc(x.event_type||'Event'))+'</p><p>'+esc(time(x.start_at))+' · '+esc([x.location,x.kind==='study'?x.barangay:null,x.kind==='study'?x.city_municipality:null,x.kind==='study'?x.province:null].filter(Boolean).join(', ')||'Location not specified')+'</p></div><button class="btn secondary" '+(x.kind==='study'?'data-cal-open="'+esc(x.id)+'"':'data-cal-event')+'>'+(x.kind==='study'?'Attendance / Details':'Events Module')+'</button></div></div>').join(''):'<p>No activities on this day for the selected filter.</p>')+'<p id="calStatus" role="status"></p></section><div id="calDetail"></div></div>';
 document.getElementById('calFilter').value=type;document.getElementById('calArea').value=areaFilter;
 document.getElementById('calFilter').onchange=e=>{type=e.target.value;studyId=null;render()};
 document.getElementById('calArea').onchange=e=>{areaFilter=e.target.value;studyId=null;render()};
@@ -35,11 +35,117 @@ el.querySelectorAll('[data-cal-event]').forEach(b=>b.onclick=()=>document.queryS
 if(studyId)void details()}
 async function shift(n){cursor.setMonth(cursor.getMonth()+n);selectedDate=phday(new Date(cursor.getFullYear(),cursor.getMonth(),1,12));studyId=null;await refresh()}
 function val(id){return document.getElementById(id)?.value||''}
+
+const calPsgcApi='https://psgc.cloud/api/v2',calPsgcCache=new Map();
+const calPlaceName=v=>String(v||'').trim().replace(/\bLos Banos\b/gi,'Los Baños');
+const calPlaceKey=v=>calPlaceName(v).toLocaleLowerCase('en-PH');
+async function calPsgc(path){
+  if(calPsgcCache.has(path))return calPsgcCache.get(path);
+  let req=fetch(calPsgcApi+path,{headers:{Accept:'application/json'}}).then(async response=>{
+    if(!response.ok)throw new Error('Philippine address list is temporarily unavailable.');
+    let json=await response.json();
+    return Array.isArray(json)?json:Array.isArray(json?.data)?json.data:Array.isArray(json?.results)?json.results:[];
+  }).catch(error=>{calPsgcCache.delete(path);throw error});
+  calPsgcCache.set(path,req);
+  return req;
+}
+function calLocationName(id){return document.getElementById(id)?.selectedOptions?.[0]?.dataset?.name||''}
+function calLocationCode(id){
+  let v=val(id);
+  return v&&!v.startsWith('legacy:')?v:null;
+}
+async function initCalendarAddress(s){
+  const p=document.getElementById('calProvince'),c=document.getElementById('calTown'),b=document.getElementById('calBarangay'),message=document.getElementById('calAddressMsg');
+  if(!p||!c||!b)return;
+  const seed={
+    province:s?.province||'Laguna', provinceCode:s?.province_psgc_code||'',
+    city:s?.city_municipality||(s?'':'Santa Maria'), cityCode:s?.city_municipality_psgc_code||'',
+    barangay:s?.barangay||'', barangayCode:s?.barangay_psgc_code||''
+  };
+  let provinceLoad=0,townLoad=0;
+  const areaMembers=()=>(S().members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive'&&m.area_id===val('calStudyArea'));
+  function waiting(node,label){node.disabled=true;node.innerHTML='<option value="">'+esc(label)+'</option>'}
+  function populate(node,rows,label,code='',wanted='',custom=[]){
+    const items=new Map();
+    for(const r of rows){
+      let name=calPlaceName(r?.name||r?.area_name),id=String(r?.code||r?.psgc_code||'');
+      if(name&&id&&!items.has(calPlaceKey(name)))items.set(calPlaceKey(name),{name,id});
+    }
+    for(const v of custom){
+      let name=calPlaceName(v?.name),id=String(v?.code||'legacy:'+name);
+      if(name&&!items.has(calPlaceKey(name)))items.set(calPlaceKey(name),{name,id});
+    }
+    if(wanted&&!items.has(calPlaceKey(wanted)))items.set(calPlaceKey(wanted),{name:calPlaceName(wanted),id:'legacy:'+wanted});
+    const arr=[...items.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
+    node.innerHTML='<option value="">'+esc(label)+'</option>'+arr.map(x=>'<option value="'+esc(x.id)+'" data-name="'+esc(x.name)+'">'+esc(x.name)+'</option>').join('');
+    let chosen=arr.find(x=>(code&&x.id===code)||(wanted&&calPlaceKey(x.name)===calPlaceKey(wanted)));
+    if(chosen)node.value=chosen.id;
+    node.disabled=false;
+  }
+  function customFromMembers(field,codeField,province='',city=''){
+    let filtered=areaMembers().filter(m=>(!province||calPlaceKey(m.province)===calPlaceKey(province))&&(!city||calPlaceKey(m.city_municipality)===calPlaceKey(city)));
+    return filtered.map(m=>({name:m[field],code:m[codeField]||null})).filter(x=>x.name);
+  }
+  async function loadBarangays(keep=false){
+    const town=c.value,selectedTown=calLocationName('calTown');
+    if(!town){waiting(b,'Select town / city first');return}
+    waiting(b,'Loading barangays…');
+    const wanted=keep?seed.barangay:'',code=keep?seed.barangayCode:'';
+    const memberExtras=customFromMembers('barangay','barangay_psgc_code',calLocationName('calProvince'),selectedTown);
+    try{
+      if(town.startsWith('legacy:'))throw new Error('Using saved member addresses');
+      let rows=await calPsgc('/cities-municipalities/'+encodeURIComponent(town)+'/barangays');
+      if(c.value!==town)return;
+      populate(b,rows,'Select Barangay / Cellgroup',code,wanted,memberExtras);
+      if(message)message.textContent='';
+    }catch(error){
+      if(c.value!==town)return;
+      populate(b,[],'Select Barangay / Cellgroup',code,wanted,memberExtras);
+      if(message)message.textContent='Showing member-directory barangays / cellgroups. The PSGC list is temporarily unavailable.';
+    }
+  }
+  async function loadTowns(keep=false){
+    const province=p.value,chosenProvince=calLocationName('calProvince'),ticket=++townLoad;
+    if(!province){waiting(c,'Select province first');waiting(b,'Select town / city first');return}
+    waiting(c,'Loading towns / cities…');waiting(b,'Select town / city first');
+    let extras=customFromMembers('city_municipality','city_municipality_psgc_code',chosenProvince);
+    const wanted=keep?seed.city:'',code=keep?seed.cityCode:'';
+    try{
+      if(province.startsWith('legacy:'))throw new Error('Using saved member addresses');
+      const path=province==='NCR'?'/regions/130000000/cities-municipalities':'/provinces/'+encodeURIComponent(province)+'/cities-municipalities';
+      let rows=await calPsgc(path);
+      if(ticket!==townLoad||p.value!==province)return;
+      populate(c,rows,'Select town / city',code,wanted,extras);
+    }catch(error){
+      if(ticket!==townLoad||p.value!==province)return;
+      populate(c,[],'Select town / city',code,wanted,extras);
+      if(message)message.textContent='Showing saved towns / cities from the member directory.';
+    }
+    await loadBarangays(keep);
+  }
+  waiting(p,'Loading provinces…');waiting(c,'Select province first');waiting(b,'Select town / city first');
+  let extras=customFromMembers('province','province_psgc_code');
+  try{
+    let rows=await calPsgc('/provinces');
+    rows=[...rows,{code:'NCR',name:'Metro Manila (NCR)'}];
+    if(!document.getElementById('calForm'))return;
+    populate(p,rows,'Select province / NCR',seed.provinceCode,seed.province,extras);
+  }catch(error){
+    if(!document.getElementById('calForm'))return;
+    populate(p,[],'Select province / NCR',seed.provinceCode,seed.province,extras);
+    if(message)message.textContent='Showing saved provinces from the member directory.';
+  }
+  await loadTowns(true);
+  p.addEventListener('change',()=>{seed.city='';seed.cityCode='';seed.barangay='';seed.barangayCode='';void loadTowns(false)});
+  c.addEventListener('change',()=>{seed.barangay='';seed.barangayCode='';void loadBarangays(false)});
+  document.getElementById('calStudyArea')?.addEventListener('change',()=>void loadBarangays(true));
+}
 function edit(s){if(!staff()||(s&&!editable(s)))return;studyId=null;render();let d=s?phday(s.start_at):selectedDate,t=s?new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(s.start_at)):'16:00';
-document.getElementById('calDetail').innerHTML='<section class="card"><h3>'+(s?'Edit':'Schedule')+' Bible Study</h3><form id="calForm" class="vccf-cal-form"><label class="vccf-cal-field vccf-cal-full">Title<input id="calTitle" maxlength="160" required value="'+esc(s?.title||'Bible Study')+'"></label><label class="vccf-cal-field">Area<select id="calStudyArea" required>'+(S().areas||[]).filter(a=>role()!=='area_leader'||a.id===myarea()).map(a=>'<option value="'+esc(a.id)+'" '+(a.id===(s?.area_id||myarea())?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></label><label class="vccf-cal-field">Date<input id="calDate" required type="date" value="'+esc(d)+'"></label><label class="vccf-cal-field">Time<input id="calTime" required type="time" value="'+esc(t)+'"></label><label class="vccf-cal-field">Location<input id="calLocation" required maxlength="320" value="'+esc(s?.location||'')+'"></label><label class="vccf-cal-field">Barangay (for summary)<input id="calBarangay" value="'+esc(s?.barangay||'')+'"></label>'+(s?'':'<label class="vccf-cal-field">Repeat<select id="calRepeat"><option value="once">One-time</option><option value="weekly">Weekly (8 sessions)</option><option value="biweekly">Every 2 weeks (8 sessions)</option><option value="monthly">Monthly (6 sessions)</option></select></label>')+'<label class="vccf-cal-field vccf-cal-full"><span><input id="calReminder" type="checkbox" '+(s?.reminder_enabled===false?'':'checked')+'> Notify Area Leaders at the Bible Study start time to fill in attendance</span></label><div class="vccf-cal-full vccf-cal-controls"><button type="submit" class="btn">Save</button><button type="button" class="btn secondary" id="calBack">Cancel</button></div></form><p id="calFormMsg"></p></section>';
+document.getElementById('calDetail').innerHTML='<section class="card"><h3>'+(s?'Edit':'Schedule')+' Bible Study</h3><form id="calForm" class="vccf-cal-form"><label class="vccf-cal-field vccf-cal-full">Title<input id="calTitle" maxlength="160" required value="'+esc(s?.title||'Bible Study')+'"></label><label class="vccf-cal-field">Area<select id="calStudyArea" required>'+(S().areas||[]).filter(a=>role()!=='area_leader'||a.id===myarea()).map(a=>'<option value="'+esc(a.id)+'" '+(a.id===(s?.area_id||myarea())?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></label><label class="vccf-cal-field">Date<input id="calDate" required type="date" value="'+esc(d)+'"></label><label class="vccf-cal-field">Time<input id="calTime" required type="time" value="'+esc(t)+'"></label><label class="vccf-cal-field">Province<select id="calProvince" required><option value="">Loading provinces…</option></select></label><label class="vccf-cal-field">Town / City<select id="calTown" required disabled><option value="">Select province first</option></select></label><label class="vccf-cal-field">Barangay / Cellgroup<select id="calBarangay" required disabled><option value="">Select town / city first</option></select></label><label class="vccf-cal-field">Exact Meeting Venue<input id="calLocation" required maxlength="320" value="'+esc(s?.location||'')+'" placeholder="Host home, street, building or meeting place"></label><p class="vccf-cal-full" id="calAddressMsg" role="status"></p>'+(s?'':'<label class="vccf-cal-field">Repeat<select id="calRepeat"><option value="once">One-time</option><option value="weekly">Weekly (8 sessions)</option><option value="biweekly">Every 2 weeks (8 sessions)</option><option value="monthly">Monthly (6 sessions)</option></select></label>')+'<label class="vccf-cal-field vccf-cal-full"><span><input id="calReminder" type="checkbox" '+(s?.reminder_enabled===false?'':'checked')+'> Notify Area Leaders at the Bible Study start time to fill in attendance</span></label><div class="vccf-cal-full vccf-cal-controls"><button type="submit" class="btn">Save</button><button type="button" class="btn secondary" id="calBack">Cancel</button></div></form><p id="calFormMsg"></p></section>';
+void initCalendarAddress(s);
 document.getElementById('calBack').onclick=render;
-document.getElementById('calForm').onsubmit=async ev=>{ev.preventDefault();let status=document.getElementById('calFormMsg');status.textContent='Saving…';let p={title:val('calTitle').trim(),area_id:val('calStudyArea'),start_at:phstart(val('calDate'),val('calTime')),location:val('calLocation').trim(),barangay:val('calBarangay').trim(),reminder_enabled:document.getElementById('calReminder').checked};try{if(s){let r=await db().from('bible_study_sessions').update(p).eq('id',s.id);if(r.error)throw r.error}else{let frequency=val('calRepeat'),count=frequency==='once'?1:frequency==='monthly'?6:8,gid=count>1?crypto.randomUUID():null,rows=[];for(let i=0;i<count;i++){let d=new Date(val('calDate')+'T12:00:00+08:00');if(frequency==='monthly')d.setMonth(d.getMonth()+i);else if(frequency!=='once')d.setDate(d.getDate()+i*(frequency==='weekly'?7:14));rows.push({...p,start_at:phstart(phday(d),val('calTime')),created_by:uid(),recurrence_group_id:gid})}let r=await db().from('bible_study_sessions').insert(rows);if(r.error)throw r.error}selectedDate=val('calDate');cursor=new Date(selectedDate+'T12:00:00+08:00');cursor.setDate(1);await refresh()}catch(e){status.textContent=e.message||'Unable to save Bible Study'}}}
-async function details(){let s=studies.find(x=>x.id===studyId),h=document.getElementById('calDetail');if(!s||!h)return;let allowed=editable(s),locked=s.status!=='scheduled';h.innerHTML='<section class="card"><div class="vccf-cal-row"><div><h2>'+esc(s.title)+'</h2><p>'+esc(area(s.area_id))+' · '+esc(time(s.start_at))+' · '+esc(s.location)+'</p><p>'+esc(s.status)+' · Reminder '+(s.reminder_enabled?'enabled':'disabled')+'</p></div>'+(allowed?'<div class="vccf-cal-controls"><button class="btn secondary" id="calEdit">Edit Study</button>'+(locked?'':'<button class="btn secondary" id="calCancelStudy">Cancel Study</button>')+'</div>':'')+'</div><div id="calAttendance"></div></section>';
+document.getElementById('calForm').onsubmit=async ev=>{ev.preventDefault();let status=document.getElementById('calFormMsg');status.textContent='Saving…';let p={title:val('calTitle').trim(),area_id:val('calStudyArea'),start_at:phstart(val('calDate'),val('calTime')),location:val('calLocation').trim(),barangay:calLocationName('calBarangay'),province:calLocationName('calProvince'),city_municipality:calLocationName('calTown'),province_psgc_code:calLocationCode('calProvince'),city_municipality_psgc_code:calLocationCode('calTown'),barangay_psgc_code:calLocationCode('calBarangay'),reminder_enabled:document.getElementById('calReminder').checked};try{if(s){let r=await db().from('bible_study_sessions').update(p).eq('id',s.id);if(r.error)throw r.error}else{let frequency=val('calRepeat'),count=frequency==='once'?1:frequency==='monthly'?6:8,gid=count>1?crypto.randomUUID():null,rows=[];for(let i=0;i<count;i++){let d=new Date(val('calDate')+'T12:00:00+08:00');if(frequency==='monthly')d.setMonth(d.getMonth()+i);else if(frequency!=='once')d.setDate(d.getDate()+i*(frequency==='weekly'?7:14));rows.push({...p,start_at:phstart(phday(d),val('calTime')),created_by:uid(),recurrence_group_id:gid})}let r=await db().from('bible_study_sessions').insert(rows);if(r.error)throw r.error}selectedDate=val('calDate');cursor=new Date(selectedDate+'T12:00:00+08:00');cursor.setDate(1);await refresh()}catch(e){status.textContent=e.message||'Unable to save Bible Study'}}}
+async function details(){let s=studies.find(x=>x.id===studyId),h=document.getElementById('calDetail');if(!s||!h)return;let allowed=editable(s),locked=s.status!=='scheduled';h.innerHTML='<section class="card"><div class="vccf-cal-row"><div><h2>'+esc(s.title)+'</h2><p>'+esc(area(s.area_id))+' · '+esc(time(s.start_at))+' · '+esc([s.location,s.barangay,s.city_municipality,s.province].filter(Boolean).join(', '))+'</p><p>'+esc(s.status)+' · Reminder '+(s.reminder_enabled?'enabled':'disabled')+'</p></div>'+(allowed?'<div class="vccf-cal-controls"><button class="btn secondary" id="calEdit">Edit Study</button>'+(locked?'':'<button class="btn secondary" id="calCancelStudy">Cancel Study</button>')+'</div>':'')+'</div><div id="calAttendance"></div></section>';
 document.getElementById('calEdit')?.addEventListener('click',()=>edit(s));document.getElementById('calCancelStudy')?.addEventListener('click',async()=>{if(!confirm('Cancel this Bible Study and its unsent attendance reminder?'))return;let q=await db().from('bible_study_sessions').update({status:'cancelled'}).eq('id',s.id);if(q.error){alert(q.error.message);return}studyId=null;await refresh()});
 if(!allowed){document.getElementById('calAttendance').innerHTML='<p>Area Leaders, Pastors, and Admins manage attendance.</p>';return}
 let [mr,ar]=await Promise.all([db().from('members').select('id,first_name,last_name,display_name,member_number,member_code,area_id,is_active,status').eq('area_id',s.area_id).order('last_name'),db().from('bible_study_session_attendance').select('id,member_id,source').eq('session_id',s.id)]);
