@@ -78,7 +78,7 @@ document.getElementById('calStartQR')?.addEventListener('click',async()=>{
 document.getElementById('calStopQR')?.addEventListener('click',stopQR);
 document.getElementById('calSubmit')?.addEventListener('click',async()=>{if(!confirm('Finalize attendance? The session will become read-only.'))return;try{let r=await db().rpc('vccf_submit_bible_study_session',{p_session_id:s.id,p_notes:val('calNotes')});if(r.error)throw r.error;await refresh()}catch(e){document.getElementById('calAttendMsg').textContent=e.message}})
 }
-window.VCCFChurchCalendar={open:()=>void refresh(),openStudy:async id=>{studyId=id;let s=studies.find(x=>x.id===id);if(s){selectedDate=phday(s.start_at);render()}else{await refresh();studyId=id;render()}}};
+window.VCCFChurchCalendar={open:()=>void refresh(),openStudy:async id=>{let s=studies.find(x=>x.id===id);if(!s){let result=await db().from('bible_study_sessions').select('id,start_at').eq('id',id).maybeSingle();if(result.error||!result.data)return;s=result.data}let d=phday(s.start_at);cursor=new Date(d+'T12:00:00+08:00');cursor.setDate(1);selectedDate=d;type='all';areaFilter='';studyId=id;await refresh()}};
 window.addEventListener('vccf-app-ready',()=>{if(host()?.classList.contains('active'))void refresh()});
 window.addEventListener('vccf-signed-out',()=>{studies=[];events=[];studyId=null});
 })();
