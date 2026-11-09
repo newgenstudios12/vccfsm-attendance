@@ -5,7 +5,7 @@ const S=()=>window.VCCF?.getState?.()||{},db=()=>window.VCCF?.sb,role=()=>String
 const canUse=()=>['admin','pastor','area_leader'].includes(role()),norm=v=>String(v??'').trim().toLowerCase(),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const name=m=>m?.display_name||[m?.first_name,m?.last_name].filter(Boolean).join(' ')||m?.member_number||m?.member_code||'Member',area=id=>(S().areas||[]).find(a=>String(a.id)===String(id))?.name||'Unassigned';
 const day=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(v)),bounds=d=>({a:new Date(d+'T00:00:00+08:00').toISOString(),b:new Date(new Date(d+'T00:00:00+08:00').getTime()+86400000).toISOString()}),stamp=d=>d===day(new Date())?new Date().toISOString():new Date(d+'T12:00:00+08:00').toISOString();
-const members=()=>{const a=role()==='area_leader'?ownArea():'';return(S().members||[]).filter(m=>m.is_active!==false&&(!a||String(m.area_id)===String(a)))};
+const members=()=>{const a=role()==='area_leader'?ownArea():'';return(S().members||[]).filter(m=>(!a||String(m.area_id)===String(a)))};
 let bible={key:'',rows:new Map(),set:new Set(),busy:false},event={id:'',key:'',meta:null,rows:[],set:new Set(),original:new Set(),busy:false},timer=0;
 
 function loadSunday(){if(window.__VCCF_ATTENDANCE_CHECKLIST__||document.querySelector('script[data-sunday-checklist]'))return;const s=document.createElement('script');s.src='/vccf-attendance-checklist.js?v=20260914-2';s.dataset.sundayChecklist='1';document.head.appendChild(s)}
