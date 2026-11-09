@@ -6,7 +6,7 @@ create or replace function public.activate_member_after_three_attendances()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_month_start timestamp;
@@ -33,7 +33,9 @@ begin
   if v_attended_days >= 3 then
     update public.members m
        set status = 'active',
-           status_updated_at = now()
+           is_active = true,
+           status_updated_at = now(),
+           status_manual_override_at = null
      where m.id = new.member_id
        and m.status = 'inactive';
   end if;
@@ -46,3 +48,6 @@ create trigger trg_activate_member_after_three_attendances
 after insert or update of member_id, checked_in_at, attendance_type
 on public.attendance
 for each row execute function public.activate_member_after_three_attendances();
+
+-- The function is intended only as a table trigger, not a public RPC.
+revoke all on function public.activate_member_after_three_attendances() from public, anon, authenticated;
