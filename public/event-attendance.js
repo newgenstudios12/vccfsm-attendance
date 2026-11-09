@@ -87,7 +87,7 @@ function renderEventList() {
 function memberOptions(eventId, query='') {
   const normalized = String(query).trim().toLowerCase();
   const registered = new Set(registrations.filter(row => row.event_id === eventId && row.status !== 'Cancelled').map(row => row.member_id));
-  return (state().members || []).filter(member => member.is_active !== false && (!normalized || (memberName(member)+' '+(member.member_code || '')).toLowerCase().includes(normalized))).slice().sort((a,b) => memberName(a).localeCompare(memberName(b))).slice(0,150).map(member => '<option value="'+esc(member.id)+'">'+esc(memberName(member))+' — '+esc(member.member_code || areaName(member.area_id))+(registered.has(member.id)?' · On roster':'')+'</option>').join('');
+  return (state().members || []).filter(member => (!normalized || (memberName(member)+' '+(member.member_code || '')).toLowerCase().includes(normalized))).slice().sort((a,b) => memberName(a).localeCompare(memberName(b))).slice(0,150).map(member => '<option value="'+esc(member.id)+'">'+esc(memberName(member))+' — '+esc(member.member_code || areaName(member.area_id))+(registered.has(member.id)?' · On roster':'')+'</option>').join('');
 }
 
 
