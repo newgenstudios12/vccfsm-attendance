@@ -16,7 +16,7 @@ const areaOf=id=>(state().areas||[]).find(a=>a.id===id)?.name||'Unassigned';
 const bounds=day=>({start:new Date(day+'T00:00:00+08:00').toISOString(),end:new Date(new Date(day+'T00:00:00+08:00').getTime()+86400000).toISOString()});
 const activeMembers=()=>{
   const area=role()==='area_leader'?ownArea():'';
-  return (state().members||[]).filter(m=>m.is_active!==false&&(!area||m.area_id===area));
+  return (state().members||[]).filter(m=>(!area||m.area_id===area));
 };
 
 let original=new Set();
@@ -91,7 +91,7 @@ function render(){
   if(!list)return;
   const members=visibleMembers();
   if(!members.length){
-    list.innerHTML='<div class="vccf-checklist-empty">No active members match these filters.</div>';
+    list.innerHTML='<div class="vccf-checklist-empty">No members match these filters.</div>';
     summary();
     return;
   }
@@ -99,7 +99,7 @@ function render(){
     const id=String(m.id),checked=draft.has(id),locked=isFinalized()||(checked&&!canRemove());
     return `<label class="vccf-check-row ${checked?'checked':''} ${locked?'locked':''} ${isFinalized()?'finalized':''}">
       <input type="checkbox" data-vccf-check-member="${esc(id)}" ${checked?'checked':''} ${locked?'disabled':''}>
-      <span class="vccf-check-copy"><b>${esc(nameOf(m))}</b><span>${esc(m.member_number||m.member_code||'No member number')} · ${esc(areaOf(m.area_id))}</span></span>
+      <span class="vccf-check-copy"><b>${esc(nameOf(m))}</b><span>${esc(m.member_number||m.member_code||'No member number')} · ${esc(areaOf(m.area_id))}${m.is_active===false||String(m.status||'').toLowerCase()==='inactive'?' · Inactive':''}</span></span>
       <span class="${checked?'vccf-check-present':'vccf-check-unmarked'}">${checked?'✓ Present':isFinalized()?'Absent':'Not marked'}</span>
     </label>`;
   }).join('');
