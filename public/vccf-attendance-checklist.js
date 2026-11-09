@@ -16,7 +16,7 @@ const areaOf=id=>(state().areas||[]).find(a=>a.id===id)?.name||'Unassigned';
 const bounds=day=>({start:new Date(day+'T00:00:00+08:00').toISOString(),end:new Date(new Date(day+'T00:00:00+08:00').getTime()+86400000).toISOString()});
 const activeMembers=()=>{
   const area=role()==='area_leader'?ownArea():'';
-  return (state().members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive'&&(!area||m.area_id===area));
+  return (state().members||[]).filter(m=>m.is_active!==false&&(!area||m.area_id===area));
 };
 
 let original=new Set();
