@@ -17,7 +17,7 @@ const bounds=day=>({start:new Date(day+'T00:00:00+08:00').toISOString(),end:new 
 const type=()=>document.getElementById('serviceAttendanceType')?.value||'bible_study';
 const label=t=>t==='midweek_service'?'Midweek Service':'Bible Study';
 const summaryType=t=>t==='midweek_service'?'Midweek Service':'Bible Study';
-const activeMembers=()=>(state().members||[]).filter(m=>m.is_active!==false);
+const activeMembers=()=>(state().members||[]);
 const isAreaLeader=()=>role()==='area_leader';
 const ownAreaId=()=>isAreaLeader()?state().profile?.area_id||'':'';
 const canApprove=t=>['admin','pastor'].includes(role())||(isAreaLeader()&&t==='bible_study');
