@@ -14,7 +14,7 @@ const phDay=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'num
 const dateBounds=day=>({start:new Date(day+'T00:00:00+08:00').toISOString(),end:new Date(new Date(day+'T00:00:00+08:00').getTime()+86400000).toISOString()});
 const serviceType=()=>document.getElementById('serviceAttendanceType')?.value||'bible_study';
 const serviceLabel=type=>type==='midweek_service'?'Midweek Service':'Bible Study';
-const activeMembers=()=>(state().members||[]).filter(m=>m.is_active!==false&&String(m.status||'').toLowerCase()!=='inactive');
+const activeMembers=()=>(state().members||[]).filter(m=>m.is_active!==false);
 
 function setStatus(id,message,kind=''){const el=document.getElementById(id);if(!el)return;el.className='attendance-status '+kind;el.textContent=message||''}
 function memberFromQr(raw){const code=String(raw||'').trim().replace(/^VCCF-MEMBER:/i,'');return activeMembers().find(m=>String(m.member_number||'')===code||String(m.member_code||'')===code||String(m.id)===code)}
