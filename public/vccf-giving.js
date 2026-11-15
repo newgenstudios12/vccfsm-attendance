@@ -37,6 +37,7 @@ const batchStatusLabel=status=>({draft:'Draft',submitted:'Awaiting approval',app
 const batchStatusClass=status=>status==='approved'?'approved':status==='submitted'?'submitted':'draft';
 const currentBatch=()=>batches.find(b=>b.sunday_date===selectedSunday)||null;
 const batchById=id=>batches.find(b=>b.id===id)||null;
+const anonymousSundayOffering=row=>row?.member_id==null&&!!row?.sunday_batch_id&&String(row.giving_type||'').toLowerCase()==='offering';
 
 async function load(month){
   const client=sb();if(!client)throw new Error('Giving service is unavailable.');
@@ -77,7 +78,7 @@ function summaryCard(label,value,hint){return '<div class="giving-stat card"><sp
 function filteredRows(){
   const member=document.getElementById('givingMemberFilter')?.value||'',type=document.getElementById('givingTypeFilter')?.value||'',query=(document.getElementById('givingSearch')?.value||'').trim().toLowerCase();
   return records.filter(row=>{
-    const m=memberById(row.member_id),hay=(memberName(m)+' '+(m?.member_code||'')+' '+(row.reference_no||'')+' '+(row.payment_method||'')).toLowerCase();
+    const m=memberById(row.member_id),hay=((anonymousSundayOffering(row)?'Anonymous ':'')+memberName(m)+' '+(m?.member_code||'')+' '+(row.reference_no||'')+' '+(row.payment_method||'')).toLowerCase();
     return (!member||row.member_id===member)&&(!type||String(row.giving_type||'').toLowerCase()===type)&&(!query||hay.includes(query));
   });
 }
@@ -112,7 +113,7 @@ function sundayWorkflowHtml(){
     '<div class="sunday-giving-metrics">'+summaryCard('Tithes',php(totals.tithe),batch?'Sunday batch total':'Not started')+summaryCard('Offerings',php(totals.offering),batch?'Sunday batch total':'Not started')+summaryCard('Combined',php(totals.tithe+totals.offering),status==='approved'?'Approved for Sunday Summary':locked?'Awaiting approval':'Draft total')+'</div>'+
     '<div class="sunday-giving-signatures">'+recorder+approver+'</div>'+
     '<div class="sunday-giving-actions">'+actions+'</div>'+
-    (batch&&totals.rows.length?'<div class="sunday-giving-mini-list">'+totals.rows.slice(0,6).map(r=>'<div><span>'+esc(memberName(memberById(r.member_id)))+' · '+esc(r.giving_type)+' · Received '+esc(dateLabel(r.given_on))+'</span><b>'+php(r.amount)+'</b></div>').join('')+(totals.rows.length>6?'<small>+'+(totals.rows.length-6)+' more record(s)</small>':'')+'</div>':'')+
+    (batch&&totals.rows.length?'<div class="sunday-giving-mini-list">'+totals.rows.slice(0,6).map(r=>'<div><span>'+esc(anonymousSundayOffering(r)?'Anonymous':memberName(memberById(r.member_id)))+' · '+esc(r.giving_type)+' · Received '+esc(dateLabel(r.given_on))+'</span><b>'+php(r.amount)+'</b></div>').join('')+(totals.rows.length>6?'<small>+'+(totals.rows.length-6)+' more record(s)</small>':'')+'</div>':'')+
   '</section>';
 }
 
@@ -124,7 +125,7 @@ function renderBody(){
   const table=document.getElementById('givingTable');
   if(!table)return;
   table.innerHTML=rows.length?'<div class="table-wrap"><table class="table giving-table"><thead><tr><th>Date</th><th>Member</th><th>Type</th><th>Amount</th><th>Sunday workflow</th><th>Method</th><th>Reference</th><th></th></tr></thead><tbody>'+rows.map(row=>{
-    const m=memberById(row.member_id),name=m?memberName(m):'Former / deleted member',area=m?areaName(m.area_id):'Historical record',batch=batchById(row.sunday_batch_id),batchStatus=batch?batch.workflow_status:null,editable=canManage()&&(!row.sunday_batch_id||batchStatus==='draft');
+    const m=memberById(row.member_id),anonymous=anonymousSundayOffering(row),name=anonymous?'Anonymous':m?memberName(m):'Former / deleted member',area=anonymous?'Anonymous Sunday offering':m?areaName(m.area_id):'Historical record',batch=batchById(row.sunday_batch_id),batchStatus=batch?batch.workflow_status:null,editable=canManage()&&(!row.sunday_batch_id||batchStatus==='draft');
     return '<tr><td>'+esc(dateLabel(row.given_on))+'</td><td><b>'+esc(name)+'</b><div class="giving-sub">'+esc(area)+'</div></td><td><span class="giving-type '+(String(row.giving_type||'').toLowerCase()==='tithe'?'tithe':'offering')+'">'+esc(row.giving_type)+'</span></td><td><strong>'+php(row.amount)+'</strong></td><td>'+(row.sunday_batch_id?'<span class="sunday-giving-status '+batchStatusClass(batchStatus)+'">'+esc(batchStatusLabel(batchStatus))+'</span><div class="giving-sub">'+esc(batch?('Sunday '+dateLabel(batch.sunday_date)):'Assigned Sunday batch')+'</div>':'<span class="giving-sub">Not in Sunday batch</span>')+'</td><td>'+esc(row.payment_method||'—')+'</td><td>'+esc(row.reference_no||'—')+'</td><td>'+(editable?'<div class="giving-row-actions"><button type="button" class="cms-small" data-giving-edit="'+row.id+'">Edit</button><button type="button" class="cms-small danger-text" data-giving-delete="'+row.id+'">Delete</button></div>':row.sunday_batch_id?'<span class="giving-sub">Locked</span>':'')+'</td></tr>';
   }).join('')+'</tbody></table></div>':'<div class="giving-empty">No tithes or offerings match the selected filters.</div>';
   table.querySelectorAll('[data-giving-edit]').forEach(button=>button.onclick=()=>{const record=records.find(r=>r.id===button.dataset.givingEdit);openForm(record,batchById(record?.sunday_batch_id))});
@@ -303,7 +304,7 @@ function openForm(record=null,batch=null){
   const members=activeMembers(),areas=(state().areas||[]).filter(a=>a.is_active!==false),recordMember=memberById(record?.member_id),initialArea=recordMember?.area_id||'',linkedBatch=batch||batchById(record?.sunday_batch_id),receivedDate=record?.given_on||linkedBatch?.sunday_date||todayKey(),wrap=document.createElement('div');wrap.id='givingModal';wrap.className='giving-modal';
   const draftBatches=batches.filter(b=>b.workflow_status==='draft');
   wrap.innerHTML='<div class="giving-modal-card card"><div class="giving-modal-head"><div><span class="giving-kicker">FINANCIAL RECORD</span><h3>'+(record?'Edit Giving':linkedBatch?'Record Sunday Giving':'Record Tithe or Offering')+'</h3><p>'+(linkedBatch?'This entry belongs to the '+esc(dateLabel(linkedBatch.sunday_date))+' Sunday giving batch.':'Search and filter the member directory before recording the contribution.')+'</p></div><button type="button" class="giving-close" aria-label="Close">×</button></div>'+
-    '<form id="givingForm"><div class="giving-member-picker"><div class="giving-member-picker-head"><b>Select member</b><span id="givingMemberResultCount"></span></div>'+
+    '<form id="givingForm"><div id="givingAnonymousOption" class="giving-anonymous-option" hidden style="display:none;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line,#e5e7eb);border-radius:12px;background:rgba(127,127,127,.06)"><label style="display:flex;gap:10px;align-items:flex-start;font-weight:800;cursor:pointer"><input id="givingAnonymousOffering" type="checkbox" style="margin-top:3px"><span>Anonymous offering<small style="display:block;font-weight:500;color:var(--muted,#6b7280);margin-top:3px">Record a Sunday offering without linking it to a member profile. Requires a draft Sunday batch.</small></span></label></div><div class="giving-member-picker"><div class="giving-member-picker-head"><b>Select member</b><span id="givingMemberResultCount"></span></div>'+
     '<div class="giving-member-filter-grid"><label>Search member<input id="givingRecordMemberSearch" type="search" placeholder="Name or member code…" autocomplete="off"></label><label>Area<select id="givingRecordAreaFilter"><option value="">All areas</option>'+areas.map(a=>'<option value="'+attr(a.id)+'" '+(initialArea===a.id?'selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></label></div>'+
     '<label>Member<select id="givingRecordMemberSelect" name="member_id" required><option value="">Select member</option></select></label></div>'+
     '<div class="giving-form-grid"><label>Date<input name="given_on" type="date" required value="'+attr(receivedDate)+'"></label><label>Type<select name="giving_type"><option value="Tithe" '+(String(record?.giving_type||'').toLowerCase()==='tithe'?'selected':'')+'>Tithe</option><option value="Offering" '+(String(record?.giving_type||'').toLowerCase()==='offering'?'selected':'')+'>Offering</option></select></label></div>'+
@@ -323,12 +324,39 @@ function openForm(record=null,batch=null){
   };
   search.oninput=renderMemberOptions;areaFilter.onchange=renderMemberOptions;renderMemberOptions();
 
+  const anonymousOption=wrap.querySelector('#givingAnonymousOption');
+  const anonymousCheckbox=wrap.querySelector('#givingAnonymousOffering');
+  const batchSelect=wrap.querySelector('[name="sunday_batch_id"]');
+  const typeSelect=wrap.querySelector('[name="giving_type"]');
+  const memberPicker=wrap.querySelector('.giving-member-picker');
+  const titheOption=typeSelect.querySelector('option[value="Tithe"]');
+  anonymousCheckbox.checked=anonymousSundayOffering(record);
+  const syncAnonymousOption=()=>{
+    const hasDraftBatch=draftBatches.some(b=>b.id===batchSelect.value);
+    anonymousOption.hidden=!hasDraftBatch;
+    anonymousOption.style.display=hasDraftBatch?'':'none';
+    if(!hasDraftBatch)anonymousCheckbox.checked=false;
+    const anonymous=hasDraftBatch&&anonymousCheckbox.checked;
+    memberSelect.disabled=anonymous;
+    memberSelect.required=!anonymous;
+    search.disabled=anonymous;
+    areaFilter.disabled=anonymous;
+    memberPicker.style.display=anonymous?'none':'';
+    if(titheOption)titheOption.disabled=anonymous;
+    if(anonymous)typeSelect.value='Offering';
+  };
+  batchSelect.addEventListener('change',syncAnonymousOption);
+  anonymousCheckbox.addEventListener('change',syncAnonymousOption);
+  typeSelect.addEventListener('change',()=>{if(anonymousCheckbox.checked)typeSelect.value='Offering'});
+  syncAnonymousOption();
+
   const close=()=>wrap.remove();wrap.querySelector('.giving-close').onclick=close;wrap.querySelector('.giving-cancel').onclick=close;wrap.onclick=e=>{if(e.target===wrap)close()};
   wrap.querySelector('form').onsubmit=async e=>{
-    e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type="submit"]'),msg=document.getElementById('givingFormMsg'),fd=new FormData(form),amount=Number(fd.get('amount'));
-    if(!fd.get('member_id')||!Number.isFinite(amount)||amount<=0){msg.textContent='Choose a member and enter a valid amount.';return}
+    e.preventDefault();const form=e.currentTarget,button=form.querySelector('button[type="submit"]'),msg=document.getElementById('givingFormMsg'),fd=new FormData(form),amount=Number(fd.get('amount')),anonymous=anonymousCheckbox.checked;
+    if((!anonymous&&!fd.get('member_id'))||!Number.isFinite(amount)||amount<=0){msg.textContent='Choose a member or anonymous offering and enter a valid amount.';return}
+    if(anonymous&&!draftBatches.some(b=>b.id===batchSelect.value)){msg.textContent='Choose a draft Sunday batch to record an anonymous offering.';return}
     button.disabled=true;button.textContent='Saving…';msg.textContent='';
-    const payload={member_id:fd.get('member_id'),given_on:fd.get('given_on'),giving_type:fd.get('giving_type'),amount,payment_method:fd.get('payment_method'),reference_no:String(fd.get('reference_no')||'').trim()||null,notes:String(fd.get('notes')||'').trim()||null,recorded_by:record?.recorded_by||currentUserId(),sunday_batch_id:String(fd.get('sunday_batch_id')||'')||null};
+    const payload={member_id:anonymous?null:fd.get('member_id'),given_on:fd.get('given_on'),giving_type:anonymous?'Offering':fd.get('giving_type'),amount,payment_method:fd.get('payment_method'),reference_no:String(fd.get('reference_no')||'').trim()||null,notes:String(fd.get('notes')||'').trim()||null,recorded_by:record?.recorded_by||currentUserId(),sunday_batch_id:String(fd.get('sunday_batch_id')||'')||null};
     const result=record?await sb().from('giving_records').update(payload).eq('id',record.id).select().single():await sb().from('giving_records').insert(payload).select().single();
     button.disabled=false;button.textContent=record?'Save Changes':'Record Giving';
     if(result.error){msg.textContent=result.error.message;return}
@@ -344,7 +372,7 @@ async function deleteRecord(id){
 
 function exportCsv(){
   const rows=filteredRows(),values=[['Date received','Assigned Sunday','Member','Member Code','Area','Type','Amount','Sunday Workflow','Payment Method','Reference','Notes']];
-  rows.forEach(row=>{const m=memberById(row.member_id),batch=batchById(row.sunday_batch_id);values.push([row.given_on,batch?.sunday_date||'',m?memberName(m):'Former / deleted member',m?.member_code||'',m?areaName(m.area_id):'',row.giving_type,Number(row.amount||0).toFixed(2),batch?batchStatusLabel(batch.workflow_status):'',row.payment_method||'',row.reference_no||'',row.notes||''])});
+  rows.forEach(row=>{const m=memberById(row.member_id),batch=batchById(row.sunday_batch_id);values.push([row.given_on,batch?.sunday_date||'',anonymousSundayOffering(row)?'Anonymous':m?memberName(m):'Former / deleted member',m?.member_code||'',m?areaName(m.area_id):'',row.giving_type,Number(row.amount||0).toFixed(2),batch?batchStatusLabel(batch.workflow_status):'',row.payment_method||'',row.reference_no||'',row.notes||''])});
   const csv=values.map(cols=>cols.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n'),link=document.createElement('a');
   link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));link.download='vccf-tithes-offerings-'+(loadedMonth||monthKey())+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
 }
